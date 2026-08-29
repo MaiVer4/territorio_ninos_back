@@ -12,6 +12,7 @@ import com.software.territoriodeninos.repository.RolRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.util.EstadoUsuario;
 import com.software.territoriodeninos.util.NombreRol;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @Transactional
 public class UsuarioServiceImpl implements UsuarioService {
