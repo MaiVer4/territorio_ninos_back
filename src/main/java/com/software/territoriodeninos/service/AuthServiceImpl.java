@@ -5,54 +5,71 @@ import com.software.territoriodeninos.dto.LoginRequestDTO;
 import com.software.territoriodeninos.entity.PasswordResetToken;
 import com.software.territoriodeninos.entity.Usuario;
 import com.software.territoriodeninos.exception.CredencialesInvalidasException;
+import com.software.territoriodeninos.exception.TokenInvalidoException;
 import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
 import com.software.territoriodeninos.util.EstadoUsuario;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 import java.util.Optional;
+import java.util.UUID;
 
+/**
+ * Implementación del servicio de autenticación.
+ * Responsabilidad única: gestionar el flujo de autenticación (login) y
+ * la orquestación de la recuperación de contraseña.
+ * El envío de emails se delega al {@link EmailService} (DIP/SRP).
+ */
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class AuthServiceImpl implements AuthService {
-    
+
     private final UsuarioRepository usuarioRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetTokenRepository tokenRepository;
-    private final JavaMailSender mailSender;
-    
-    private final String FRONTEND_URL = "http://localhost:4200/reset-password?token=";
-    
+    private final EmailService emailService;
+
+    @Value("${app.frontend.url:http://localhost:4200}")
+    private String frontendUrl;
+
     public AuthServiceImpl(UsuarioRepository usuarioRepository, JwtUtil jwtUtil,
                             PasswordEncoder passwordEncoder, PasswordResetTokenRepository tokenRepository,
-                            JavaMailSender mailSender) {
+                            EmailService emailService) {
         this.usuarioRepository = usuarioRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
         this.tokenRepository = tokenRepository;
-        this.mailSender = mailSender;
+        this.emailService = emailService;
     }
-    
+
     @Override
     public AuthResponseDTO login(LoginRequestDTO loginRequestDTO) {
+        log.info("Intento de login para: {}", loginRequestDTO.getCorreo());
+
         Usuario usuario = usuarioRepository.findByCorreoAndEstado(loginRequestDTO.getCorreo(), EstadoUsuario.ACTIVO)
-                .orElseThrow(() -> new CredencialesInvalidasException("Correo o contraseña incorrectos"));
-        
+                .orElseThrow(() -> {
+                    log.warn("Login fallido: usuario no encontrado o inactivo - {}", loginRequestDTO.getCorreo());
+                    return new CredencialesInvalidasException("Correo o contraseña incorrectos");
+                });
+
         if (!passwordEncoder.matches(loginRequestDTO.getPassword(), usuario.getPassword())) {
+            log.warn("Login fallido: contraseña incorrecta para - {}", loginRequestDTO.getCorreo());
             throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
-        
+
         String nombreRol = usuario.getRol().getNombre().name();
         String token = jwtUtil.generarToken(usuario.getCorreo(), nombreRol);
-        
+
+        log.info("Login exitoso para: {}", loginRequestDTO.getCorreo());
+
         return AuthResponseDTO.builder()
                 .token(token)
                 .tipoToken("Bearer")
@@ -60,12 +77,12 @@ public class AuthServiceImpl implements AuthService {
                 .rol(nombreRol)
                 .build();
     }
-    
+
     @Override
     @Transactional
     public void generarTokenRecuperacion(String correo) {
         Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreoAndEstado(correo, EstadoUsuario.ACTIVO);
-        
+
         if (usuarioOpt.isPresent()) {
             Usuario usuario = usuarioOpt.get();
             tokenRepository.deleteByUsuarioId(usuario.getId());
@@ -77,7 +94,13 @@ public class AuthServiceImpl implements AuthService {
             resetToken.setFechaExpiracion(LocalDateTime.now().plusMinutes(15));
 
             tokenRepository.save(resetToken);
-            enviarEmail(usuario.getCorreo(), token);
+
+            String resetUrl = frontendUrl + "/reset-password?token=" + token;
+            emailService.enviarCorreoRecuperacion(usuario.getCorreo(), resetUrl);
+
+            log.info("Token de recuperación generado para: {}", correo);
+        } else {
+            log.warn("Solicitud de recuperación para correo inexistente o inactivo: {}", correo);
         }
     }
 
@@ -85,11 +108,12 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void cambiarContrasena(String token, String nuevaContrasena) {
         PasswordResetToken resetToken = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Token inválido o no existe"));
+                .orElseThrow(() -> new TokenInvalidoException("Token inválido o no existe"));
 
         if (resetToken.isExpired()) {
             tokenRepository.delete(resetToken);
-            throw new RuntimeException("El token ha expirado. Solicite uno nuevo.");
+            log.warn("Intento de uso de token expirado");
+            throw new TokenInvalidoException("El token ha expirado. Solicite uno nuevo.");
         }
 
         Usuario usuario = resetToken.getUsuario();
@@ -97,16 +121,6 @@ public class AuthServiceImpl implements AuthService {
         usuarioRepository.save(usuario);
 
         tokenRepository.delete(resetToken);
-    }
-
-    private void enviarEmail(String destinatario, String token) {
-        SimpleMailMessage mensaje = new SimpleMailMessage();
-        mensaje.setTo(destinatario);
-        mensaje.setSubject("Recuperación de Contraseña - Territorio de Niños");
-        mensaje.setText("Hola,\n\nHas solicitado restablecer tu contraseña. " +
-                "Haz clic en el siguiente enlace para continuar (válido por 15 minutos):\n\n" +
-                FRONTEND_URL + token + "\n\nSi no fuiste tú, ignora este mensaje.");
-        
-        mailSender.send(mensaje);
+        log.info("Contraseña actualizada exitosamente para usuario ID: {}", usuario.getId());
     }
 }
