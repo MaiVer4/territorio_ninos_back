@@ -1,32 +1,39 @@
 package com.software.territoriodeninos.service;
 
+import com.software.territoriodeninos.dto.AuthResponseDTO;
+import com.software.territoriodeninos.dto.LoginRequestDTO;
 import com.software.territoriodeninos.entity.PasswordResetToken;
 import com.software.territoriodeninos.entity.Rol;
 import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.exception.CredencialesInvalidasException;
+import com.software.territoriodeninos.exception.TokenInvalidoException;
 import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
 import com.software.territoriodeninos.util.EstadoUsuario;
 import com.software.territoriodeninos.util.NombreRol;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AuthServiceImpl - Tests unitarios")
 public class AuthServiceTest {
 
     @Mock
@@ -42,91 +49,219 @@ public class AuthServiceTest {
     private PasswordResetTokenRepository tokenRepository;
 
     @Mock
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     @InjectMocks
     private AuthServiceImpl authService;
 
     private Usuario mockUsuario;
+    private Rol mockRol;
 
     @BeforeEach
     void setUp() {
-        Rol rol = new Rol();
-        rol.setNombre(NombreRol.ADMINISTRADOR);
+        mockRol = new Rol();
+        mockRol.setId(1L);
+        mockRol.setNombre(NombreRol.ADMINISTRADOR);
 
         mockUsuario = new Usuario();
         mockUsuario.setId(1L);
-        mockUsuario.setCorreo("test@test.com");
+        mockUsuario.setNombre("Admin Test");
+        mockUsuario.setCorreo("admin@test.com");
         mockUsuario.setPassword("hashedPass");
         mockUsuario.setEstado(EstadoUsuario.ACTIVO);
-        mockUsuario.setRol(rol);
+        mockUsuario.setRol(mockRol);
+
+        // Inyectar la propiedad @Value manualmente en tests
+        ReflectionTestUtils.setField(authService, "frontendUrl", "http://localhost:4200");
     }
 
-    @Test
-    void generarTokenRecuperacion_EnvioExitoso() {
-        when(usuarioRepository.findByCorreoAndEstado("test@test.com", EstadoUsuario.ACTIVO))
-                .thenReturn(Optional.of(mockUsuario));
+    // =========================================================================
+    // LOGIN
+    // =========================================================================
+    @Nested
+    @DisplayName("Login")
+    class LoginTests {
 
-        authService.generarTokenRecuperacion("test@test.com");
+        @Test
+        @DisplayName("Login exitoso devuelve AuthResponseDTO con token")
+        void login_Exitoso() {
+            LoginRequestDTO request = LoginRequestDTO.builder()
+                    .correo("admin@test.com")
+                    .password("Password123")
+                    .build();
 
-        verify(tokenRepository, times(1)).deleteByUsuarioId(1L);
-        
-        ArgumentCaptor<PasswordResetToken> tokenCaptor = ArgumentCaptor.forClass(PasswordResetToken.class);
-        verify(tokenRepository, times(1)).save(tokenCaptor.capture());
-        
-        PasswordResetToken savedToken = tokenCaptor.getValue();
-        assertNotNull(savedToken.getToken());
-        assertEquals(1L, savedToken.getUsuario().getId());
-        assertTrue(savedToken.getFechaExpiracion().isAfter(LocalDateTime.now().plusMinutes(10)));
+            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.of(mockUsuario));
+            when(passwordEncoder.matches("Password123", "hashedPass")).thenReturn(true);
+            when(jwtUtil.generarToken("admin@test.com", "ADMINISTRADOR")).thenReturn("jwt-token-mock");
 
-        verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
+            AuthResponseDTO response = authService.login(request);
+
+            assertNotNull(response);
+            assertEquals("jwt-token-mock", response.getToken());
+            assertEquals("Bearer", response.getTipoToken());
+            assertEquals("admin@test.com", response.getCorreo());
+            assertEquals("ADMINISTRADOR", response.getRol());
+
+            verify(usuarioRepository).findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO);
+            verify(passwordEncoder).matches("Password123", "hashedPass");
+            verify(jwtUtil).generarToken("admin@test.com", "ADMINISTRADOR");
+        }
+
+        @Test
+        @DisplayName("Login con usuario inexistente lanza CredencialesInvalidasException")
+        void login_UsuarioNoExiste() {
+            LoginRequestDTO request = LoginRequestDTO.builder()
+                    .correo("noexiste@test.com")
+                    .password("Password123")
+                    .build();
+
+            when(usuarioRepository.findByCorreoAndEstado("noexiste@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.empty());
+
+            CredencialesInvalidasException ex = assertThrows(
+                    CredencialesInvalidasException.class,
+                    () -> authService.login(request)
+            );
+
+            assertEquals("Correo o contraseña incorrectos", ex.getMessage());
+            verify(passwordEncoder, never()).matches(anyString(), anyString());
+            verify(jwtUtil, never()).generarToken(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("Login con contraseña incorrecta lanza CredencialesInvalidasException")
+        void login_ContrasenaIncorrecta() {
+            LoginRequestDTO request = LoginRequestDTO.builder()
+                    .correo("admin@test.com")
+                    .password("WrongPassword")
+                    .build();
+
+            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.of(mockUsuario));
+            when(passwordEncoder.matches("WrongPassword", "hashedPass")).thenReturn(false);
+
+            CredencialesInvalidasException ex = assertThrows(
+                    CredencialesInvalidasException.class,
+                    () -> authService.login(request)
+            );
+
+            assertEquals("Correo o contraseña incorrectos", ex.getMessage());
+            verify(jwtUtil, never()).generarToken(anyString(), anyString());
+        }
     }
 
-    @Test
-    void generarTokenRecuperacion_UsuarioNoExiste_Silencioso() {
-        when(usuarioRepository.findByCorreoAndEstado("inexistente@test.com", EstadoUsuario.ACTIVO))
-                .thenReturn(Optional.empty());
+    // =========================================================================
+    // RECUPERACIÓN DE CONTRASEÑA
+    // =========================================================================
+    @Nested
+    @DisplayName("Generación de token de recuperación")
+    class GenerarTokenRecuperacionTests {
 
-        authService.generarTokenRecuperacion("inexistente@test.com");
+        @Test
+        @DisplayName("Token generado y email enviado para usuario existente")
+        void generarToken_UsuarioExiste_EnviaEmail() {
+            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.of(mockUsuario));
 
-        verify(tokenRepository, never()).save(any());
-        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+            authService.generarTokenRecuperacion("admin@test.com");
+
+            verify(tokenRepository).deleteByUsuarioId(1L);
+            verify(tokenRepository).save(any(PasswordResetToken.class));
+
+            ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(emailService).enviarCorreoRecuperacion(eq("admin@test.com"), urlCaptor.capture());
+
+            String resetUrl = urlCaptor.getValue();
+            assertTrue(resetUrl.startsWith("http://localhost:4200/reset-password?token="));
+            assertTrue(resetUrl.length() > "http://localhost:4200/reset-password?token=".length());
+        }
+
+        @Test
+        @DisplayName("No se envía email si usuario no existe (prevención de enumeración)")
+        void generarToken_UsuarioNoExiste_NoEnviaEmail() {
+            when(usuarioRepository.findByCorreoAndEstado("noexiste@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.empty());
+
+            authService.generarTokenRecuperacion("noexiste@test.com");
+
+            verify(tokenRepository, never()).deleteByUsuarioId(anyLong());
+            verify(tokenRepository, never()).save(any(PasswordResetToken.class));
+            verify(emailService, never()).enviarCorreoRecuperacion(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("Token anterior se elimina antes de generar uno nuevo")
+        void generarToken_EliminaTokenAnterior() {
+            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.of(mockUsuario));
+
+            authService.generarTokenRecuperacion("admin@test.com");
+
+            // Se verifica el orden: primero delete, luego save
+            var inOrder = inOrder(tokenRepository);
+            inOrder.verify(tokenRepository).deleteByUsuarioId(1L);
+            inOrder.verify(tokenRepository).save(any(PasswordResetToken.class));
+        }
     }
 
-    @Test
-    void cambiarContrasena_Exitoso() {
-        String mockTokenStr = "uuid-token";
-        PasswordResetToken mockToken = new PasswordResetToken();
-        mockToken.setToken(mockTokenStr);
-        mockToken.setUsuario(mockUsuario);
-        mockToken.setFechaExpiracion(LocalDateTime.now().plusMinutes(10));
+    // =========================================================================
+    // CAMBIAR CONTRASEÑA
+    // =========================================================================
+    @Nested
+    @DisplayName("Cambiar contraseña con token")
+    class CambiarContrasenaTests {
 
-        when(tokenRepository.findByToken(mockTokenStr)).thenReturn(Optional.of(mockToken));
-        when(passwordEncoder.encode("Nueva123*")).thenReturn("hashedNueva123*");
+        @Test
+        @DisplayName("Contraseña cambiada exitosamente con token válido")
+        void cambiarContrasena_TokenValido() {
+            PasswordResetToken resetToken = new PasswordResetToken();
+            resetToken.setToken("valid-token");
+            resetToken.setUsuario(mockUsuario);
+            resetToken.setFechaExpiracion(LocalDateTime.now().plusMinutes(10));
 
-        authService.cambiarContrasena(mockTokenStr, "Nueva123*");
+            when(tokenRepository.findByToken("valid-token")).thenReturn(Optional.of(resetToken));
+            when(passwordEncoder.encode("NewPassword123")).thenReturn("newHashedPass");
 
-        verify(usuarioRepository, times(1)).save(mockUsuario);
-        assertEquals("hashedNueva123*", mockUsuario.getPassword());
-        verify(tokenRepository, times(1)).delete(mockToken);
-    }
+            authService.cambiarContrasena("valid-token", "NewPassword123");
 
-    @Test
-    void cambiarContrasena_TokenExpirado() {
-        String mockTokenStr = "uuid-token-expirado";
-        PasswordResetToken mockToken = new PasswordResetToken();
-        mockToken.setToken(mockTokenStr);
-        mockToken.setUsuario(mockUsuario);
-        mockToken.setFechaExpiracion(LocalDateTime.now().minusMinutes(5));
+            assertEquals("newHashedPass", mockUsuario.getPassword());
+            verify(usuarioRepository).save(mockUsuario);
+            verify(tokenRepository).delete(resetToken);
+        }
 
-        when(tokenRepository.findByToken(mockTokenStr)).thenReturn(Optional.of(mockToken));
+        @Test
+        @DisplayName("Token inexistente lanza TokenInvalidoException")
+        void cambiarContrasena_TokenNoExiste() {
+            when(tokenRepository.findByToken("invalid-token")).thenReturn(Optional.empty());
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-            authService.cambiarContrasena(mockTokenStr, "Nueva123*");
-        });
+            TokenInvalidoException ex = assertThrows(
+                    TokenInvalidoException.class,
+                    () -> authService.cambiarContrasena("invalid-token", "NewPassword123")
+            );
 
-        assertEquals("El token ha expirado. Solicite uno nuevo.", exception.getMessage());
-        verify(tokenRepository, times(1)).delete(mockToken);
-        verify(usuarioRepository, never()).save(any());
+            assertEquals("Token inválido o no existe", ex.getMessage());
+            verify(usuarioRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Token expirado lanza TokenInvalidoException y elimina el token")
+        void cambiarContrasena_TokenExpirado() {
+            PasswordResetToken resetToken = new PasswordResetToken();
+            resetToken.setToken("expired-token");
+            resetToken.setUsuario(mockUsuario);
+            resetToken.setFechaExpiracion(LocalDateTime.now().minusMinutes(5));
+
+            when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(resetToken));
+
+            TokenInvalidoException ex = assertThrows(
+                    TokenInvalidoException.class,
+                    () -> authService.cambiarContrasena("expired-token", "NewPassword123")
+            );
+
+            assertEquals("El token ha expirado. Solicite uno nuevo.", ex.getMessage());
+            verify(tokenRepository).delete(resetToken);
+            verify(usuarioRepository, never()).save(any());
+        }
     }
 }
