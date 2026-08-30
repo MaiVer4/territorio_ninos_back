@@ -226,7 +226,6 @@ public class AuthServiceTest {
             authService.cambiarContrasena("valid-token", "NewPassword123");
 
             assertEquals("newHashedPass", mockUsuario.getPassword());
-            verify(usuarioRepository).save(mockUsuario);
             verify(tokenRepository).delete(resetToken);
         }
 

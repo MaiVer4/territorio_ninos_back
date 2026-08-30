@@ -65,6 +65,11 @@ public class AuthServiceImpl implements AuthService {
             throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
 
+        if (usuario.getRol() == null || usuario.getRol().getNombre() == null) {
+            log.error("Usuario {} tiene rol nulo en la base de datos", usuario.getId());
+            throw new CredencialesInvalidasException("Error de configuración del usuario. Contacte al administrador.");
+        }
+
         String nombreRol = usuario.getRol().getNombre().name();
         String token = jwtUtil.generarToken(usuario.getCorreo(), nombreRol);
 
@@ -118,7 +123,7 @@ public class AuthServiceImpl implements AuthService {
 
         Usuario usuario = resetToken.getUsuario();
         usuario.setPassword(passwordEncoder.encode(nuevaContrasena));
-        usuarioRepository.save(usuario);
+        // JPA dirty checking se encarga del update automáticamente, save() eliminado
 
         tokenRepository.delete(resetToken);
         log.info("Contraseña actualizada exitosamente para usuario ID: {}", usuario.getId());
