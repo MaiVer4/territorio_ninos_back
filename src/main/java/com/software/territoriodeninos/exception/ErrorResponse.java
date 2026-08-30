@@ -20,7 +20,7 @@ public class ErrorResponse {
     private String mensaje;
     
     @Schema(description = "Detalles adicionales del error")
-    private String detalle;
+    private Object detalles;
     
     @Builder.Default
     @Schema(description = "Timestamp del error")
@@ -32,10 +32,10 @@ public class ErrorResponse {
         this.timestamp = LocalDateTime.now();
     }
     
-    public ErrorResponse(int codigo, String mensaje, String detalle) {
+    public ErrorResponse(int codigo, String mensaje, Object detalles) {
         this.codigo = codigo;
         this.mensaje = mensaje;
-        this.detalle = detalle;
+        this.detalles = detalles;
         this.timestamp = LocalDateTime.now();
     }
 }
