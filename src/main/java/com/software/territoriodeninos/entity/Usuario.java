@@ -38,7 +38,7 @@ public class Usuario {
     @Column(name = "fecha_actualizacion")
     private LocalDateTime fechaActualizacion;
     
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rol_id", nullable = false)
     private Rol rol;
     
