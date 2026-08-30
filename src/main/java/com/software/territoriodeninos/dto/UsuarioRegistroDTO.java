@@ -25,8 +25,11 @@ public class UsuarioRegistroDTO {
     private String correo;
     
     @NotBlank(message = "La contraseña no puede estar vacía")
-    @Size(min = 8, message = "La contraseña debe tener mínimo 8 caracteres")
-    @Schema(description = "Contraseña del usuario (al menos 8 caracteres)", example = "Password123")
+    @jakarta.validation.constraints.Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$", 
+        message = "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número"
+    )
+    @Schema(description = "Contraseña del usuario (al menos 8 caracteres, 1 mayúscula, 1 minúscula, 1 número)", example = "Password123")
     private String password;
     
     @NotBlank(message = "El rol no puede estar vacío")

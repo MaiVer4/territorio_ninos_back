@@ -114,10 +114,6 @@ public class UsuarioServiceImpl implements UsuarioService {
             usuario.setCorreo(updateDTO.getCorreo());
         }
         
-        if (StringUtils.hasText(updateDTO.getPassword())) {
-            usuario.setPassword(passwordEncoder.encode(updateDTO.getPassword()));
-        }
-        
         if (StringUtils.hasText(updateDTO.getEstado())) {
             try {
                 usuario.setEstado(EstadoUsuario.valueOf(updateDTO.getEstado().toUpperCase()));
@@ -127,6 +123,18 @@ public class UsuarioServiceImpl implements UsuarioService {
         }
         
         return usuarioMapper.toResponseDTO(usuario);
+    }
+    
+    @Override
+    public void cambiarPassword(Long id, com.software.territoriodeninos.dto.ChangePasswordRequest request) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario con ID " + id + " no encontrado"));
+                
+        if (!passwordEncoder.matches(request.getPasswordActual(), usuario.getPassword())) {
+            throw new com.software.territoriodeninos.exception.ConflictoException("La contraseña actual es incorrecta");
+        }
+        
+        usuario.setPassword(passwordEncoder.encode(request.getNuevaContrasena()));
     }
     
     @Override

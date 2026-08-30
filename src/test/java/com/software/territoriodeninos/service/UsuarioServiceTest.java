@@ -317,17 +317,19 @@ public class UsuarioServiceTest {
         }
 
         @Test
-        @DisplayName("Actualizar contraseña la codifica con PasswordEncoder")
-        void actualizar_Password() {
-            UsuarioUpdateDTO dto = UsuarioUpdateDTO.builder()
-                    .password("NewPassword123")
-                    .build();
+        @DisplayName("Cambiar contraseña la codifica y actualiza correctamente")
+        void cambiarPassword_Exito() {
+            com.software.territoriodeninos.dto.ChangePasswordRequest dto = new com.software.territoriodeninos.dto.ChangePasswordRequest();
+            dto.setPasswordActual("OldPassword123");
+            dto.setNuevaContrasena("NewPassword123");
+
+            mockUsuario.setPassword("oldHashedPass");
 
             when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+            when(passwordEncoder.matches("OldPassword123", "oldHashedPass")).thenReturn(true);
             when(passwordEncoder.encode("NewPassword123")).thenReturn("newHashedPass");
-            when(usuarioMapper.toResponseDTO(mockUsuario)).thenReturn(mockResponseDTO);
 
-            usuarioService.actualizar(1L, dto);
+            usuarioService.cambiarPassword(1L, dto);
 
             assertEquals("newHashedPass", mockUsuario.getPassword());
             verify(passwordEncoder).encode("NewPassword123");

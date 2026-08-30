@@ -21,10 +21,6 @@ public class UsuarioUpdateDTO {
     @Schema(description = "Correo electrónico único", example = "juan.nuevo@example.com")
     private String correo;
     
-    @Size(min = 8, message = "La contraseña debe tener mínimo 8 caracteres")
-    @Schema(description = "Nueva contraseña (al menos 8 caracteres)", example = "NewPassword123")
-    private String password;
-    
     @Schema(description = "Nuevo estado del usuario (ACTIVO, INACTIVO, SUSPENDIDO)", example = "ACTIVO")
     private String estado;
 }

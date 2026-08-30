@@ -28,7 +28,7 @@ public interface UsuarioService {
 
     UsuarioResponseDTO actualizar(Long id, UsuarioUpdateDTO updateDTO);
     
+    void cambiarPassword(Long id, com.software.territoriodeninos.dto.ChangePasswordRequest request);
     
-
     UsuarioResponseDTO inactivar(Long id);
 }
