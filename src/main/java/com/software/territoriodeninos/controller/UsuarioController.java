@@ -31,6 +31,7 @@ public class UsuarioController {
     }
     
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
     @Operation(summary = "Registrar nuevo usuario", description = "Crear un nuevo usuario en el sistema (solo ADMINISTRADOR)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Usuario creado exitosamente",
@@ -46,6 +47,7 @@ public class UsuarioController {
     }
     
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
     @Operation(summary = "Obtener todos los usuarios", description = "Obtiene la lista de todos los usuarios activos")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Lista obtenida exitosamente",
@@ -58,6 +60,7 @@ public class UsuarioController {
     }
     
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
     @Operation(summary = "Obtener usuario por ID", description = "Obtiene un usuario específico por su ID")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Usuario encontrado",
@@ -71,6 +74,7 @@ public class UsuarioController {
     }
     
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
     @Operation(summary = "Actualizar usuario", description = "Actualiza los datos de un usuario existente (ADMINISTRADOR y TAQUILLERO)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Usuario actualizado exitosamente",
@@ -87,7 +91,17 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioActualizado);
     }
     
+    @PatchMapping("/{id}/password")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @Operation(summary = "Cambiar contraseña", description = "Cambia la contraseña del usuario tras validar la actual")
+    public ResponseEntity<?> cambiarPassword(@PathVariable Long id, 
+                                             @Valid @RequestBody com.software.territoriodeninos.dto.ChangePasswordRequest request) {
+        usuarioService.cambiarPassword(id, request);
+        return ResponseEntity.ok(java.util.Map.of("mensaje", "Contraseña actualizada exitosamente."));
+    }
+    
     @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
     @Operation(summary = "Inactivar usuario", description = "Inactiva un usuario del sistema (eliminación lógica, solo ADMINISTRADOR)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Usuario inactivado exitosamente",

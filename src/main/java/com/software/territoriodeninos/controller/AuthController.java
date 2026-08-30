@@ -111,7 +111,7 @@ public class AuthController {
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.generarTokenRecuperacion(request.getEmail());
         // Siempre devolvemos OK para no revelar qué correos están registrados
-        return ResponseEntity.ok("Si el correo existe, se enviará un enlace de recuperación.");
+        return ResponseEntity.ok(java.util.Map.of("mensaje", "Si el correo existe, se enviará un enlace de recuperación."));
     }
 
     // =========================================================================
@@ -152,6 +152,6 @@ public class AuthController {
     })
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.cambiarContrasena(request.getToken(), request.getNuevaContrasena());
-        return ResponseEntity.ok("Contraseña actualizada exitosamente.");
+        return ResponseEntity.ok(java.util.Map.of("mensaje", "Contraseña actualizada exitosamente."));
     }
 }

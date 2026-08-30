@@ -34,7 +34,7 @@ public class AuthControllerTest {
         ResponseEntity<?> response = authController.forgotPassword(request);
         
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Si el correo existe, se enviará un enlace de recuperación.", response.getBody());
+        assertEquals(java.util.Map.of("mensaje", "Si el correo existe, se enviará un enlace de recuperación."), response.getBody());
         verify(authService, times(1)).generarTokenRecuperacion("test@test.com");
     }
 
@@ -49,7 +49,7 @@ public class AuthControllerTest {
         ResponseEntity<?> response = authController.resetPassword(request);
         
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Contraseña actualizada exitosamente.", response.getBody());
+        assertEquals(java.util.Map.of("mensaje", "Contraseña actualizada exitosamente."), response.getBody());
         verify(authService, times(1)).cambiarContrasena("my-token", "NuevaPass123");
     }
 }
