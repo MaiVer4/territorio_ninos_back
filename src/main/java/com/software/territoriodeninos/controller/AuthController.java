@@ -102,7 +102,7 @@ public class AuthController {
             description = "Solicitud procesada. Si el correo existe, se enviará el enlace.",
             content = @Content(
                 mediaType = "application/json",
-                examples = @ExampleObject(value = "\"Si el correo existe, se enviará un enlace de recuperación.\"")
+                examples = @ExampleObject(value = "{\n  \"mensaje\": \"Si el correo existe, se enviará un enlace de recuperación.\"\n}")
             )
         ),
         @ApiResponse(responseCode = "400", description = "El campo email es inválido o está vacío.",
@@ -140,7 +140,7 @@ public class AuthController {
             description = "Contraseña actualizada exitosamente. El token queda invalidado.",
             content = @Content(
                 mediaType = "application/json",
-                examples = @ExampleObject(value = "\"Contraseña actualizada exitosamente.\"")
+                examples = @ExampleObject(value = "{\n  \"mensaje\": \"Contraseña actualizada exitosamente.\"\n}")
             )
         ),
         @ApiResponse(responseCode = "401",
