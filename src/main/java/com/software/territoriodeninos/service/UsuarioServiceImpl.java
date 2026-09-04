@@ -12,6 +12,7 @@ import com.software.territoriodeninos.repository.RolRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.util.EstadoUsuario;
 import com.software.territoriodeninos.util.NombreRol;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,20 +24,13 @@ import java.util.List;
 @Slf4j
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class UsuarioServiceImpl implements UsuarioService {
     
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
     private final UsuarioMapper usuarioMapper;
-    
-    public UsuarioServiceImpl(UsuarioRepository usuarioRepository, RolRepository rolRepository,
-                               PasswordEncoder passwordEncoder, UsuarioMapper usuarioMapper) {
-        this.usuarioRepository = usuarioRepository;
-        this.rolRepository = rolRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.usuarioMapper = usuarioMapper;
-    }
     
     @Override
     public UsuarioResponseDTO registrar(UsuarioRegistroDTO registroDTO) {
