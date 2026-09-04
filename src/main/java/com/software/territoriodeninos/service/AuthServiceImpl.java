@@ -10,6 +10,7 @@ import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
 import com.software.territoriodeninos.util.EstadoUsuario;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +30,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private final UsuarioRepository usuarioRepository;
@@ -39,16 +41,6 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
-
-    public AuthServiceImpl(UsuarioRepository usuarioRepository, JwtUtil jwtUtil,
-                            PasswordEncoder passwordEncoder, PasswordResetTokenRepository tokenRepository,
-                            EmailService emailService) {
-        this.usuarioRepository = usuarioRepository;
-        this.jwtUtil = jwtUtil;
-        this.passwordEncoder = passwordEncoder;
-        this.tokenRepository = tokenRepository;
-        this.emailService = emailService;
-    }
 
     @Override
     public AuthResponseDTO login(LoginRequestDTO loginRequestDTO) {
