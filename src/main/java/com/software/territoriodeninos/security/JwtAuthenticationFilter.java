@@ -1,10 +1,12 @@
 package com.software.territoriodeninos.security;
 
+import com.software.territoriodeninos.exception.ErrorResponse;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -48,12 +50,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
+            filterChain.doFilter(request, response);
         } catch (TokenInvalidoException e) {
             logger.warn("Token JWT inválido: " + e.getMessage());
+            escribirRespuestaError(response, HttpStatus.UNAUTHORIZED, "Token inválido o expirado", e.getMessage());
         } catch (Exception e) {
             logger.error("Error inesperado en filtro JWT", e);
+            escribirRespuestaError(response, HttpStatus.INTERNAL_SERVER_ERROR, "Error interno", "Ocurrió un error al procesar el token");
         }
-        
-        filterChain.doFilter(request, response);
+    }
+
+    private void escribirRespuestaError(HttpServletResponse response, HttpStatus status, String mensaje, String detalle) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType("application/json;charset=UTF-8");
+        String json = String.format("{\"codigo\":%d, \"mensaje\":\"%s\", \"detalles\":\"%s\"}", 
+            status.value(), 
+            mensaje.replace("\"", "\\\""), 
+            detalle.replace("\"", "\\\""));
+        response.getWriter().write(json);
     }
 }

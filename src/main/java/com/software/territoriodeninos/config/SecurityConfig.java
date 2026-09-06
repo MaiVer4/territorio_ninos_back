@@ -1,12 +1,13 @@
 package com.software.territoriodeninos.config;
 
 import com.software.territoriodeninos.security.JwtAuthenticationFilter;
-import com.software.territoriodeninos.util.NombreRol;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -23,14 +24,14 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-    }
+
+    @Value("${app.frontend.url:http://localhost:4200}")
+    private String allowedOrigin;
     
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -46,7 +47,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        // Leemos el origen desde application.properties (ej: http://localhost:4200)
+        configuration.setAllowedOrigins(List.of(allowedOrigin));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
@@ -77,15 +79,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         
-                        .requestMatchers(HttpMethod.POST, "/api/usuarios")
-                            .hasRole(NombreRol.ADMINISTRADOR.name())
-                        .requestMatchers(HttpMethod.GET, "/api/usuarios/**")
-                            .hasAnyRole(NombreRol.ADMINISTRADOR.name(), NombreRol.TAQUILLERO.name(), NombreRol.OPERARIO.name())
-                        .requestMatchers(HttpMethod.PUT, "/api/usuarios/**")
-                            .hasAnyRole(NombreRol.ADMINISTRADOR.name(), NombreRol.TAQUILLERO.name())
-                        .requestMatchers(HttpMethod.DELETE, "/api/usuarios/**")
-                            .hasRole(NombreRol.ADMINISTRADOR.name())
-                        
+                        // Los roles de negocio están delegados a @PreAuthorize en cada Controller
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
