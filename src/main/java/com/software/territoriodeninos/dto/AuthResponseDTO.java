@@ -17,6 +17,12 @@ public class AuthResponseDTO {
     @Schema(description = "Tipo de token (Bearer)")
     private String tipoToken;
     
+    @Schema(description = "ID del usuario autenticado")
+    private Long id;
+    
+    @Schema(description = "Nombre del usuario autenticado")
+    private String nombre;
+    
     @Schema(description = "Correo del usuario autenticado")
     private String correo;
     

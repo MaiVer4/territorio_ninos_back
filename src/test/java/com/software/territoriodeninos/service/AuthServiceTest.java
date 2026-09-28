@@ -93,7 +93,7 @@ public class AuthServiceTest {
             when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
                     .thenReturn(Optional.of(mockUsuario));
             when(passwordEncoder.matches("Password123", "hashedPass")).thenReturn(true);
-            when(jwtUtil.generarToken("admin@test.com", "ADMINISTRADOR")).thenReturn("jwt-token-mock");
+            when(jwtUtil.generarToken(mockUsuario)).thenReturn("jwt-token-mock");
 
             AuthResponseDTO response = authService.login(request);
 
@@ -105,7 +105,7 @@ public class AuthServiceTest {
 
             verify(usuarioRepository).findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO);
             verify(passwordEncoder).matches("Password123", "hashedPass");
-            verify(jwtUtil).generarToken("admin@test.com", "ADMINISTRADOR");
+            verify(jwtUtil).generarToken(mockUsuario);
         }
 
         @Test
@@ -126,7 +126,7 @@ public class AuthServiceTest {
 
             assertEquals("Correo o contraseña incorrectos", ex.getMessage());
             verify(passwordEncoder, never()).matches(anyString(), anyString());
-            verify(jwtUtil, never()).generarToken(anyString(), anyString());
+            verify(jwtUtil, never()).generarToken(any(com.software.territoriodeninos.entity.Usuario.class));
         }
 
         @Test
@@ -147,7 +147,7 @@ public class AuthServiceTest {
             );
 
             assertEquals("Correo o contraseña incorrectos", ex.getMessage());
-            verify(jwtUtil, never()).generarToken(anyString(), anyString());
+            verify(jwtUtil, never()).generarToken(any(com.software.territoriodeninos.entity.Usuario.class));
         }
     }
 

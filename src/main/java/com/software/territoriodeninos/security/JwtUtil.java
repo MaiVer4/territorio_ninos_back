@@ -31,16 +31,18 @@ public class JwtUtil {
         return expirationHours * 60 * 60 * 1000L;
     }
     
-    public String generarToken(String correo, String nombreRol) {
+    public String generarToken(com.software.territoriodeninos.entity.Usuario usuario) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("rol", nombreRol);
+        claims.put("rol", usuario.getRol().getNombre().name());
+        claims.put("userId", usuario.getId());
+        claims.put("nombre", usuario.getNombre());
         
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + getExpirationTime());
         
         return Jwts.builder()
                 .claims(claims)
-                .subject(correo)
+                .subject(usuario.getCorreo())
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())

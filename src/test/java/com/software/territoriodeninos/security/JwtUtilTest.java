@@ -3,6 +3,9 @@ package com.software.territoriodeninos.security;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.entity.Rol;
+import com.software.territoriodeninos.util.NombreRol;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,7 +23,15 @@ class JwtUtilTest {
 
     @Test
     void generarToken_deberiaRetornarTokenValido() {
-        String token = jwtUtil.generarToken("test@example.com", "ADMINISTRADOR");
+        Rol rol = new Rol();
+        rol.setNombre(NombreRol.ADMINISTRADOR);
+        Usuario usuario = new Usuario();
+        usuario.setId(99L);
+        usuario.setNombre("Test User");
+        usuario.setCorreo("test@example.com");
+        usuario.setRol(rol);
+        
+        String token = jwtUtil.generarToken(usuario);
         
         assertNotNull(token);
         assertTrue(jwtUtil.esValido(token));

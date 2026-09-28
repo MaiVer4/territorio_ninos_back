@@ -63,13 +63,15 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String nombreRol = usuario.getRol().getNombre().name();
-        String token = jwtUtil.generarToken(usuario.getCorreo(), nombreRol);
+        String token = jwtUtil.generarToken(usuario);
 
         log.info("Login exitoso para: {}", loginRequestDTO.getCorreo());
 
         return AuthResponseDTO.builder()
                 .token(token)
                 .tipoToken("Bearer")
+                .id(usuario.getId())
+                .nombre(usuario.getNombre())
                 .correo(usuario.getCorreo())
                 .rol(nombreRol)
                 .build();

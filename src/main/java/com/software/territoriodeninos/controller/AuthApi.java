@@ -120,4 +120,26 @@ public interface AuthApi {
             content = @Content(mediaType = "application/json"))
     })
     ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request);
+
+    @Operation(
+        summary = "Cerrar sesión",
+        description = """
+            Cierra la sesión del usuario actual. 
+            Valida reglas de negocio (ej: si un TAQUILLERO tiene caja activa no puede cerrar sesión).
+            Limpia el SecurityContext local.
+            """
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Sesión cerrada exitosamente.",
+            content = @Content(mediaType = "application/json")
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "No se puede cerrar sesión por reglas de negocio (ej: caja abierta).",
+            content = @Content(mediaType = "application/json")
+        )
+    })
+    ResponseEntity<?> logout();
 }
