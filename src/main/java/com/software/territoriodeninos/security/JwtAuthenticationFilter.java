@@ -63,10 +63,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void escribirRespuestaError(HttpServletResponse response, HttpStatus status, String mensaje, String detalle) throws IOException {
         response.setStatus(status.value());
         response.setContentType("application/json;charset=UTF-8");
-        String json = String.format("{\"codigo\":%d, \"mensaje\":\"%s\", \"detalles\":\"%s\"}", 
-            status.value(), 
-            mensaje.replace("\"", "\\\""), 
-            detalle.replace("\"", "\\\""));
-        response.getWriter().write(json);
+        
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("codigo", status.value());
+        body.put("mensaje", mensaje);
+        body.put("detalles", detalle);
+        
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        mapper.writeValue(response.getOutputStream(), body);
     }
 }

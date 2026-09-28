@@ -96,6 +96,8 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario con ID " + id + " no encontrado"));
         
+        verificarBOLA(usuario, false);
+        
         if (StringUtils.hasText(updateDTO.getNombre())) {
             usuario.setNombre(updateDTO.getNombre());
         }
@@ -124,6 +126,8 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario con ID " + id + " no encontrado"));
                 
+        verificarBOLA(usuario, true);
+        
         if (!passwordEncoder.matches(request.getPasswordActual(), usuario.getPassword())) {
             throw new com.software.territoriodeninos.exception.ConflictoException("La contraseña actual es incorrecta");
         }
@@ -138,5 +142,23 @@ public class UsuarioServiceImpl implements UsuarioService {
         
         usuario.inactivar();
         return usuarioMapper.toResponseDTO(usuario);
+    }
+
+    private void verificarBOLA(Usuario usuarioTarget, boolean soloMismoUsuario) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            throw new org.springframework.security.access.AccessDeniedException("No autenticado");
+        }
+        String correoAutenticado = auth.getName();
+        if (usuarioTarget.getCorreo().equalsIgnoreCase(correoAutenticado)) {
+            return;
+        }
+        if (soloMismoUsuario) {
+            throw new org.springframework.security.access.AccessDeniedException("Solo puedes modificar tu propia contraseña");
+        }
+        boolean esAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMINISTRADOR"));
+        if (!esAdmin) {
+            throw new org.springframework.security.access.AccessDeniedException("Privilegios insuficientes para modificar a otro usuario");
+        }
     }
 }

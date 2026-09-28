@@ -77,6 +77,13 @@ public class UsuarioServiceTest {
                 .rol("TAQUILLERO")
                 .fechaCreacion(mockUsuario.getFechaCreacion())
                 .build();
+                
+        org.springframework.security.core.Authentication authentication = mock(org.springframework.security.core.Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("juan@test.com");
+        org.springframework.security.core.context.SecurityContext securityContext = mock(org.springframework.security.core.context.SecurityContext.class);
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        org.springframework.security.core.context.SecurityContextHolder.setContext(securityContext);
     }
 
     // =========================================================================
