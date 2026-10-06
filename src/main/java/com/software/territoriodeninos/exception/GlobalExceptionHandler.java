@@ -44,6 +44,36 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(CuentaInactivaException.class)
+    public ResponseEntity<ErrorResponse> handleCuentaInactiva(CuentaInactivaException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                "Cuenta inactiva",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(CuentaBloqueadaException.class)
+    public ResponseEntity<ErrorResponse> handleCuentaBloqueada(CuentaBloqueadaException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.LOCKED.value(),
+                "Cuenta bloqueada",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.LOCKED);
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                "Acceso denegado",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(TokenInvalidoException.class)
     public ResponseEntity<ErrorResponse> handleTokenInvalido(TokenInvalidoException ex) {
         ErrorResponse errorResponse = new ErrorResponse(

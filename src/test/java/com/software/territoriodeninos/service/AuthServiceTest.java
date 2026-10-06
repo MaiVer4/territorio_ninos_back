@@ -51,6 +51,9 @@ public class AuthServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private com.software.territoriodeninos.security.LoginAttemptService loginAttemptService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -90,7 +93,8 @@ public class AuthServiceTest {
                     .password("Password123")
                     .build();
 
-            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+            when(loginAttemptService.isBlocked("admin@test.com")).thenReturn(false);
+            when(usuarioRepository.findByCorreo("admin@test.com"))
                     .thenReturn(Optional.of(mockUsuario));
             when(passwordEncoder.matches("Password123", "hashedPass")).thenReturn(true);
             when(jwtUtil.generarToken(mockUsuario)).thenReturn("jwt-token-mock");
@@ -103,9 +107,10 @@ public class AuthServiceTest {
             assertEquals("admin@test.com", response.getCorreo());
             assertEquals("ADMINISTRADOR", response.getRol());
 
-            verify(usuarioRepository).findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO);
+            verify(usuarioRepository).findByCorreo("admin@test.com");
             verify(passwordEncoder).matches("Password123", "hashedPass");
             verify(jwtUtil).generarToken(mockUsuario);
+            verify(loginAttemptService).loginSucceeded("admin@test.com");
         }
 
         @Test
@@ -116,7 +121,8 @@ public class AuthServiceTest {
                     .password("Password123")
                     .build();
 
-            when(usuarioRepository.findByCorreoAndEstado("noexiste@test.com", EstadoUsuario.ACTIVO))
+            when(loginAttemptService.isBlocked("noexiste@test.com")).thenReturn(false);
+            when(usuarioRepository.findByCorreo("noexiste@test.com"))
                     .thenReturn(Optional.empty());
 
             CredencialesInvalidasException ex = assertThrows(
@@ -127,6 +133,7 @@ public class AuthServiceTest {
             assertEquals("Correo o contraseña incorrectos", ex.getMessage());
             verify(passwordEncoder, never()).matches(anyString(), anyString());
             verify(jwtUtil, never()).generarToken(any(com.software.territoriodeninos.entity.Usuario.class));
+            verify(loginAttemptService).loginFailed("noexiste@test.com");
         }
 
         @Test
@@ -137,7 +144,8 @@ public class AuthServiceTest {
                     .password("WrongPassword")
                     .build();
 
-            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+            when(loginAttemptService.isBlocked("admin@test.com")).thenReturn(false);
+            when(usuarioRepository.findByCorreo("admin@test.com"))
                     .thenReturn(Optional.of(mockUsuario));
             when(passwordEncoder.matches("WrongPassword", "hashedPass")).thenReturn(false);
 
@@ -148,6 +156,43 @@ public class AuthServiceTest {
 
             assertEquals("Correo o contraseña incorrectos", ex.getMessage());
             verify(jwtUtil, never()).generarToken(any(com.software.territoriodeninos.entity.Usuario.class));
+            verify(loginAttemptService).loginFailed("admin@test.com");
+        }
+
+        @Test
+        @DisplayName("Login con cuenta inactiva lanza CuentaInactivaException")
+        void login_CuentaInactiva() {
+            mockUsuario.setEstado(EstadoUsuario.INACTIVO);
+            LoginRequestDTO request = LoginRequestDTO.builder()
+                    .correo("admin@test.com")
+                    .password("Password123")
+                    .build();
+
+            when(loginAttemptService.isBlocked("admin@test.com")).thenReturn(false);
+            when(usuarioRepository.findByCorreo("admin@test.com"))
+                    .thenReturn(Optional.of(mockUsuario));
+
+            assertThrows(
+                    com.software.territoriodeninos.exception.CuentaInactivaException.class,
+                    () -> authService.login(request)
+            );
+        }
+
+        @Test
+        @DisplayName("Login con cuenta bloqueada lanza CuentaBloqueadaException")
+        void login_CuentaBloqueada() {
+            LoginRequestDTO request = LoginRequestDTO.builder()
+                    .correo("admin@test.com")
+                    .password("Password123")
+                    .build();
+
+            when(loginAttemptService.isBlocked("admin@test.com")).thenReturn(true);
+            when(loginAttemptService.getRemainingLockoutMinutes("admin@test.com")).thenReturn(15L);
+
+            assertThrows(
+                    com.software.territoriodeninos.exception.CuentaBloqueadaException.class,
+                    () -> authService.login(request)
+            );
         }
     }
 

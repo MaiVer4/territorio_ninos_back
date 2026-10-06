@@ -38,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
+    private final com.software.territoriodeninos.security.LoginAttemptService loginAttemptService;
 
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
@@ -46,14 +47,31 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponseDTO login(LoginRequestDTO loginRequestDTO) {
         log.info("Intento de login para: {}", loginRequestDTO.getCorreo());
 
-        Usuario usuario = usuarioRepository.findByCorreoAndEstado(loginRequestDTO.getCorreo(), EstadoUsuario.ACTIVO)
+        String correo = loginRequestDTO.getCorreo();
+
+        if (loginAttemptService.isBlocked(correo)) {
+            long minutos = loginAttemptService.getRemainingLockoutMinutes(correo);
+            log.warn("Login bloqueado por fuerza bruta para: {} ({} minutos restantes)", correo, minutos);
+            throw new com.software.territoriodeninos.exception.CuentaBloqueadaException(
+                    "Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente en " + minutos + " minutos.");
+        }
+
+        Usuario usuario = usuarioRepository.findByCorreo(correo)
                 .orElseThrow(() -> {
-                    log.warn("Login fallido: usuario no encontrado o inactivo - {}", loginRequestDTO.getCorreo());
+                    log.warn("Login fallido: usuario no encontrado - {}", correo);
+                    loginAttemptService.loginFailed(correo);
                     return new CredencialesInvalidasException("Correo o contraseña incorrectos");
                 });
 
+        if (usuario.getEstado() != EstadoUsuario.ACTIVO) {
+            log.warn("Login fallido: cuenta inactiva - {}", correo);
+            throw new com.software.territoriodeninos.exception.CuentaInactivaException(
+                    "Su cuenta ha sido desactivada. Por favor, comuníquese con el administrador.");
+        }
+
         if (!passwordEncoder.matches(loginRequestDTO.getPassword(), usuario.getPassword())) {
-            log.warn("Login fallido: contraseña incorrecta para - {}", loginRequestDTO.getCorreo());
+            log.warn("Login fallido: contraseña incorrecta para - {}", correo);
+            loginAttemptService.loginFailed(correo);
             throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
 
@@ -61,6 +79,8 @@ public class AuthServiceImpl implements AuthService {
             log.error("Usuario {} tiene rol nulo en la base de datos", usuario.getId());
             throw new CredencialesInvalidasException("Error de configuración del usuario. Contacte al administrador.");
         }
+
+        loginAttemptService.loginSucceeded(correo);
 
         String nombreRol = usuario.getRol().getNombre().name();
         String token = jwtUtil.generarToken(usuario);
