@@ -25,6 +25,7 @@ public class UsuarioRegistroDTO {
     private String correo;
     
     @NotBlank(message = "La contraseña no puede estar vacía")
+    @com.fasterxml.jackson.annotation.JsonAlias({"contrasena", "contraseña", "clave"})
     @jakarta.validation.constraints.Pattern(
         regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$", 
         message = "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número"
@@ -33,6 +34,7 @@ public class UsuarioRegistroDTO {
     private String password;
     
     @NotBlank(message = "El rol no puede estar vacío")
+    @com.fasterxml.jackson.annotation.JsonAlias({"rol", "role"})
     @Schema(description = "Nombre del rol (ADMINISTRADOR, TAQUILLERO, OPERARIO)", example = "TAQUILLERO")
     private String nombreRol;
 }
