@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.dto;
 
+import com.software.territoriodeninos.util.TipoAtraccion;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,5 +14,15 @@ public record AtraccionRequestDTO(
     
     @NotNull(message = "La tarifa por minuto es obligatoria")
     @DecimalMin(value = "0.01", message = "La tarifa debe ser mayor a 0")
-    BigDecimal tarifaMinuto
-) {}
+    BigDecimal tarifaMinuto,
+
+    TipoAtraccion tipo,
+    Integer capacidadMaxima,
+    Integer duracionMinutosBase,
+    Integer toleranciaMinutos,
+    Integer caidasLimite
+) {
+    public AtraccionRequestDTO(String nombre, String descripcion, BigDecimal tarifaMinuto) {
+        this(nombre, descripcion, tarifaMinuto, TipoAtraccion.TEMPORIZADA, 1, 15, 0, 3);
+    }
+}

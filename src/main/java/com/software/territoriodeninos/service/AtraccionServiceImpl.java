@@ -28,13 +28,28 @@ public class AtraccionServiceImpl implements AtraccionService {
             throw new ConflictoException("Ya existe una atracción con el nombre: " + request.nombre());
         }
 
-        Atraccion atraccion = Atraccion.builder()
+        Atraccion.AtraccionBuilder builder = Atraccion.builder()
                 .nombre(request.nombre())
                 .descripcion(request.descripcion())
-                .tarifaMinuto(request.tarifaMinuto())
-                .build();
+                .tarifaMinuto(request.tarifaMinuto());
 
-        Atraccion guardada = atraccionRepository.save(atraccion);
+        if (request.tipo() != null) {
+            builder.tipo(request.tipo());
+        }
+        if (request.capacidadMaxima() != null) {
+            builder.capacidadMaxima(request.capacidadMaxima());
+        }
+        if (request.duracionMinutosBase() != null) {
+            builder.duracionMinutosBase(request.duracionMinutosBase());
+        }
+        if (request.toleranciaMinutos() != null) {
+            builder.toleranciaMinutos(request.toleranciaMinutos());
+        }
+        if (request.caidasLimite() != null) {
+            builder.caidasLimite(request.caidasLimite());
+        }
+
+        Atraccion guardada = atraccionRepository.save(builder.build());
         log.info("Atracción creada: {}", guardada.getNombre());
         return mapToDTO(guardada);
     }
@@ -77,6 +92,22 @@ public class AtraccionServiceImpl implements AtraccionService {
         atraccion.setDescripcion(request.descripcion());
         atraccion.setTarifaMinuto(request.tarifaMinuto());
 
+        if (request.tipo() != null) {
+            atraccion.setTipo(request.tipo());
+        }
+        if (request.capacidadMaxima() != null) {
+            atraccion.setCapacidadMaxima(request.capacidadMaxima());
+        }
+        if (request.duracionMinutosBase() != null) {
+            atraccion.setDuracionMinutosBase(request.duracionMinutosBase());
+        }
+        if (request.toleranciaMinutos() != null) {
+            atraccion.setToleranciaMinutos(request.toleranciaMinutos());
+        }
+        if (request.caidasLimite() != null) {
+            atraccion.setCaidasLimite(request.caidasLimite());
+        }
+
         log.info("Atracción actualizada: {}", atraccion.getNombre());
         return mapToDTO(atraccion);
     }
@@ -112,8 +143,13 @@ public class AtraccionServiceImpl implements AtraccionService {
                 atraccion.getNombre(),
                 atraccion.getDescripcion(),
                 atraccion.getTarifaMinuto(),
-                atraccion.getEstado().name(),
-                atraccion.getFechaCreacion()
+                atraccion.getEstado() != null ? atraccion.getEstado().name() : "ACTIVO",
+                atraccion.getFechaCreacion(),
+                atraccion.getTipo() != null ? atraccion.getTipo().name() : "TEMPORIZADA",
+                atraccion.getCapacidadMaxima(),
+                atraccion.getDuracionMinutosBase(),
+                atraccion.getToleranciaMinutos(),
+                atraccion.getCaidasLimite()
         );
     }
 }

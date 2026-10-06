@@ -34,6 +34,27 @@ public class Atraccion {
     @Column(nullable = false)
     private EstadoAtraccion estado;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private com.software.territoriodeninos.util.TipoAtraccion tipo = com.software.territoriodeninos.util.TipoAtraccion.TEMPORIZADA;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer capacidadMaxima = 1;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer duracionMinutosBase = 15;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer toleranciaMinutos = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer caidasLimite = 3;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;
 
@@ -42,6 +63,21 @@ public class Atraccion {
         this.fechaCreacion = LocalDateTime.now();
         if (this.estado == null) {
             this.estado = EstadoAtraccion.ACTIVO;
+        }
+        if (this.tipo == null) {
+            this.tipo = com.software.territoriodeninos.util.TipoAtraccion.TEMPORIZADA;
+        }
+        if (this.capacidadMaxima == null) {
+            this.capacidadMaxima = 1;
+        }
+        if (this.duracionMinutosBase == null) {
+            this.duracionMinutosBase = 15;
+        }
+        if (this.toleranciaMinutos == null) {
+            this.toleranciaMinutos = 0;
+        }
+        if (this.caidasLimite == null) {
+            this.caidasLimite = 3;
         }
     }
 }

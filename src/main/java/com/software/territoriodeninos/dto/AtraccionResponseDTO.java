@@ -9,5 +9,14 @@ public record AtraccionResponseDTO(
     String descripcion,
     BigDecimal tarifaMinuto,
     String estado,
-    LocalDateTime fechaCreacion
-) {}
+    LocalDateTime fechaCreacion,
+    String tipo,
+    Integer capacidadMaxima,
+    Integer duracionMinutosBase,
+    Integer toleranciaMinutos,
+    Integer caidasLimite
+) {
+    public AtraccionResponseDTO(Long id, String nombre, String descripcion, BigDecimal tarifaMinuto, String estado, LocalDateTime fechaCreacion) {
+        this(id, nombre, descripcion, tarifaMinuto, estado, fechaCreacion, "TEMPORIZADA", 1, 15, 0, 3);
+    }
+}
