@@ -1,0 +1,127 @@
+<mxfile host="app.diagrams.net" modified="2026-10-02T16:30:00.000Z" agent="Draw.io" version="21.0.0" type="device">
+  <diagram id="diagram_er_prueba" name="Modelo Entidad-Relación">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- LEYENDA / TÍTULO -->
+        <mxCell id="title" value="MODELO ENTIDAD - RELACIÓN (NOTACIÓN CLÁSICA CHEN)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="300" y="40" width="560" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ================= ENTIDAD: CLIENTE ================= -->
+        <mxCell id="ent_cliente" value="CLIENTE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="100" y="270" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos Cliente -->
+        <mxCell id="att_cli_id" value="&lt;u&gt;id_cliente&lt;/u&gt; (PK)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="30" y="160" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_cli_nom" value="nombre" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="160" y="150" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_cli_email" value="email" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="30" y="380" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_cli_tel" value="telefono" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="150" y="390" width="90" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones Atributos Cliente -->
+        <mxCell id="edge_att_cli_1" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_cli_id" target="ent_cliente" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_cli_2" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_cli_nom" target="ent_cliente" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_cli_3" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_cli_email" target="ent_cliente" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_cli_4" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_cli_tel" target="ent_cliente" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= RELACIÓN: REALIZA (1:N) ================= -->
+        <mxCell id="rel_realiza" value="Realiza" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="320" y="260" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ================= ENTIDAD: PEDIDO ================= -->
+        <mxCell id="ent_pedido" value="PEDIDO" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="510" y="270" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones CLIENTE - REALIZA - PEDIDO con Cardinalidad -->
+        <mxCell id="edge_cli_realiza" value="1" style="endArrow=none;html=1;strokeWidth=2;fontSize=14;fontStyle=1;fontColor=#004C99;labelBackgroundColor=#ffffff;" edge="1" source="ent_cliente" target="rel_realiza" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_realiza_ped" value="N" style="endArrow=none;html=1;strokeWidth=2;fontSize=14;fontStyle=1;fontColor=#004C99;labelBackgroundColor=#ffffff;" edge="1" source="rel_realiza" target="ent_pedido" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos Pedido -->
+        <mxCell id="att_ped_id" value="&lt;u&gt;id_pedido&lt;/u&gt; (PK)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="470" y="160" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_ped_fecha" value="fecha" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="590" y="160" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_ped_total" value="total" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="530" y="380" width="90" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones Atributos Pedido -->
+        <mxCell id="edge_att_ped_1" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_ped_id" target="ent_pedido" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_ped_2" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_ped_fecha" target="ent_pedido" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_ped_3" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_ped_total" target="ent_pedido" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= RELACIÓN: CONTIENE (N:M con atributos) ================= -->
+        <mxCell id="rel_contiene" value="Contiene" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="720" y="260" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos de la Relación Contiene -->
+        <mxCell id="att_rel_cant" value="cantidad" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="725" y="160" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_att_rel_1" style="endArrow=none;html=1;strokeColor=#9673a6;dashed=1;" edge="1" source="att_rel_cant" target="rel_contiene" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= ENTIDAD: PRODUCTO ================= -->
+        <mxCell id="ent_prod" value="PRODUCTO" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="910" y="270" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones PEDIDO - CONTIENE - PRODUCTO con Cardinalidad -->
+        <mxCell id="edge_ped_contiene" value="N" style="endArrow=none;html=1;strokeWidth=2;fontSize=14;fontStyle=1;fontColor=#004C99;labelBackgroundColor=#ffffff;" edge="1" source="ent_pedido" target="rel_contiene" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_contiene_prod" value="M" style="endArrow=none;html=1;strokeWidth=2;fontSize=14;fontStyle=1;fontColor=#004C99;labelBackgroundColor=#ffffff;" edge="1" source="rel_contiene" target="ent_prod" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos Producto -->
+        <mxCell id="att_prod_id" value="&lt;u&gt;id_producto&lt;/u&gt; (PK)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="870" y="160" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_prod_nom" value="nombre_prod" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="160" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_prod_precio" value="precio" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="900" y="380" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_prod_stock" value="stock" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="380" width="90" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones Atributos Producto -->
+        <mxCell id="edge_att_prod_1" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_prod_id" target="ent_prod" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_prod_2" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_prod_nom" target="ent_prod" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_prod_3" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_prod_precio" target="ent_prod" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_prod_4" style="endArrow=none;html=1;strokeColor=#999999;" edge="1" source="att_prod_stock" target="ent_prod" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= CUADRO DE CONVENCIONES (SIGNOS E-R) ================= -->
+        <mxCell id="box_legend" value="SIGNOS Y CONVENCIONES E-R (CHEN)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="100" y="490" width="940" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_content" value="&lt;table style='width:100%; border-collapse:collapse;'&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;■ Rectángulo:&lt;/b&gt; Entidad fuerte (Ej: CLIENTE, PEDIDO)&lt;/td&gt;&lt;td&gt;&lt;b&gt;◆ Rombo:&lt;/b&gt; Relación / Verbo (Ej: Realiza, Contiene)&lt;/td&gt;&lt;td&gt;&lt;b&gt;● Óvalo:&lt;/b&gt; Atributo descriptivo (Ej: nombre, fecha)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;&lt;u&gt;● Óvalo Subrayado&lt;/u&gt;:&lt;/b&gt; Llave Primaria (PK)&lt;/td&gt;&lt;td&gt;&lt;b&gt;1 : N :&lt;/b&gt; Cardinalidad (Uno a Muchos)&lt;/td&gt;&lt;td&gt;&lt;b&gt;N : M :&lt;/b&gt; Cardinalidad (Muchos a Muchos con atributo propio)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;overflow=hidden;rotatable=0;html=1;fontSize=11;" vertex="1" parent="box_legend">
+          <mxGeometry y="26" width="940" height="84" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

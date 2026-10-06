@@ -1,0 +1,101 @@
+<mxfile host="app.diagrams.net" modified="2026-10-02T16:40:00.000Z" agent="Draw.io" version="21.0.0" type="device">
+  <diagram id="er_chen_exacto" name="Modelo ER Simbologia Chen">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- TITULO -->
+        <mxCell id="title" value="MODELO ENTIDAD - RELACIÓN (CON LOS SÍMBOLOS EXACTOS DE TU IMAGEN)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="250" y="30" width="670" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ================= 1. ENTIDAD FUERTE (Rectángulo simple): CLIENTE ================= -->
+        <mxCell id="ent_cliente" value="cliente" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="680" y="240" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos Cliente -->
+        <mxCell id="att_id_sena" value="&lt;u&gt;id_sena&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="120" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_cli_nombre" value="nombre" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="110" width="100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones Atributos Cliente -->
+        <mxCell id="edge_att_cli_1" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_id_sena" target="ent_cliente" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_cli_2" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_cli_nombre" target="ent_cliente" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= 2. RELACIÓN IDENTIFICADORA (Doble rombo): TIENE ================= -->
+        <mxCell id="rel_tiene" value="tiene" style="shape=rhombus;double=1;perimeter=rhombusPerimeter;whiteSpace=wrap;html=1;align=center;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="450" y="225" width="120" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- ================= 3. ENTIDAD DÉBIL (Doble rectángulo): VENTA ================= -->
+        <mxCell id="ent_venta" value="venta" style="shape=ext;double=1;margin=4;whiteSpace=wrap;html=1;align=center;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="190" y="235" width="140" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones con cardinalidades -->
+        <mxCell id="edge_cli_tiene" value="1" style="endArrow=none;html=1;strokeColor=#ffffff;fontSize=14;fontColor=#ffffff;fontStyle=1;labelBackgroundColor=#000000;" edge="1" source="ent_cliente" target="rel_tiene" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_tiene_venta" value="N" style="endArrow=none;html=1;strokeColor=#ffffff;fontSize=14;fontColor=#ffffff;fontStyle=1;labelBackgroundColor=#000000;" edge="1" source="rel_tiene" target="ent_venta" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos de Venta -->
+        <mxCell id="att_num_venta" value="&lt;u&gt;num_venta&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="120" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_fecha" value="fecha" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="270" y="120" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_total" value="total" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="100" y="360" width="100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Conexiones Atributos Venta -->
+        <mxCell id="edge_att_vta_1" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_num_venta" target="ent_venta" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_vta_2" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_fecha" target="ent_venta" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_vta_3" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_total" target="ent_venta" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= 4. RELACIÓN NORMAL (Rombo simple): INCLUYE ================= -->
+        <mxCell id="rel_incluye" value="incluye" style="shape=rhombus;perimeter=rhombusPerimeter;whiteSpace=wrap;html=1;align=center;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="205" y="440" width="110" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_venta_incluye" value="N" style="endArrow=none;html=1;strokeColor=#ffffff;fontSize=14;fontColor=#ffffff;fontStyle=1;labelBackgroundColor=#000000;" edge="1" source="ent_venta" target="rel_incluye" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================= 5. ENTIDAD FUERTE: PRODUCTO ================= -->
+        <mxCell id="ent_producto" value="producto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="190" y="580" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_incluye_prod" value="M" style="endArrow=none;html=1;strokeColor=#ffffff;fontSize=14;fontColor=#ffffff;fontStyle=1;labelBackgroundColor=#000000;" edge="1" source="rel_incluye" target="ent_producto" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Atributos Producto -->
+        <mxCell id="att_id_prod" value="&lt;u&gt;id_producto&lt;/u&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="585" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="att_prod_precio" value="precio" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1a1a1a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="360" y="585" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_att_prod_1" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_id_prod" target="ent_producto" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="edge_att_prod_2" style="endArrow=none;html=1;strokeColor=#ffffff;" edge="1" source="att_prod_precio" target="ent_producto" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ================= TABLA DE GUÍA DE SÍMBOLOS ================= -->
+        <mxCell id="box_guia" value="GUÍA DE LOS SÍMBOLOS UTILIZADOS (NOTACIÓN CHEN)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;fillColor=#2a2a2a;strokeColor=#ffffff;fontColor=#ffffff;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="440" width="460" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="guia_content" value="&lt;table style='width:100%; color:#ffffff; font-size:11px;'&gt;&#xa;&lt;tr&gt;&lt;td&gt;&lt;b&gt;■ Rectángulo simple:&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Entidad Fuerte (Ej: &lt;i&gt;cliente, producto&lt;/i&gt;)&lt;/td&gt;&lt;/tr&gt;&#xa;&lt;tr&gt;&lt;td&gt;&lt;b&gt;■■ Doble rectángulo:&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Entidad Débil (Ej: &lt;i&gt;venta&lt;/i&gt;)&lt;/td&gt;&lt;/tr&gt;&#xa;&lt;tr&gt;&lt;td&gt;&lt;b&gt;◆◆ Doble rombo:&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Relación Identificadora (Ej: &lt;i&gt;tiene&lt;/i&gt;)&lt;/td&gt;&lt;/tr&gt;&#xa;&lt;tr&gt;&lt;td&gt;&lt;b&gt;◆ Rombo simple:&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Relación Normal (Ej: &lt;i&gt;incluye&lt;/i&gt;)&lt;/td&gt;&lt;/tr&gt;&#xa;&lt;tr&gt;&lt;td&gt;&lt;b&gt;&lt;u&gt;● Óvalo subrayado&lt;/u&gt;:&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Clave Primaria / Discriminador (PK)&lt;/td&gt;&lt;/tr&gt;&#xa;&lt;tr&gt;&lt;td&gt;&lt;b&gt;● Óvalo simple:&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Atributo normal descriptivo&lt;/td&gt;&lt;/tr&gt;&#xa;&lt;/table&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;overflow=hidden;rotatable=0;html=1;fontSize=11;fontColor=#ffffff;" vertex="1" parent="box_guia">
+          <mxGeometry y="26" width="460" height="154" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
