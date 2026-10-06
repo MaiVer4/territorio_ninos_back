@@ -188,9 +188,9 @@ public class UsuarioServiceTest {
     class ObtenerTests {
 
         @Test
-        @DisplayName("Obtener todos devuelve lista de usuarios activos")
+        @DisplayName("Obtener todos devuelve lista de usuarios")
         void obtenerTodos_DevuelveLista() {
-            when(usuarioRepository.findByEstado(EstadoUsuario.ACTIVO)).thenReturn(List.of(mockUsuario));
+            when(usuarioRepository.findAll()).thenReturn(List.of(mockUsuario));
             when(usuarioMapper.toResponseDTO(mockUsuario)).thenReturn(mockResponseDTO);
 
             List<UsuarioResponseDTO> result = usuarioService.obtenerTodos();
@@ -201,9 +201,9 @@ public class UsuarioServiceTest {
         }
 
         @Test
-        @DisplayName("Obtener todos sin usuarios activos devuelve lista vacía")
+        @DisplayName("Obtener todos sin usuarios devuelve lista vacía")
         void obtenerTodos_SinUsuarios() {
-            when(usuarioRepository.findByEstado(EstadoUsuario.ACTIVO)).thenReturn(List.of());
+            when(usuarioRepository.findAll()).thenReturn(List.of());
 
             List<UsuarioResponseDTO> result = usuarioService.obtenerTodos();
 

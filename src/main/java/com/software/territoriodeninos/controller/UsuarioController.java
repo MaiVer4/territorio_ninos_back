@@ -100,18 +100,19 @@ public class UsuarioController {
         return ResponseEntity.ok(java.util.Map.of("mensaje", "Contraseña actualizada exitosamente."));
     }
     
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}/inactivar")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
-    @Operation(summary = "Inactivar usuario", description = "Inactiva un usuario del sistema (eliminación lógica, solo ADMINISTRADOR)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Usuario inactivado exitosamente",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = UsuarioResponseDTO.class))),
-            @ApiResponse(responseCode = "401", description = "No autenticado"),
-            @ApiResponse(responseCode = "403", description = "Sin permisos para inactivar usuario"),
-            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
-    })
+    @Operation(summary = "Inactivar usuario", description = "Inactiva un usuario del sistema (cambio a INACTIVO, solo ADMINISTRADOR)")
     public ResponseEntity<UsuarioResponseDTO> inactivar(@PathVariable Long id) {
         UsuarioResponseDTO usuarioInactivado = usuarioService.inactivar(id);
         return ResponseEntity.ok(usuarioInactivado);
+    }
+
+    @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
+    @Operation(summary = "Eliminar usuario permanentemente", description = "Elimina un usuario del sistema de forma definitiva (solo ADMINISTRADOR)")
+    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+        usuarioService.eliminar(id);
+        return ResponseEntity.noContent().build();
     }
 }

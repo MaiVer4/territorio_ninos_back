@@ -62,7 +62,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     @Transactional(readOnly = true)
     public List<UsuarioResponseDTO> obtenerTodos() {
-        return usuarioRepository.findByEstado(EstadoUsuario.ACTIVO)
+        return usuarioRepository.findAll()
                 .stream()
                 .map(usuarioMapper::toResponseDTO)
                 .toList();
@@ -142,6 +142,13 @@ public class UsuarioServiceImpl implements UsuarioService {
         
         usuario.inactivar();
         return usuarioMapper.toResponseDTO(usuario);
+    }
+
+    @Override
+    public void eliminar(Long id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario con ID " + id + " no encontrado"));
+        usuarioRepository.delete(usuario);
     }
 
     private void verificarBOLA(Usuario usuarioTarget, boolean soloMismoUsuario) {
