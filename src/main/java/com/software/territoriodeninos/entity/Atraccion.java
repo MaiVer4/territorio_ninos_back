@@ -55,6 +55,14 @@ public class Atraccion {
     @Builder.Default
     private Integer caidasLimite = 3;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer edadMinima = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer edadMaxima = 12;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;
 
@@ -78,6 +86,12 @@ public class Atraccion {
         }
         if (this.caidasLimite == null) {
             this.caidasLimite = 3;
+        }
+        if (this.edadMinima == null) {
+            this.edadMinima = 0;
+        }
+        if (this.edadMaxima == null) {
+            this.edadMaxima = 12;
         }
     }
 }
