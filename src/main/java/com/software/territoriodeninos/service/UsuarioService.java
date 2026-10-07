@@ -32,5 +32,9 @@ public interface UsuarioService {
     
     UsuarioResponseDTO inactivar(Long id);
 
+    UsuarioResponseDTO activar(Long id);
+
+    List<UsuarioResponseDTO> obtenerPorRol(String rol);
+
     void eliminar(Long id);
 }

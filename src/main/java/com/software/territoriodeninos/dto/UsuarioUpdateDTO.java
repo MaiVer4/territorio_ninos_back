@@ -23,4 +23,8 @@ public class UsuarioUpdateDTO {
     
     @Schema(description = "Nuevo estado del usuario (ACTIVO, INACTIVO, SUSPENDIDO)", example = "ACTIVO")
     private String estado;
+
+    @com.fasterxml.jackson.annotation.JsonAlias({"nombreRol", "role"})
+    @Schema(description = "Nuevo rol del usuario (ADMINISTRADOR, TAQUILLERO, OPERARIO)", example = "TAQUILLERO")
+    private String rol;
 }

@@ -117,6 +117,18 @@ public class UsuarioServiceImpl implements UsuarioService {
                 throw new ConflictoException("Estado inválido: " + updateDTO.getEstado());
             }
         }
+
+        if (StringUtils.hasText(updateDTO.getRol())) {
+            NombreRol nombreRolEnum;
+            try {
+                nombreRolEnum = NombreRol.valueOf(updateDTO.getRol().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new ConflictoException("Rol inválido: " + updateDTO.getRol());
+            }
+            Rol rol = rolRepository.findByNombre(nombreRolEnum)
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Rol " + updateDTO.getRol() + " no encontrado"));
+            usuario.setRol(rol);
+        }
         
         return usuarioMapper.toResponseDTO(usuario);
     }
@@ -142,6 +154,29 @@ public class UsuarioServiceImpl implements UsuarioService {
         
         usuario.inactivar();
         return usuarioMapper.toResponseDTO(usuario);
+    }
+
+    @Override
+    public UsuarioResponseDTO activar(Long id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario con ID " + id + " no encontrado"));
+        
+        usuario.setEstado(EstadoUsuario.ACTIVO);
+        log.info("Usuario {} reactivado", usuario.getCorreo());
+        return usuarioMapper.toResponseDTO(usuario);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UsuarioResponseDTO> obtenerPorRol(String rol) {
+        try {
+            NombreRol nombreRolEnum = NombreRol.valueOf(rol.toUpperCase());
+            return usuarioRepository.findByRolNombre(nombreRolEnum).stream()
+                    .map(usuarioMapper::toResponseDTO)
+                    .toList();
+        } catch (IllegalArgumentException e) {
+            throw new ConflictoException("Rol inválido: " + rol);
+        }
     }
 
     @Override

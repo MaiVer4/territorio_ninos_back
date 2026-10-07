@@ -9,8 +9,17 @@ import lombok.Data;
 @Schema(description = "DTO para solicitar la recuperación de contraseña")
 public class ForgotPasswordRequest {
     
-    @NotBlank(message = "El email es requerido")
-    @Email(message = "El formato del email es inválido")
+    @NotBlank(message = "El correo es requerido")
+    @Email(message = "El formato del correo es inválido")
+    @com.fasterxml.jackson.annotation.JsonAlias({"email"})
     @Schema(description = "Correo electrónico asociado a la cuenta a recuperar", example = "usuario@ejemplo.com")
-    private String email;
+    private String correo;
+
+    public String getEmail() {
+        return this.correo;
+    }
+
+    public void setEmail(String email) {
+        this.correo = email;
+    }
 }

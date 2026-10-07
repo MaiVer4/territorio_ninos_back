@@ -108,6 +108,22 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioInactivado);
     }
 
+    @PatchMapping("/{id}/activar")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
+    @Operation(summary = "Activar usuario", description = "Activa un usuario del sistema (cambio a ACTIVO, solo ADMINISTRADOR)")
+    public ResponseEntity<UsuarioResponseDTO> activar(@PathVariable Long id) {
+        UsuarioResponseDTO usuarioActivado = usuarioService.activar(id);
+        return ResponseEntity.ok(usuarioActivado);
+    }
+
+    @GetMapping("/rol/{rol}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
+    @Operation(summary = "Obtener usuarios por rol", description = "Obtiene la lista de usuarios filtrada por rol (ADMINISTRADOR, TAQUILLERO, OPERARIO)")
+    public ResponseEntity<List<UsuarioResponseDTO>> obtenerPorRol(@PathVariable String rol) {
+        List<UsuarioResponseDTO> usuarios = usuarioService.obtenerPorRol(rol);
+        return ResponseEntity.ok(usuarios);
+    }
+
     @DeleteMapping("/{id}")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
     @Operation(summary = "Eliminar usuario permanentemente", description = "Elimina un usuario del sistema de forma definitiva (solo ADMINISTRADOR)")
