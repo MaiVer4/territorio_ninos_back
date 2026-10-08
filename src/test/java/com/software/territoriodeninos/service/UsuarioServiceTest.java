@@ -81,8 +81,9 @@ public class UsuarioServiceTest {
         org.springframework.security.core.Authentication authentication = mock(org.springframework.security.core.Authentication.class);
         lenient().when(authentication.isAuthenticated()).thenReturn(true);
         lenient().when(authentication.getName()).thenReturn("juan@test.com");
-        org.springframework.security.core.context.SecurityContext securityContext = mock(org.springframework.security.core.context.SecurityContext.class);
-        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        java.util.Collection authorities = List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMINISTRADOR"));
+        lenient().doReturn(authorities).when(authentication).getAuthorities();
+        org.springframework.security.core.context.SecurityContext securityContext = new org.springframework.security.core.context.SecurityContextImpl(authentication);
         org.springframework.security.core.context.SecurityContextHolder.setContext(securityContext);
     }
 
@@ -366,6 +367,46 @@ public class UsuarioServiceTest {
 
             assertThrows(RecursoNoEncontradoException.class,
                     () -> usuarioService.actualizar(99L, dto));
+        }
+
+        @Test
+        @DisplayName("Usuario no admin intentando cambiar rol lanza AccessDeniedException")
+        void actualizar_NoAdminIntentandoCambiarRol() {
+            UsuarioUpdateDTO dto = UsuarioUpdateDTO.builder()
+                    .rol("ADMINISTRADOR")
+                    .build();
+
+            org.springframework.security.core.Authentication authNoAdmin = mock(org.springframework.security.core.Authentication.class);
+            when(authNoAdmin.isAuthenticated()).thenReturn(true);
+            when(authNoAdmin.getName()).thenReturn("juan@test.com");
+            doReturn(List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_TAQUILLERO")))
+                    .when(authNoAdmin).getAuthorities();
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authNoAdmin);
+
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+
+            assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                    () -> usuarioService.actualizar(1L, dto));
+        }
+
+        @Test
+        @DisplayName("Usuario no admin intentando cambiar estado lanza AccessDeniedException")
+        void actualizar_NoAdminIntentandoCambiarEstado() {
+            UsuarioUpdateDTO dto = UsuarioUpdateDTO.builder()
+                    .estado("INACTIVO")
+                    .build();
+
+            org.springframework.security.core.Authentication authNoAdmin = mock(org.springframework.security.core.Authentication.class);
+            when(authNoAdmin.isAuthenticated()).thenReturn(true);
+            when(authNoAdmin.getName()).thenReturn("juan@test.com");
+            doReturn(List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_TAQUILLERO")))
+                    .when(authNoAdmin).getAuthorities();
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authNoAdmin);
+
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+
+            assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                    () -> usuarioService.actualizar(1L, dto));
         }
     }
 
