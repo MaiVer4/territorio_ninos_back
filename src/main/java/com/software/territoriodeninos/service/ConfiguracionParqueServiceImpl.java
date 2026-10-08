@@ -19,15 +19,12 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
     @Override
     @Transactional(readOnly = true)
     public ConfiguracionParqueDTO obtenerConfiguracion() {
-        ConfiguracionParque config = repository.findFirstByOrderByIdAsc()
-                .orElseGet(this::crearConfiguracionPorDefecto);
-        return mapToDTO(config);
+        return mapToDTO(obtenerOCrearConfiguracion());
     }
 
     @Override
     public ConfiguracionParqueDTO actualizarConfiguracion(ConfiguracionParqueDTO dto) {
-        ConfiguracionParque config = repository.findFirstByOrderByIdAsc()
-                .orElseGet(this::crearConfiguracionPorDefecto);
+        ConfiguracionParque config = obtenerOCrearConfiguracion();
 
         config.setNombreParque(dto.getNombreParque());
         config.setNit(dto.getNit());
@@ -39,6 +36,11 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
         ConfiguracionParque guardada = repository.save(config);
         log.info("Configuración general del parque actualizada");
         return mapToDTO(guardada);
+    }
+
+    private ConfiguracionParque obtenerOCrearConfiguracion() {
+        return repository.findFirstByOrderByIdAsc()
+                .orElseGet(this::crearConfiguracionPorDefecto);
     }
 
     private ConfiguracionParque crearConfiguracionPorDefecto() {

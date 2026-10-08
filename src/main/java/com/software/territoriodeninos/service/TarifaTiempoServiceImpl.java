@@ -27,15 +27,8 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
 
     @Override
     public TarifaTiempoResponseDTO crear(TarifaTiempoRequestDTO request) {
-        Atraccion atraccion = atraccionRepository.findById(request.atraccionId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + request.atraccionId()));
-
-        if (request.precio() == null || request.precio().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("El precio debe ser mayor a 0");
-        }
-        if (request.duracionMinutos() == null || request.duracionMinutos() <= 0) {
-            throw new IllegalArgumentException("La duración debe ser mayor a 0 minutos");
-        }
+        Atraccion atraccion = findAtraccion(request.atraccionId());
+        validarParametros(request.precio(), request.duracionMinutos());
 
         if (tarifaTiempoRepository.existsByAtraccionIdAndDuracionMinutos(request.atraccionId(), request.duracionMinutos())) {
             throw new ConflictoException("Ya existe una tarifa para la atracción '" + atraccion.getNombre() +
@@ -69,27 +62,20 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
     @Override
     @Transactional(readOnly = true)
     public TarifaTiempoResponseDTO obtenerPorId(Long id) {
-        TarifaTiempo tarifa = tarifaTiempoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por tiempo no encontrada con ID: " + id));
-        return mapToDTO(tarifa);
+        return mapToDTO(findTarifa(id));
     }
 
     @Override
     public TarifaTiempoResponseDTO actualizar(Long id, TarifaTiempoRequestDTO request) {
-        TarifaTiempo tarifa = tarifaTiempoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por tiempo no encontrada con ID: " + id));
+        TarifaTiempo tarifa = findTarifa(id);
 
         if (request.precio() != null) {
-            if (request.precio().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("El precio debe ser mayor a 0");
-            }
+            validarPrecio(request.precio());
             tarifa.setPrecio(request.precio());
         }
 
         if (request.duracionMinutos() != null) {
-            if (request.duracionMinutos() <= 0) {
-                throw new IllegalArgumentException("La duración debe ser mayor a 0 minutos");
-            }
+            validarDuracion(request.duracionMinutos());
             if (!tarifa.getDuracionMinutos().equals(request.duracionMinutos()) &&
                     tarifaTiempoRepository.existsByAtraccionIdAndDuracionMinutos(tarifa.getAtraccion().getId(), request.duracionMinutos())) {
                 throw new ConflictoException("Ya existe una tarifa para la atracción con duración de " + request.duracionMinutos() + " minutos");
@@ -107,10 +93,35 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
 
     @Override
     public void eliminar(Long id) {
-        TarifaTiempo tarifa = tarifaTiempoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por tiempo no encontrada con ID: " + id));
-        tarifaTiempoRepository.delete(tarifa);
+        tarifaTiempoRepository.delete(findTarifa(id));
         log.info("Tarifa de tiempo con ID {} eliminada", id);
+    }
+
+    private Atraccion findAtraccion(Long id) {
+        return atraccionRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+    }
+
+    private TarifaTiempo findTarifa(Long id) {
+        return tarifaTiempoRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por tiempo no encontrada con ID: " + id));
+    }
+
+    private void validarParametros(BigDecimal precio, Integer duracionMinutos) {
+        validarPrecio(precio);
+        validarDuracion(duracionMinutos);
+    }
+
+    private void validarPrecio(BigDecimal precio) {
+        if (precio == null || precio.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("El precio debe ser mayor a 0");
+        }
+    }
+
+    private void validarDuracion(Integer duracionMinutos) {
+        if (duracionMinutos == null || duracionMinutos <= 0) {
+            throw new IllegalArgumentException("La duración debe ser mayor a 0 minutos");
+        }
     }
 
     private TarifaTiempoResponseDTO mapToDTO(TarifaTiempo tarifa) {

@@ -28,36 +28,14 @@ public class AtraccionServiceImpl implements AtraccionService {
             throw new ConflictoException("Ya existe una atracción con el nombre: " + request.nombre());
         }
 
-        if (request.edadMinima() != null && request.edadMaxima() != null && request.edadMinima() > request.edadMaxima()) {
-            throw new IllegalArgumentException("La edad mínima no puede ser mayor que la edad máxima");
-        }
+        validarEdades(request);
 
         Atraccion.AtraccionBuilder builder = Atraccion.builder()
                 .nombre(request.nombre())
                 .descripcion(request.descripcion())
                 .tarifaMinuto(request.tarifaMinuto());
 
-        if (request.tipo() != null) {
-            builder.tipo(request.tipo());
-        }
-        if (request.capacidadMaxima() != null) {
-            builder.capacidadMaxima(request.capacidadMaxima());
-        }
-        if (request.duracionMinutosBase() != null) {
-            builder.duracionMinutosBase(request.duracionMinutosBase());
-        }
-        if (request.toleranciaMinutos() != null) {
-            builder.toleranciaMinutos(request.toleranciaMinutos());
-        }
-        if (request.caidasLimite() != null) {
-            builder.caidasLimite(request.caidasLimite());
-        }
-        if (request.edadMinima() != null) {
-            builder.edadMinima(request.edadMinima());
-        }
-        if (request.edadMaxima() != null) {
-            builder.edadMaxima(request.edadMaxima());
-        }
+        aplicarAtributosOpcionales(builder, request);
 
         Atraccion guardada = atraccionRepository.save(builder.build());
         log.info("Atracción creada: {}", guardada.getNombre());
@@ -83,50 +61,26 @@ public class AtraccionServiceImpl implements AtraccionService {
     @Override
     @Transactional(readOnly = true)
     public AtraccionResponseDTO obtenerPorId(Long id) {
-        Atraccion atraccion = atraccionRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+        Atraccion atraccion = findAtraccionById(id);
         return mapToDTO(atraccion);
     }
 
     @Override
     public AtraccionResponseDTO actualizar(Long id, AtraccionRequestDTO request) {
-        Atraccion atraccion = atraccionRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+        Atraccion atraccion = findAtraccionById(id);
 
         if (!atraccion.getNombre().equalsIgnoreCase(request.nombre()) &&
                 atraccionRepository.existsByNombreIgnoreCase(request.nombre())) {
             throw new ConflictoException("Ya existe otra atracción con el nombre: " + request.nombre());
         }
 
-        if (request.edadMinima() != null && request.edadMaxima() != null && request.edadMinima() > request.edadMaxima()) {
-            throw new IllegalArgumentException("La edad mínima no puede ser mayor que la edad máxima");
-        }
+        validarEdades(request);
 
         atraccion.setNombre(request.nombre());
         atraccion.setDescripcion(request.descripcion());
         atraccion.setTarifaMinuto(request.tarifaMinuto());
 
-        if (request.tipo() != null) {
-            atraccion.setTipo(request.tipo());
-        }
-        if (request.capacidadMaxima() != null) {
-            atraccion.setCapacidadMaxima(request.capacidadMaxima());
-        }
-        if (request.duracionMinutosBase() != null) {
-            atraccion.setDuracionMinutosBase(request.duracionMinutosBase());
-        }
-        if (request.toleranciaMinutos() != null) {
-            atraccion.setToleranciaMinutos(request.toleranciaMinutos());
-        }
-        if (request.caidasLimite() != null) {
-            atraccion.setCaidasLimite(request.caidasLimite());
-        }
-        if (request.edadMinima() != null) {
-            atraccion.setEdadMinima(request.edadMinima());
-        }
-        if (request.edadMaxima() != null) {
-            atraccion.setEdadMaxima(request.edadMaxima());
-        }
+        aplicarAtributosOpcionales(atraccion, request);
 
         log.info("Atracción actualizada: {}", atraccion.getNombre());
         return mapToDTO(atraccion);
@@ -134,8 +88,7 @@ public class AtraccionServiceImpl implements AtraccionService {
 
     @Override
     public AtraccionResponseDTO cambiarEstado(Long id, String nuevoEstado) {
-        Atraccion atraccion = atraccionRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+        Atraccion atraccion = findAtraccionById(id);
 
         try {
             EstadoAtraccion estado = EstadoAtraccion.fromString(nuevoEstado);
@@ -150,11 +103,43 @@ public class AtraccionServiceImpl implements AtraccionService {
 
     @Override
     public void eliminar(Long id) {
-        Atraccion atraccion = atraccionRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+        Atraccion atraccion = findAtraccionById(id);
         
         atraccion.setEstado(EstadoAtraccion.INACTIVO);
         log.info("Atracción {} marcada como inactiva", atraccion.getNombre());
+    }
+
+    // --- Métodos Privados Auxiliares ---
+
+    private Atraccion findAtraccionById(Long id) {
+        return atraccionRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+    }
+
+    private void validarEdades(AtraccionRequestDTO request) {
+        if (request.edadMinima() != null && request.edadMaxima() != null && request.edadMinima() > request.edadMaxima()) {
+            throw new IllegalArgumentException("La edad mínima no puede ser mayor que la edad máxima");
+        }
+    }
+
+    private void aplicarAtributosOpcionales(Atraccion.AtraccionBuilder builder, AtraccionRequestDTO request) {
+        if (request.tipo() != null) builder.tipo(request.tipo());
+        if (request.capacidadMaxima() != null) builder.capacidadMaxima(request.capacidadMaxima());
+        if (request.duracionMinutosBase() != null) builder.duracionMinutosBase(request.duracionMinutosBase());
+        if (request.toleranciaMinutos() != null) builder.toleranciaMinutos(request.toleranciaMinutos());
+        if (request.caidasLimite() != null) builder.caidasLimite(request.caidasLimite());
+        if (request.edadMinima() != null) builder.edadMinima(request.edadMinima());
+        if (request.edadMaxima() != null) builder.edadMaxima(request.edadMaxima());
+    }
+
+    private void aplicarAtributosOpcionales(Atraccion atraccion, AtraccionRequestDTO request) {
+        if (request.tipo() != null) atraccion.setTipo(request.tipo());
+        if (request.capacidadMaxima() != null) atraccion.setCapacidadMaxima(request.capacidadMaxima());
+        if (request.duracionMinutosBase() != null) atraccion.setDuracionMinutosBase(request.duracionMinutosBase());
+        if (request.toleranciaMinutos() != null) atraccion.setToleranciaMinutos(request.toleranciaMinutos());
+        if (request.caidasLimite() != null) atraccion.setCaidasLimite(request.caidasLimite());
+        if (request.edadMinima() != null) atraccion.setEdadMinima(request.edadMinima());
+        if (request.edadMaxima() != null) atraccion.setEdadMaxima(request.edadMaxima());
     }
 
     private AtraccionResponseDTO mapToDTO(Atraccion atraccion) {

@@ -35,61 +35,24 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
 
     @Override
     public AsignacionResponseDTO asignar(AsignacionRequestDTO request) {
-        Usuario usuario = usuarioRepository.findById(request.usuarioId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Operario no encontrado con ID: " + request.usuarioId()));
-
-        if (usuario.getRol() == null || usuario.getRol().getNombre() != NombreRol.OPERARIO) {
-            throw new ConflictoException("El usuario con ID " + usuario.getId() + " no tiene el rol de OPERARIO");
-        }
-
-        if (!usuario.estaActivo()) {
-            throw new ConflictoException("El operario se encuentra inactivo");
-        }
-
-        Atraccion atraccion = atraccionRepository.findById(request.atraccionId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + request.atraccionId()));
-
-        if (atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
-            throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' no se encuentra activa");
-        }
+        Usuario usuario = findAndValidateOperario(request.usuarioId());
+        Atraccion atraccion = findAndValidateAtraccionActiva(request.atraccionId());
 
         if (asignacionRepository.existsByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)) {
             throw new ConflictoException("El operario ya cuenta con una asignación activa en el parque");
         }
 
-        AsignacionOperario asignacion = AsignacionOperario.builder()
-                .usuario(usuario)
-                .atraccion(atraccion)
-                .fechaAsignacion(LocalDate.now())
-                .horaInicio(LocalDateTime.now())
-                .estado(EstadoAsignacion.ACTIVA)
-                .observaciones(request.observaciones())
-                .build();
-
+        AsignacionOperario asignacion = buildAsignacionActiva(usuario, atraccion, request.observaciones());
         AsignacionOperario guardada = asignacionRepository.save(asignacion);
+        
         log.info("Operario {} asignado a atracción {}", usuario.getCorreo(), atraccion.getNombre());
         return mapToDTO(guardada);
     }
 
     @Override
     public AsignacionResponseDTO reasignar(ReasignacionRequestDTO request) {
-        Usuario usuario = usuarioRepository.findById(request.usuarioId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Operario no encontrado con ID: " + request.usuarioId()));
-
-        if (usuario.getRol() == null || usuario.getRol().getNombre() != NombreRol.OPERARIO) {
-            throw new ConflictoException("El usuario con ID " + usuario.getId() + " no tiene el rol de OPERARIO");
-        }
-
-        if (!usuario.estaActivo()) {
-            throw new ConflictoException("El operario se encuentra inactivo");
-        }
-
-        Atraccion nuevaAtraccion = atraccionRepository.findById(request.nuevaAtraccionId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Nueva atracción no encontrada con ID: " + request.nuevaAtraccionId()));
-
-        if (nuevaAtraccion.getEstado() != EstadoAtraccion.ACTIVO) {
-            throw new ConflictoException("La nueva atracción '" + nuevaAtraccion.getNombre() + "' no se encuentra activa");
-        }
+        Usuario usuario = findAndValidateOperario(request.usuarioId());
+        Atraccion nuevaAtraccion = findAndValidateAtraccionActiva(request.nuevaAtraccionId());
 
         AsignacionOperario asignacionActual = asignacionRepository.findByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)
                 .orElseThrow(() -> new RecursoNoEncontradoException("El operario no tiene una asignación activa para reasignar"));
@@ -97,26 +60,23 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
         // Cerrar asignación anterior
         asignacionActual.setEstado(EstadoAsignacion.REASIGNADA);
         asignacionActual.setHoraFin(LocalDateTime.now());
+        
         if (request.motivo() != null && !request.motivo().isBlank()) {
             String obs = asignacionActual.getObservaciones();
             asignacionActual.setObservaciones((obs != null && !obs.isBlank() ? obs + " | " : "") + "Reasignado: " + request.motivo());
         }
-        asignacionRepository.save(asignacionActual);
 
         // Crear nueva asignación activa
-        AsignacionOperario nuevaAsignacion = AsignacionOperario.builder()
-                .usuario(usuario)
-                .atraccion(nuevaAtraccion)
-                .fechaAsignacion(LocalDate.now())
-                .horaInicio(LocalDateTime.now())
-                .estado(EstadoAsignacion.ACTIVA)
-                .observaciones("Reasignado desde " + asignacionActual.getAtraccion().getNombre() +
-                        (request.motivo() != null && !request.motivo().isBlank() ? " (" + request.motivo() + ")" : ""))
-                .build();
+        String nuevasObservaciones = "Reasignado desde " + asignacionActual.getAtraccion().getNombre() +
+                (request.motivo() != null && !request.motivo().isBlank() ? " (" + request.motivo() + ")" : "");
+        
+        AsignacionOperario nuevaAsignacion = buildAsignacionActiva(usuario, nuevaAtraccion, nuevasObservaciones);
 
         AsignacionOperario guardada = asignacionRepository.save(nuevaAsignacion);
+        
         log.info("Operario {} reasignado de {} a {}", usuario.getCorreo(),
                 asignacionActual.getAtraccion().getNombre(), nuevaAtraccion.getNombre());
+                
         return mapToDTO(guardada);
     }
 
@@ -146,9 +106,7 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
     @Override
     @Transactional(readOnly = true)
     public AsignacionResponseDTO obtenerActivaPorOperario(Long usuarioId) {
-        if (!usuarioRepository.existsById(usuarioId)) {
-            throw new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId);
-        }
+        ensureUsuarioExists(usuarioId);
         AsignacionOperario asignacion = asignacionRepository.findByUsuarioIdAndEstado(usuarioId, EstadoAsignacion.ACTIVA)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró una asignación activa para el operario con ID: " + usuarioId));
         return mapToDTO(asignacion);
@@ -168,12 +126,55 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
     @Override
     @Transactional(readOnly = true)
     public List<AsignacionResponseDTO> obtenerHistorialPorOperario(Long usuarioId) {
-        if (!usuarioRepository.existsById(usuarioId)) {
-            throw new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId);
-        }
+        ensureUsuarioExists(usuarioId);
         return asignacionRepository.findByUsuarioId(usuarioId).stream()
                 .map(this::mapToDTO)
                 .toList();
+    }
+
+    // --- Métodos Privados Auxiliares ---
+
+    private Usuario findAndValidateOperario(Long usuarioId) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Operario no encontrado con ID: " + usuarioId));
+
+        if (usuario.getRol() == null || usuario.getRol().getNombre() != NombreRol.OPERARIO) {
+            throw new ConflictoException("El usuario con ID " + usuario.getId() + " no tiene el rol de OPERARIO");
+        }
+
+        if (!usuario.estaActivo()) {
+            throw new ConflictoException("El operario se encuentra inactivo");
+        }
+
+        return usuario;
+    }
+
+    private Atraccion findAndValidateAtraccionActiva(Long atraccionId) {
+        Atraccion atraccion = atraccionRepository.findById(atraccionId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + atraccionId));
+
+        if (atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
+            throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' no se encuentra activa");
+        }
+        
+        return atraccion;
+    }
+
+    private void ensureUsuarioExists(Long usuarioId) {
+        if (!usuarioRepository.existsById(usuarioId)) {
+            throw new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId);
+        }
+    }
+
+    private AsignacionOperario buildAsignacionActiva(Usuario usuario, Atraccion atraccion, String observaciones) {
+        return AsignacionOperario.builder()
+                .usuario(usuario)
+                .atraccion(atraccion)
+                .fechaAsignacion(LocalDate.now())
+                .horaInicio(LocalDateTime.now())
+                .estado(EstadoAsignacion.ACTIVA)
+                .observaciones(observaciones)
+                .build();
     }
 
     private AsignacionResponseDTO mapToDTO(AsignacionOperario asignacion) {

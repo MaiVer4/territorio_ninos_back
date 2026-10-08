@@ -27,15 +27,8 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
 
     @Override
     public TarifaEventoResponseDTO crear(TarifaEventoRequestDTO request) {
-        Atraccion atraccion = atraccionRepository.findById(request.atraccionId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + request.atraccionId()));
-
-        if (request.precio() == null || request.precio().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("El precio debe ser mayor a 0");
-        }
-        if (request.intentos() == null || request.intentos() < 1) {
-            throw new IllegalArgumentException("El número de intentos debe ser al menos 1");
-        }
+        Atraccion atraccion = findAtraccion(request.atraccionId());
+        validarParametros(request.precio(), request.intentos());
 
         if (tarifaEventoRepository.existsByAtraccionIdAndIntentos(request.atraccionId(), request.intentos())) {
             throw new ConflictoException("Ya existe una tarifa de evento para la atracción '" + atraccion.getNombre() +
@@ -69,27 +62,20 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
     @Override
     @Transactional(readOnly = true)
     public TarifaEventoResponseDTO obtenerPorId(Long id) {
-        TarifaEvento tarifa = tarifaEventoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por evento no encontrada con ID: " + id));
-        return mapToDTO(tarifa);
+        return mapToDTO(findTarifa(id));
     }
 
     @Override
     public TarifaEventoResponseDTO actualizar(Long id, TarifaEventoRequestDTO request) {
-        TarifaEvento tarifa = tarifaEventoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por evento no encontrada con ID: " + id));
+        TarifaEvento tarifa = findTarifa(id);
 
         if (request.precio() != null) {
-            if (request.precio().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("El precio debe ser mayor a 0");
-            }
+            validarPrecio(request.precio());
             tarifa.setPrecio(request.precio());
         }
 
         if (request.intentos() != null) {
-            if (request.intentos() < 1) {
-                throw new IllegalArgumentException("El número de intentos debe ser al menos 1");
-            }
+            validarIntentos(request.intentos());
             if (!tarifa.getIntentos().equals(request.intentos()) &&
                     tarifaEventoRepository.existsByAtraccionIdAndIntentos(tarifa.getAtraccion().getId(), request.intentos())) {
                 throw new ConflictoException("Ya existe una tarifa para la atracción con " + request.intentos() + " intento(s)");
@@ -107,10 +93,35 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
 
     @Override
     public void eliminar(Long id) {
-        TarifaEvento tarifa = tarifaEventoRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por evento no encontrada con ID: " + id));
-        tarifaEventoRepository.delete(tarifa);
+        tarifaEventoRepository.delete(findTarifa(id));
         log.info("Tarifa de evento con ID {} eliminada", id);
+    }
+
+    private Atraccion findAtraccion(Long id) {
+        return atraccionRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
+    }
+
+    private TarifaEvento findTarifa(Long id) {
+        return tarifaEventoRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa por evento no encontrada con ID: " + id));
+    }
+
+    private void validarParametros(BigDecimal precio, Integer intentos) {
+        validarPrecio(precio);
+        validarIntentos(intentos);
+    }
+
+    private void validarPrecio(BigDecimal precio) {
+        if (precio == null || precio.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("El precio debe ser mayor a 0");
+        }
+    }
+
+    private void validarIntentos(Integer intentos) {
+        if (intentos == null || intentos < 1) {
+            throw new IllegalArgumentException("El número de intentos debe ser al menos 1");
+        }
     }
 
     private TarifaEventoResponseDTO mapToDTO(TarifaEvento tarifa) {

@@ -4,11 +4,14 @@ import com.software.territoriodeninos.dto.AuthResponseDTO;
 import com.software.territoriodeninos.dto.LoginRequestDTO;
 import com.software.territoriodeninos.entity.PasswordResetToken;
 import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.exception.CuentaBloqueadaException;
+import com.software.territoriodeninos.exception.CuentaInactivaException;
 import com.software.territoriodeninos.exception.CredencialesInvalidasException;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
 import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
+import com.software.territoriodeninos.security.LoginAttemptService;
 import com.software.territoriodeninos.util.EstadoUsuario;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,34 +41,33 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
-    private final com.software.territoriodeninos.security.LoginAttemptService loginAttemptService;
+    private final LoginAttemptService loginAttemptService;
 
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
 
     @Override
     public AuthResponseDTO login(LoginRequestDTO loginRequestDTO) {
-        log.info("Intento de login para: {}", loginRequestDTO.getCorreo());
-
         String correo = loginRequestDTO.getCorreo();
+        log.info("Intento de login para: {}", correo);
 
         if (loginAttemptService.isBlocked(correo)) {
             long minutos = loginAttemptService.getRemainingLockoutMinutes(correo);
             log.warn("Login bloqueado por fuerza bruta para: {} ({} minutos restantes)", correo, minutos);
-            throw new com.software.territoriodeninos.exception.CuentaBloqueadaException(
+            throw new CuentaBloqueadaException(
                     "Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente en " + minutos + " minutos.");
         }
 
-        Usuario usuario = usuarioRepository.findByCorreo(correo)
-                .orElseThrow(() -> {
-                    log.warn("Login fallido: usuario no encontrado - {}", correo);
-                    loginAttemptService.loginFailed(correo);
-                    return new CredencialesInvalidasException("Correo o contraseña incorrectos");
-                });
+        Usuario usuario = usuarioRepository.findByCorreo(correo).orElse(null);
+        if (usuario == null) {
+            log.warn("Login fallido: usuario no encontrado - {}", correo);
+            loginAttemptService.loginFailed(correo);
+            throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
+        }
 
         if (usuario.getEstado() != EstadoUsuario.ACTIVO) {
             log.warn("Login fallido: cuenta inactiva - {}", correo);
-            throw new com.software.territoriodeninos.exception.CuentaInactivaException(
+            throw new CuentaInactivaException(
                     "Su cuenta ha sido desactivada. Por favor, comuníquese con el administrador.");
         }
 
@@ -85,7 +87,7 @@ public class AuthServiceImpl implements AuthService {
         String nombreRol = usuario.getRol().getNombre().name();
         String token = jwtUtil.generarToken(usuario);
 
-        log.info("Login exitoso para: {}", loginRequestDTO.getCorreo());
+        log.info("Login exitoso para: {}", correo);
 
         return AuthResponseDTO.builder()
                 .token(token)
@@ -137,7 +139,6 @@ public class AuthServiceImpl implements AuthService {
 
         Usuario usuario = resetToken.getUsuario();
         usuario.setPassword(passwordEncoder.encode(nuevaContrasena));
-        // JPA dirty checking se encarga del update automáticamente, save() eliminado
 
         tokenRepository.delete(resetToken);
         log.info("Contraseña actualizada exitosamente para usuario ID: {}", usuario.getId());
