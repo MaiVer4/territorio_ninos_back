@@ -49,7 +49,7 @@ public class JwtUtil {
                 .compact();
     }
     
-    private Claims extraerClaims(String token) {
+    public Claims extraerClaims(String token) {
         try {
             return Jwts.parser()
                     .verifyWith(getSigningKey())

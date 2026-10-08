@@ -1,7 +1,8 @@
 package com.software.territoriodeninos.security;
 
-import com.software.territoriodeninos.exception.ErrorResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,12 +16,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     
     private final JwtUtil jwtUtil;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     
     public JwtAuthenticationFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
@@ -36,9 +40,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = jwtUtil.extraerTokenDelHeader(authHeader);
                 
-                if (jwtUtil.esValido(token)) {
-                    String correo = jwtUtil.extraerCorreo(token);
-                    String rol = jwtUtil.extraerRol(token);
+                Claims claims = jwtUtil.extraerClaims(token);
+                if (claims != null && claims.getExpiration() != null && !claims.getExpiration().before(new Date())) {
+                    String correo = claims.getSubject();
+                    String rol = (String) claims.get("rol");
                     
                     List<SimpleGrantedAuthority> authorities = List.of(
                             new SimpleGrantedAuthority("ROLE_" + rol)
@@ -64,12 +69,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setStatus(status.value());
         response.setContentType("application/json;charset=UTF-8");
         
-        java.util.Map<String, Object> body = new java.util.HashMap<>();
-        body.put("codigo", status.value());
-        body.put("mensaje", mensaje);
-        body.put("detalles", detalle);
+        Map<String, Object> body = Map.of(
+                "codigo", status.value(),
+                "mensaje", mensaje,
+                "detalles", detalle
+        );
         
-        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        mapper.writeValue(response.getOutputStream(), body);
+        objectMapper.writeValue(response.getOutputStream(), body);
     }
 }
