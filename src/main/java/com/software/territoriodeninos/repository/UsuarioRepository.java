@@ -15,10 +15,13 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     
     Optional<Usuario> findByCorreoAndEstado(String correo, EstadoUsuario estado);
     
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"rol"})
     List<Usuario> findByEstado(EstadoUsuario estado);
     
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"rol"})
     List<Usuario> findByRolNombre(com.software.territoriodeninos.util.NombreRol nombreRol);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"rol"})
     List<Usuario> findByRolNombreAndEstado(com.software.territoriodeninos.util.NombreRol nombreRol, EstadoUsuario estado);
     
     boolean existsByCorreo(String correo);
