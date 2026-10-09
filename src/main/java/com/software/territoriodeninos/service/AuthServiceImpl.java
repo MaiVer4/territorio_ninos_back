@@ -16,11 +16,17 @@ import com.software.territoriodeninos.util.EstadoUsuario;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -108,18 +114,23 @@ public class AuthServiceImpl implements AuthService {
             Usuario usuario = usuarioOpt.get();
             tokenRepository.deleteByUsuarioId(usuario.getId());
 
-            String token = UUID.randomUUID().toString();
+            String tokenPlano = UUID.randomUUID().toString();
+            String tokenHash = sha256Hex(tokenPlano);
+
             PasswordResetToken resetToken = new PasswordResetToken();
-            resetToken.setToken(token);
+            resetToken.setToken(tokenHash);
             resetToken.setUsuario(usuario);
             resetToken.setFechaExpiracion(LocalDateTime.now().plusMinutes(15));
 
             tokenRepository.save(resetToken);
 
-            String resetUrl = frontendUrl + "/reset-password?token=" + token;
-            emailService.enviarCorreoRecuperacion(usuario.getCorreo(), resetUrl);
-
-            log.info("Token de recuperación generado para: {}", correo);
+            try {
+                String resetUrl = frontendUrl + "/reset-password?token=" + tokenPlano;
+                emailService.enviarCorreoRecuperacion(usuario.getCorreo(), resetUrl);
+                log.info("Token de recuperación generado para: {}", correo);
+            } catch (MailException e) {
+                log.warn("No se pudo enviar el correo de recuperación a {}: {}", correo, e.getMessage());
+            }
         } else {
             log.warn("Solicitud de recuperación para correo inexistente o inactivo: {}", correo);
         }
@@ -128,7 +139,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void cambiarContrasena(String token, String nuevaContrasena) {
-        PasswordResetToken resetToken = tokenRepository.findByToken(token)
+        String tokenHash = sha256Hex(token);
+        PasswordResetToken resetToken = tokenRepository.findByToken(tokenHash)
                 .orElseThrow(() -> new TokenInvalidoException("Token inválido o no existe"));
 
         if (resetToken.isExpired()) {
@@ -142,5 +154,23 @@ public class AuthServiceImpl implements AuthService {
 
         tokenRepository.delete(resetToken);
         log.info("Contraseña actualizada exitosamente para usuario ID: {}", usuario.getId());
+    }
+
+    @Override
+    @Scheduled(cron = "0 0 3 * * ?")
+    @Transactional
+    public void purgarTokensExpirados() {
+        tokenRepository.deleteByFechaExpiracionBefore(LocalDateTime.now());
+        log.info("Purga de tokens de recuperación expirados ejecutada exitosamente.");
+    }
+
+    private String sha256Hex(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashBytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Error al inicializar algoritmo SHA-256", e);
+        }
     }
 }

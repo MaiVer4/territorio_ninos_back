@@ -7,4 +7,5 @@ public interface AuthService {
     AuthResponseDTO login(LoginRequestDTO loginRequestDTO);
     void generarTokenRecuperacion(String email);
     void cambiarContrasena(String token, String nuevaContrasena);
+    void purgarTokensExpirados();
 }

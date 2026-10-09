@@ -197,6 +197,7 @@ public class AuthServiceTest {
     }
 
     // =========================================================================
+    // =========================================================================
     // RECUPERACIÓN DE CONTRASEÑA
     // =========================================================================
     @Nested
@@ -204,7 +205,7 @@ public class AuthServiceTest {
     class GenerarTokenRecuperacionTests {
 
         @Test
-        @DisplayName("Token generado y email enviado para usuario existente")
+        @DisplayName("Token generado y email enviado para usuario existente con hash SHA-256")
         void generarToken_UsuarioExiste_EnviaEmail() {
             when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
                     .thenReturn(Optional.of(mockUsuario));
@@ -212,14 +213,23 @@ public class AuthServiceTest {
             authService.generarTokenRecuperacion("admin@test.com");
 
             verify(tokenRepository).deleteByUsuarioId(1L);
-            verify(tokenRepository).save(any(PasswordResetToken.class));
+
+            ArgumentCaptor<PasswordResetToken> tokenCaptor = ArgumentCaptor.forClass(PasswordResetToken.class);
+            verify(tokenRepository).save(tokenCaptor.capture());
 
             ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
             verify(emailService).enviarCorreoRecuperacion(eq("admin@test.com"), urlCaptor.capture());
 
             String resetUrl = urlCaptor.getValue();
             assertTrue(resetUrl.startsWith("http://localhost:4200/reset-password?token="));
-            assertTrue(resetUrl.length() > "http://localhost:4200/reset-password?token=".length());
+            String tokenPlano = resetUrl.substring("http://localhost:4200/reset-password?token=".length());
+            assertFalse(tokenPlano.isBlank());
+
+            PasswordResetToken savedToken = tokenCaptor.getValue();
+            assertNotNull(savedToken);
+            assertEquals(64, savedToken.getToken().length());
+            assertEquals(sha256Hex(tokenPlano), savedToken.getToken());
+            assertEquals(mockUsuario, savedToken.getUsuario());
         }
 
         @Test
@@ -248,6 +258,19 @@ public class AuthServiceTest {
             inOrder.verify(tokenRepository).deleteByUsuarioId(1L);
             inOrder.verify(tokenRepository).save(any(PasswordResetToken.class));
         }
+
+        @Test
+        @DisplayName("Fallo al enviar correo captura MailException sin propagar error")
+        void generarToken_ErrorEnvioCorreo_NoLanzaExcepcion() {
+            when(usuarioRepository.findByCorreoAndEstado("admin@test.com", EstadoUsuario.ACTIVO))
+                    .thenReturn(Optional.of(mockUsuario));
+            doThrow(new org.springframework.mail.MailSendException("SMTP error"))
+                    .when(emailService).enviarCorreoRecuperacion(anyString(), anyString());
+
+            assertDoesNotThrow(() -> authService.generarTokenRecuperacion("admin@test.com"));
+
+            verify(tokenRepository).save(any(PasswordResetToken.class));
+        }
     }
 
     // =========================================================================
@@ -260,15 +283,18 @@ public class AuthServiceTest {
         @Test
         @DisplayName("Contraseña cambiada exitosamente con token válido")
         void cambiarContrasena_TokenValido() {
+            String tokenPlano = "valid-token";
+            String tokenHash = sha256Hex(tokenPlano);
+
             PasswordResetToken resetToken = new PasswordResetToken();
-            resetToken.setToken("valid-token");
+            resetToken.setToken(tokenHash);
             resetToken.setUsuario(mockUsuario);
             resetToken.setFechaExpiracion(LocalDateTime.now().plusMinutes(10));
 
-            when(tokenRepository.findByToken("valid-token")).thenReturn(Optional.of(resetToken));
+            when(tokenRepository.findByToken(tokenHash)).thenReturn(Optional.of(resetToken));
             when(passwordEncoder.encode("NewPassword123")).thenReturn("newHashedPass");
 
-            authService.cambiarContrasena("valid-token", "NewPassword123");
+            authService.cambiarContrasena(tokenPlano, "NewPassword123");
 
             assertEquals("newHashedPass", mockUsuario.getPassword());
             verify(tokenRepository).delete(resetToken);
@@ -277,11 +303,13 @@ public class AuthServiceTest {
         @Test
         @DisplayName("Token inexistente lanza TokenInvalidoException")
         void cambiarContrasena_TokenNoExiste() {
-            when(tokenRepository.findByToken("invalid-token")).thenReturn(Optional.empty());
+            String tokenPlano = "invalid-token";
+            String tokenHash = sha256Hex(tokenPlano);
+            when(tokenRepository.findByToken(tokenHash)).thenReturn(Optional.empty());
 
             TokenInvalidoException ex = assertThrows(
                     TokenInvalidoException.class,
-                    () -> authService.cambiarContrasena("invalid-token", "NewPassword123")
+                    () -> authService.cambiarContrasena(tokenPlano, "NewPassword123")
             );
 
             assertEquals("Token inválido o no existe", ex.getMessage());
@@ -291,21 +319,49 @@ public class AuthServiceTest {
         @Test
         @DisplayName("Token expirado lanza TokenInvalidoException y elimina el token")
         void cambiarContrasena_TokenExpirado() {
+            String tokenPlano = "expired-token";
+            String tokenHash = sha256Hex(tokenPlano);
+
             PasswordResetToken resetToken = new PasswordResetToken();
-            resetToken.setToken("expired-token");
+            resetToken.setToken(tokenHash);
             resetToken.setUsuario(mockUsuario);
             resetToken.setFechaExpiracion(LocalDateTime.now().minusMinutes(5));
 
-            when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(resetToken));
+            when(tokenRepository.findByToken(tokenHash)).thenReturn(Optional.of(resetToken));
 
             TokenInvalidoException ex = assertThrows(
                     TokenInvalidoException.class,
-                    () -> authService.cambiarContrasena("expired-token", "NewPassword123")
+                    () -> authService.cambiarContrasena(tokenPlano, "NewPassword123")
             );
 
             assertEquals("El token ha expirado. Solicite uno nuevo.", ex.getMessage());
             verify(tokenRepository).delete(resetToken);
             verify(usuarioRepository, never()).save(any());
+        }
+    }
+
+    // =========================================================================
+    // PURGAR TOKENS EXPIRADOS
+    // =========================================================================
+    @Nested
+    @DisplayName("Purgar tokens expirados")
+    class PurgarTokensExpiradosTests {
+
+        @Test
+        @DisplayName("Invoca eliminación de tokens anteriores a la fecha y hora actual")
+        void purgarTokensExpirados_EjecutaEliminacion() {
+            authService.purgarTokensExpirados();
+            verify(tokenRepository).deleteByFechaExpiracionBefore(any(LocalDateTime.class));
+        }
+    }
+
+    private String sha256Hex(String input) {
+        try {
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hashBytes);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }
