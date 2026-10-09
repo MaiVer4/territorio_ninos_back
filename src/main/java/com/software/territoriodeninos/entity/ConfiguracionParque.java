@@ -5,7 +5,8 @@ import lombok.*;
 
 @Entity
 @Table(name = "configuracion_parque")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

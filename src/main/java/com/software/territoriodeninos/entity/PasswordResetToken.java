@@ -1,13 +1,15 @@
 package com.software.territoriodeninos.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @Entity
 @Table(name = "password_reset_token")
 public class PasswordResetToken {
@@ -16,7 +18,7 @@ public class PasswordResetToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 64)
     private String token;
 
     @OneToOne(targetEntity = Usuario.class, fetch = FetchType.LAZY)
