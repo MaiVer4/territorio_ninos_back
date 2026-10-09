@@ -77,7 +77,6 @@ public class SecurityConfig {
                                 "/configuration/security",
                                 "/webjars/**"
                         ).permitAll()
-                        .requestMatchers("/api/public/**").permitAll()
                         
                         // Los roles de negocio están delegados a @PreAuthorize en cada Controller
                         .anyRequest().authenticated()
