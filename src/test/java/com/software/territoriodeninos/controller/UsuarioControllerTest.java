@@ -728,4 +728,31 @@ class UsuarioControllerTest {
                     .andExpect(jsonPath("$.codigo", is(403)));
         }
     }
+
+    @Nested
+    @DisplayName("Manejo de Errores Semánticos en Controller (GlobalExceptionHandler)")
+    class ManejoErroresSemanticosTests {
+
+        @Test
+        @DisplayName("400 Bad Request - Formato JSON inválido al registrar usuario")
+        void testRegistrar_JsonInvalido_BadRequest() throws Exception {
+            mockMvc.perform(post("/api/usuarios")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{ nombre: malformado without quotes }"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.codigo", is(400)))
+                    .andExpect(jsonPath("$.mensaje", is("Formato JSON inválido")));
+        }
+
+        @Test
+        @DisplayName("400 Bad Request - Tipo de parámetro inválido en PathVariable")
+        void testObtenerPorId_TipoParametroInvalido_BadRequest() throws Exception {
+            mockMvc.perform(get("/api/usuarios/no-es-un-numero")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.codigo", is(400)))
+                    .andExpect(jsonPath("$.mensaje", is("Tipo de parámetro inválido")))
+                    .andExpect(jsonPath("$.detalles", is("El parámetro 'id' con valor 'no-es-un-numero' no es válido. Se esperaba un tipo 'Long'.")));
+        }
+    }
 }

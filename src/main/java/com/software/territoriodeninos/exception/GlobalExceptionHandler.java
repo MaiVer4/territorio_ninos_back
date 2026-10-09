@@ -4,10 +4,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice(basePackages = "com.software.territoriodeninos.controller")
 public class GlobalExceptionHandler {
@@ -97,6 +99,33 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 "Error de validación",
                 errores
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        log.warn("Cuerpo de solicitud HTTP no legible o JSON inválido: {}", ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Formato JSON inválido",
+                "El cuerpo de la solicitud no tiene un formato JSON válido o contiene datos incompatibles."
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String nombreParametro = ex.getName();
+        String tipoRequerido = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "desconocido";
+        Object valorRecibido = ex.getValue();
+        String detalle = String.format("El parámetro '%s' con valor '%s' no es válido. Se esperaba un tipo '%s'.",
+                nombreParametro, valorRecibido, tipoRequerido);
+        log.warn("Tipo de argumento inválido en la solicitud: {}", detalle);
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Tipo de parámetro inválido",
+                detalle
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
