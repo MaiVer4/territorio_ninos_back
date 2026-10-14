@@ -47,6 +47,12 @@ public class UsuarioServiceTest {
     @Mock
     private UsuarioMapper usuarioMapper;
 
+    @Mock
+    private com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
+
+    @Mock
+    private com.software.territoriodeninos.repository.PasswordResetTokenRepository tokenRepository;
+
     @InjectMocks
     private UsuarioServiceImpl usuarioService;
 
@@ -420,6 +426,7 @@ public class UsuarioServiceTest {
         @Test
         @DisplayName("Inactivar usuario existente cambia estado a INACTIVO")
         void inactivar_Exitoso() {
+            autenticarComo("admin@test.com");
             when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
             when(usuarioMapper.toResponseDTO(mockUsuario)).thenReturn(mockResponseDTO);
 
@@ -435,6 +442,103 @@ public class UsuarioServiceTest {
 
             assertThrows(RecursoNoEncontradoException.class,
                     () -> usuarioService.inactivar(99L));
+        }
+    }
+
+    private void autenticarComo(String correo) {
+        org.springframework.security.core.Authentication auth =
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        correo, null, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMINISTRADOR")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private Usuario crearAdmin() {
+        Rol rolAdmin = new Rol();
+        rolAdmin.setId(2L);
+        rolAdmin.setNombre(NombreRol.ADMINISTRADOR);
+        Usuario admin = new Usuario();
+        admin.setId(5L);
+        admin.setCorreo("otro.admin@test.com");
+        admin.setEstado(EstadoUsuario.ACTIVO);
+        admin.setRol(rolAdmin);
+        return admin;
+    }
+
+    @Nested
+    @DisplayName("Guardas de integridad (último admin / auto-acción / historial)")
+    class GuardasTests {
+
+        @Test
+        @DisplayName("Inactivar la propia cuenta lanza ConflictoException")
+        void inactivar_PropiaCuenta() {
+            autenticarComo("juan@test.com");
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+
+            assertThrows(ConflictoException.class, () -> usuarioService.inactivar(1L));
+            assertEquals(EstadoUsuario.ACTIVO, mockUsuario.getEstado());
+        }
+
+        @Test
+        @DisplayName("Inactivar al último administrador activo lanza ConflictoException")
+        void inactivar_UltimoAdmin() {
+            autenticarComo("admin@test.com");
+            Usuario admin = crearAdmin();
+            when(usuarioRepository.findById(5L)).thenReturn(Optional.of(admin));
+            when(usuarioRepository.countByRolNombreAndEstado(NombreRol.ADMINISTRADOR, EstadoUsuario.ACTIVO)).thenReturn(1L);
+
+            assertThrows(ConflictoException.class, () -> usuarioService.inactivar(5L));
+        }
+
+        @Test
+        @DisplayName("Inactivar un admin cuando hay otros admins activos es permitido")
+        void inactivar_AdminConOtrosAdmins() {
+            autenticarComo("admin@test.com");
+            Usuario admin = crearAdmin();
+            when(usuarioRepository.findById(5L)).thenReturn(Optional.of(admin));
+            when(usuarioRepository.countByRolNombreAndEstado(NombreRol.ADMINISTRADOR, EstadoUsuario.ACTIVO)).thenReturn(2L);
+
+            usuarioService.inactivar(5L);
+
+            assertEquals(EstadoUsuario.INACTIVO, admin.getEstado());
+        }
+
+        @Test
+        @DisplayName("Eliminar usuario con historial de asignaciones lanza ConflictoException")
+        void eliminar_ConHistorial() {
+            autenticarComo("admin@test.com");
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+            when(asignacionRepository.existsByUsuarioId(1L)).thenReturn(true);
+
+            assertThrows(ConflictoException.class, () -> usuarioService.eliminar(1L));
+            verify(usuarioRepository, never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("Eliminar usuario sin historial borra tokens y usuario")
+        void eliminar_SinHistorial() {
+            autenticarComo("admin@test.com");
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+            when(asignacionRepository.existsByUsuarioId(1L)).thenReturn(false);
+
+            usuarioService.eliminar(1L);
+
+            verify(tokenRepository).deleteByUsuarioId(1L);
+            verify(usuarioRepository).delete(mockUsuario);
+        }
+
+        @Test
+        @DisplayName("Quitar rol ADMINISTRADOR al último admin lanza ConflictoException")
+        void actualizar_DegradarUltimoAdmin() {
+            autenticarComo("admin@test.com");
+            Usuario admin = crearAdmin();
+            when(usuarioRepository.findById(5L)).thenReturn(Optional.of(admin));
+            when(rolRepository.findByNombre(NombreRol.TAQUILLERO)).thenReturn(Optional.of(mockRol));
+            when(usuarioRepository.countByRolNombreAndEstado(NombreRol.ADMINISTRADOR, EstadoUsuario.ACTIVO)).thenReturn(1L);
+            UsuarioUpdateDTO dto = new UsuarioUpdateDTO();
+            dto.setRol("TAQUILLERO");
+
+            assertThrows(ConflictoException.class, () -> usuarioService.actualizar(5L, dto));
+            assertEquals(NombreRol.ADMINISTRADOR, admin.getRol().getNombre());
         }
     }
 }

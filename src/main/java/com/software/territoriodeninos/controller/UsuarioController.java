@@ -32,7 +32,7 @@ public class UsuarioController implements UsuarioApi {
     
     @Override
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
     public ResponseEntity<List<UsuarioResponseDTO>> obtenerTodos() {
         List<UsuarioResponseDTO> usuarios = usuarioService.obtenerTodos();
         return ResponseEntity.ok(usuarios);

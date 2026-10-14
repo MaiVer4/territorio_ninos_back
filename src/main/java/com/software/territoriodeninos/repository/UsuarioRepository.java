@@ -25,4 +25,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     List<Usuario> findByRolNombreAndEstado(com.software.territoriodeninos.util.NombreRol nombreRol, EstadoUsuario estado);
     
     boolean existsByCorreo(String correo);
+
+    long countByRolNombreAndEstado(com.software.territoriodeninos.util.NombreRol nombreRol, EstadoUsuario estado);
 }

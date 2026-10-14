@@ -35,6 +35,8 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
     private final UsuarioMapper usuarioMapper;
+    private final com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
+    private final com.software.territoriodeninos.repository.PasswordResetTokenRepository tokenRepository;
 
     @Override
     public UsuarioResponseDTO registrar(UsuarioRegistroDTO registroDTO) {
@@ -114,11 +116,16 @@ public class UsuarioServiceImpl implements UsuarioService {
             if (!esAdmin) {
                 throw new AccessDeniedException("Solo un administrador puede modificar el estado de un usuario");
             }
+            EstadoUsuario nuevoEstado;
             try {
-                usuario.setEstado(EstadoUsuario.valueOf(updateDTO.getEstado().toUpperCase()));
+                nuevoEstado = EstadoUsuario.valueOf(updateDTO.getEstado().toUpperCase());
             } catch (IllegalArgumentException e) {
                 throw new ConflictoException("Estado inválido: " + updateDTO.getEstado());
             }
+            if (nuevoEstado != EstadoUsuario.ACTIVO) {
+                verificarNoEsUltimoAdminNiPropio(usuario);
+            }
+            usuario.setEstado(nuevoEstado);
         }
 
         if (StringUtils.hasText(updateDTO.getRol())) {
@@ -128,6 +135,9 @@ public class UsuarioServiceImpl implements UsuarioService {
             NombreRol nombreRolEnum = parseRol(updateDTO.getRol());
             Rol rol = rolRepository.findByNombre(nombreRolEnum)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Rol " + updateDTO.getRol() + " no encontrado"));
+            if (nombreRolEnum != NombreRol.ADMINISTRADOR) {
+                verificarNoEsUltimoAdminNiPropio(usuario);
+            }
             usuario.setRol(rol);
         }
 
@@ -150,6 +160,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     public UsuarioResponseDTO inactivar(Long id) {
         Usuario usuario = findUsuarioById(id);
+        verificarNoEsUltimoAdminNiPropio(usuario);
         usuario.inactivar();
         return usuarioMapper.toResponseDTO(usuario);
     }
@@ -174,10 +185,35 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     public void eliminar(Long id) {
         Usuario usuario = findUsuarioById(id);
+        verificarNoEsUltimoAdminNiPropio(usuario);
+        if (asignacionRepository.existsByUsuarioId(id)) {
+            throw new ConflictoException(
+                    "El usuario tiene historial de asignaciones y no puede eliminarse. Use la opción de inactivar.");
+        }
+        tokenRepository.deleteByUsuarioId(id);
         usuarioRepository.delete(usuario);
     }
 
     // --- Métodos Privados Auxiliares ---
+
+    /**
+     * Impide que un administrador se inactive/elimine/degrade a sí mismo
+     * o que el sistema quede sin ningún administrador activo.
+     */
+    private void verificarNoEsUltimoAdminNiPropio(Usuario usuarioTarget) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && usuarioTarget.getCorreo() != null
+                && usuarioTarget.getCorreo().equalsIgnoreCase(auth.getName())) {
+            throw new ConflictoException("No puedes inactivar, eliminar o quitar el rol de administrador a tu propia cuenta");
+        }
+        boolean esAdminActivo = usuarioTarget.estaActivo()
+                && usuarioTarget.getRol() != null
+                && usuarioTarget.getRol().getNombre() == NombreRol.ADMINISTRADOR;
+        if (esAdminActivo
+                && usuarioRepository.countByRolNombreAndEstado(NombreRol.ADMINISTRADOR, EstadoUsuario.ACTIVO) <= 1) {
+            throw new ConflictoException("No se puede dejar el sistema sin administradores activos");
+        }
+    }
 
     private Usuario findUsuarioById(Long id) {
         return usuarioRepository.findById(id)
