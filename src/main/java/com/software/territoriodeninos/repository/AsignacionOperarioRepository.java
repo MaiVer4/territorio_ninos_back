@@ -12,6 +12,10 @@ import java.util.Optional;
 public interface AsignacionOperarioRepository extends JpaRepository<AsignacionOperario, Long> {
     
     boolean existsByUsuarioIdAndEstado(Long usuarioId, EstadoAsignacion estado);
+
+    boolean existsByUsuarioId(Long usuarioId);
+
+    boolean existsByAtraccionIdAndEstado(Long atraccionId, EstadoAsignacion estado);
     
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"usuario", "usuario.rol", "atraccion"})
     Optional<AsignacionOperario> findByUsuarioIdAndEstado(Long usuarioId, EstadoAsignacion estado);

@@ -29,6 +29,9 @@ class AtraccionServiceTest {
     @Mock
     private AtraccionRepository atraccionRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
+
     @InjectMocks
     private AtraccionServiceImpl atraccionService;
 
@@ -142,5 +145,24 @@ class AtraccionServiceTest {
         atraccionService.eliminar(1L);
 
         assertEquals(EstadoAtraccion.INACTIVO, atraccionMock.getEstado());
+    }
+
+    @Test
+    void eliminar_ConOperariosActivos_LanzaConflicto() {
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionMock));
+        when(asignacionRepository.existsByAtraccionIdAndEstado(atraccionMock.getId(),
+                com.software.territoriodeninos.util.EstadoAsignacion.ACTIVA)).thenReturn(true);
+
+        assertThrows(ConflictoException.class, () -> atraccionService.eliminar(1L));
+        assertNotEquals(EstadoAtraccion.INACTIVO, atraccionMock.getEstado());
+    }
+
+    @Test
+    void cambiarEstado_AMantenimientoConOperariosActivos_LanzaConflicto() {
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionMock));
+        when(asignacionRepository.existsByAtraccionIdAndEstado(atraccionMock.getId(),
+                com.software.territoriodeninos.util.EstadoAsignacion.ACTIVA)).thenReturn(true);
+
+        assertThrows(ConflictoException.class, () -> atraccionService.cambiarEstado(1L, "MANTENIMIENTO"));
     }
 }

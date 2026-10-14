@@ -6,6 +6,7 @@ import com.software.territoriodeninos.entity.Atraccion;
 import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.repository.AtraccionRepository;
+import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoAtraccion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.List;
 public class AtraccionServiceImpl implements AtraccionService {
 
     private final AtraccionRepository atraccionRepository;
+    private final com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
 
     @Override
     public AtraccionResponseDTO crear(AtraccionRequestDTO request) {
@@ -88,6 +90,9 @@ public class AtraccionServiceImpl implements AtraccionService {
 
         try {
             EstadoAtraccion estado = EstadoAtraccion.fromString(nuevoEstado);
+            if (estado != EstadoAtraccion.ACTIVO) {
+                verificarSinOperariosActivos(atraccion);
+            }
             atraccion.setEstado(estado);
             log.info("Estado de atracción {} cambiado a {}", atraccion.getNombre(), estado);
         } catch (IllegalArgumentException e) {
@@ -100,12 +105,20 @@ public class AtraccionServiceImpl implements AtraccionService {
     @Override
     public void eliminar(Long id) {
         Atraccion atraccion = findAtraccionById(id);
-        
+        verificarSinOperariosActivos(atraccion);
+
         atraccion.setEstado(EstadoAtraccion.INACTIVO);
         log.info("Atracción {} marcada como inactiva", atraccion.getNombre());
     }
 
     // --- Métodos Privados Auxiliares ---
+
+    private void verificarSinOperariosActivos(Atraccion atraccion) {
+        if (asignacionRepository.existsByAtraccionIdAndEstado(atraccion.getId(), EstadoAsignacion.ACTIVA)) {
+            throw new ConflictoException("La atracción '" + atraccion.getNombre()
+                    + "' tiene operarios asignados. Reasígnelos o finalice sus asignaciones primero.");
+        }
+    }
 
     private Atraccion findAtraccionById(Long id) {
         return atraccionRepository.findById(id)
