@@ -28,8 +28,6 @@ public class AtraccionServiceImpl implements AtraccionService {
             throw new ConflictoException("Ya existe una atracción con el nombre: " + request.nombre());
         }
 
-        validarEdades(request);
-
         Atraccion.AtraccionBuilder builder = Atraccion.builder()
                 .nombre(request.nombre())
                 .descripcion(request.descripcion())
@@ -74,8 +72,6 @@ public class AtraccionServiceImpl implements AtraccionService {
             throw new ConflictoException("Ya existe otra atracción con el nombre: " + request.nombre());
         }
 
-        validarEdades(request);
-
         atraccion.setNombre(request.nombre());
         atraccion.setDescripcion(request.descripcion());
         atraccion.setTarifaMinuto(request.tarifaMinuto());
@@ -116,20 +112,12 @@ public class AtraccionServiceImpl implements AtraccionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id));
     }
 
-    private void validarEdades(AtraccionRequestDTO request) {
-        if (request.edadMinima() != null && request.edadMaxima() != null && request.edadMinima() > request.edadMaxima()) {
-            throw new IllegalArgumentException("La edad mínima no puede ser mayor que la edad máxima");
-        }
-    }
-
     private void aplicarAtributosOpcionales(Atraccion.AtraccionBuilder builder, AtraccionRequestDTO request) {
         if (request.tipo() != null) builder.tipo(request.tipo());
         if (request.capacidadMaxima() != null) builder.capacidadMaxima(request.capacidadMaxima());
         if (request.duracionMinutosBase() != null) builder.duracionMinutosBase(request.duracionMinutosBase());
         if (request.toleranciaMinutos() != null) builder.toleranciaMinutos(request.toleranciaMinutos());
         if (request.caidasLimite() != null) builder.caidasLimite(request.caidasLimite());
-        if (request.edadMinima() != null) builder.edadMinima(request.edadMinima());
-        if (request.edadMaxima() != null) builder.edadMaxima(request.edadMaxima());
     }
 
     private void aplicarAtributosOpcionales(Atraccion atraccion, AtraccionRequestDTO request) {
@@ -138,8 +126,6 @@ public class AtraccionServiceImpl implements AtraccionService {
         if (request.duracionMinutosBase() != null) atraccion.setDuracionMinutosBase(request.duracionMinutosBase());
         if (request.toleranciaMinutos() != null) atraccion.setToleranciaMinutos(request.toleranciaMinutos());
         if (request.caidasLimite() != null) atraccion.setCaidasLimite(request.caidasLimite());
-        if (request.edadMinima() != null) atraccion.setEdadMinima(request.edadMinima());
-        if (request.edadMaxima() != null) atraccion.setEdadMaxima(request.edadMaxima());
     }
 
     private AtraccionResponseDTO mapToDTO(Atraccion atraccion) {
@@ -154,9 +140,7 @@ public class AtraccionServiceImpl implements AtraccionService {
                 atraccion.getCapacidadMaxima(),
                 atraccion.getDuracionMinutosBase(),
                 atraccion.getToleranciaMinutos(),
-                atraccion.getCaidasLimite(),
-                atraccion.getEdadMinima() != null ? atraccion.getEdadMinima() : 0,
-                atraccion.getEdadMaxima() != null ? atraccion.getEdadMaxima() : 12
+                atraccion.getCaidasLimite()
         );
     }
 }

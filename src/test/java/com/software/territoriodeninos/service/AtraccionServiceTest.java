@@ -143,17 +143,4 @@ class AtraccionServiceTest {
 
         assertEquals(EstadoAtraccion.INACTIVO, atraccionMock.getEstado());
     }
-
-    @Test
-    void crear_EdadInvalida_LanzaExcepcion() {
-        when(atraccionRepository.existsByNombreIgnoreCase(anyString())).thenReturn(false);
-        AtraccionRequestDTO invalidAgeRequest = new AtraccionRequestDTO(
-                "Trampolin", "Saltos", new BigDecimal("50.00"),
-                com.software.territoriodeninos.util.TipoAtraccion.TEMPORIZADA,
-                10, 15, 0, 3, 12, 5 // edadMinima 12 > edadMaxima 5
-        );
-
-        assertThrows(IllegalArgumentException.class, () -> atraccionService.crear(invalidAgeRequest));
-        verify(atraccionRepository, never()).save(any(Atraccion.class));
-    }
 }
