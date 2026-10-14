@@ -48,6 +48,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
     private final LoginAttemptService loginAttemptService;
+    private final com.software.territoriodeninos.security.TokenBlacklistService tokenBlacklistService;
 
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
@@ -162,6 +163,15 @@ public class AuthServiceImpl implements AuthService {
     public void purgarTokensExpirados() {
         tokenRepository.deleteByFechaExpiracionBefore(LocalDateTime.now());
         log.info("Purga de tokens de recuperación expirados ejecutada exitosamente.");
+    }
+
+    @Override
+    public void cerrarSesion(String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = jwtUtil.extraerTokenDelHeader(authHeader);
+            tokenBlacklistService.revocar(token);
+            log.info("Token JWT revocado en logout");
+        }
     }
 
     private String sha256Hex(String input) {

@@ -280,13 +280,26 @@ class AuthControllerTest {
     class LogoutEndpointTests {
 
         @Test
-        @DisplayName("200 OK - Cierre de sesión exitoso")
+        @DisplayName("200 OK - Cierre de sesión exitoso sin header")
         void testLogout_Exito_Ok() throws Exception {
             // Act & Assert
             mockMvc.perform(post("/api/auth/logout")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.mensaje", is("Sesión cerrada exitosamente.")));
+        }
+
+        @Test
+        @DisplayName("200 OK - Cierre de sesión con token revoca token en authService")
+        void testLogout_ConToken_RevocaExitosamente() throws Exception {
+            String token = "Bearer token-de-prueba";
+            mockMvc.perform(post("/api/auth/logout")
+                            .header("Authorization", token)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.mensaje", is("Sesión cerrada exitosamente.")));
+
+            verify(authService, times(1)).cerrarSesion(token);
         }
     }
 }

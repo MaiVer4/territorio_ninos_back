@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import jakarta.validation.Valid;
 
 @Tag(
@@ -141,5 +142,5 @@ public interface AuthApi {
             content = @Content(mediaType = "application/json")
         )
     })
-    ResponseEntity<?> logout();
+    ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String authHeader);
 }

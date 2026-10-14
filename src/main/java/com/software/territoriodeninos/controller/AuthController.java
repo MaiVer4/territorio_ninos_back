@@ -53,7 +53,7 @@ public class AuthController implements AuthApi {
     // =========================================================================
     @Override
     @PostMapping("/logout")
-    public ResponseEntity<?> logout() {
+    public ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         
         if (auth != null && auth.isAuthenticated()) {
@@ -67,8 +67,11 @@ public class AuthController implements AuthApi {
                 // }
             }
             
+            authService.cerrarSesion(authHeader);
             // Limpiar el contexto de seguridad
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        } else if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            authService.cerrarSesion(authHeader);
         }
         
         return ResponseEntity.ok(java.util.Map.of("mensaje", "Sesión cerrada exitosamente."));

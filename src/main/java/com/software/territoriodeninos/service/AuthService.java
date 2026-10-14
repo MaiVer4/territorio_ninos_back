@@ -8,4 +8,5 @@ public interface AuthService {
     void generarTokenRecuperacion(String email);
     void cambiarContrasena(String token, String nuevaContrasena);
     void purgarTokensExpirados();
+    void cerrarSesion(String authHeader);
 }

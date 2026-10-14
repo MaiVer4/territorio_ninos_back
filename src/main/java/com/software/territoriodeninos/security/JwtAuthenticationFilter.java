@@ -24,10 +24,12 @@ import java.util.Map;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     
     private final JwtUtil jwtUtil;
+    private final TokenBlacklistService tokenBlacklistService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenBlacklistService tokenBlacklistService) {
         this.jwtUtil = jwtUtil;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
     
     @Override
@@ -39,15 +41,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = jwtUtil.extraerTokenDelHeader(authHeader);
+
+                if (tokenBlacklistService.estaRevocado(token)) {
+                    throw new TokenInvalidoException("La sesión fue cerrada. Inicie sesión nuevamente.");
+                }
                 
                 Claims claims = jwtUtil.extraerClaims(token);
                 if (claims != null && claims.getExpiration() != null && !claims.getExpiration().before(new Date())) {
                     String correo = claims.getSubject();
                     String rol = (String) claims.get("rol");
                     
-                    List<SimpleGrantedAuthority> authorities = List.of(
-                            new SimpleGrantedAuthority("ROLE_" + rol)
-                    );
+                    List<SimpleGrantedAuthority> authorities = (rol != null && !rol.isBlank())
+                            ? List.of(new SimpleGrantedAuthority("ROLE_" + rol))
+                            : List.of();
                     
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(correo, null, authorities);

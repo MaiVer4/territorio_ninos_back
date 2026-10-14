@@ -54,6 +54,9 @@ public class AuthServiceTest {
     @Mock
     private com.software.territoriodeninos.security.LoginAttemptService loginAttemptService;
 
+    @Mock
+    private com.software.territoriodeninos.security.TokenBlacklistService tokenBlacklistService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -352,6 +355,34 @@ public class AuthServiceTest {
         void purgarTokensExpirados_EjecutaEliminacion() {
             authService.purgarTokensExpirados();
             verify(tokenRepository).deleteByFechaExpiracionBefore(any(LocalDateTime.class));
+        }
+    }
+
+    // =========================================================================
+    // CERRAR SESIÓN (LOGOUT)
+    // =========================================================================
+    @Nested
+    @DisplayName("Cerrar sesión")
+    class CerrarSesionTests {
+
+        @Test
+        @DisplayName("Header con Bearer revoca token en blacklist")
+        void cerrarSesion_ConBearerToken_Revoca() {
+            String header = "Bearer jwt-de-prueba";
+            when(jwtUtil.extraerTokenDelHeader(header)).thenReturn("jwt-de-prueba");
+
+            authService.cerrarSesion(header);
+
+            verify(tokenBlacklistService, times(1)).revocar("jwt-de-prueba");
+        }
+
+        @Test
+        @DisplayName("Header nulo o sin Bearer no interactúa con blacklist")
+        void cerrarSesion_HeaderInvalido_NoRevoca() {
+            authService.cerrarSesion(null);
+            authService.cerrarSesion("Basic 12345");
+
+            verify(tokenBlacklistService, never()).revocar(anyString());
         }
     }
 
