@@ -19,6 +19,10 @@ public class ConfiguracionParque {
     @Column(nullable = false)
     private String nombreParque;
 
+    private String nombreComercial;
+
+    private String razonSocial;
+
     @Column(nullable = false)
     private String nit;
 
@@ -26,7 +30,17 @@ public class ConfiguracionParque {
 
     private String telefono;
 
-    @Column(length = 1000)
+    private String ciudad;
+
+    @Column(length = 2000)
+    private String politicasSeguridad;
+
+    @Builder.Default
+    private Integer anchoPapelMm = 80;
+
+    private String mensajePie;
+
+    @Column(length = 2000)
     private String pieTicketLegal;
 
     @Column(nullable = false)

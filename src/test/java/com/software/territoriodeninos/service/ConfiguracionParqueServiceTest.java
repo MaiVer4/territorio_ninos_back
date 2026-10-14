@@ -87,7 +87,8 @@ class ConfiguracionParqueServiceTest {
             assertNotNull(resultado);
             assertEquals(1L, resultado.getId());
             assertEquals("Territorio de Niños", resultado.getNombreParque());
-            assertEquals("900.123.456-7", resultado.getNit());
+            assertEquals("Territorio de Niños", resultado.getNombreComercial());
+            assertEquals("901.458.789-2", resultado.getNit());
             assertEquals(60, resultado.getTiempoGraciaGeneralSegundos());
             assertNotNull(resultado.getPieTicketLegal());
             verify(repository, times(1)).findFirstByOrderByIdAsc();
