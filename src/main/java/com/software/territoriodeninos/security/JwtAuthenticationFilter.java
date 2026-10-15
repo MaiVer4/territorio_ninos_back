@@ -31,6 +31,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.jwtUtil = jwtUtil;
         this.tokenBlacklistService = tokenBlacklistService;
     }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.contains("/api/auth/login") ||
+               path.contains("/api/auth/forgot-password") ||
+               path.contains("/api/auth/reset-password") ||
+               path.contains("/v3/api-docs") ||
+               path.contains("/swagger-ui");
+    }
     
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
