@@ -42,6 +42,13 @@ public class AsignacionOperarioController implements AsignacionOperarioApi {
     }
 
     @Override
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<AsignacionResponseDTO> liberar(@PathVariable Long id) {
+        return ResponseEntity.ok(asignacionOperarioService.finalizar(id));
+    }
+
+    @Override
     @GetMapping("/activas")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
     public ResponseEntity<List<AsignacionResponseDTO>> obtenerActivas() {

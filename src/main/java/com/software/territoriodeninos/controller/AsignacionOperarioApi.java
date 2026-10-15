@@ -30,6 +30,10 @@ public interface AsignacionOperarioApi {
     @ApiResponse(responseCode = "200", description = "Asignación finalizada")
     ResponseEntity<AsignacionResponseDTO> finalizar(@PathVariable Long id);
 
+    @Operation(summary = "Liberar o desasignar operario", description = "Libera la asignación activa de un operario delegando a la finalización de turno (DELETE /{id}).")
+    @ApiResponse(responseCode = "200", description = "Asignación liberada exitosamente")
+    ResponseEntity<AsignacionResponseDTO> liberar(@PathVariable Long id);
+
     @Operation(summary = "Obtener todas las asignaciones activas", description = "Retorna el listado de todas las asignaciones actualmente activas en el parque.")
     @ApiResponse(responseCode = "200", description = "Lista de asignaciones activas")
     ResponseEntity<List<AsignacionResponseDTO>> obtenerActivas();

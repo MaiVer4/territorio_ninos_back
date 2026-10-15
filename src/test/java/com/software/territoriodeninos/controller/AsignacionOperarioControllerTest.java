@@ -79,9 +79,44 @@ class AsignacionOperarioControllerTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.id", is(10)))
+                    .andExpect(jsonPath("$.usuarioId", is(5)))
+                    .andExpect(jsonPath("$.operarioId", is(5)))
                     .andExpect(jsonPath("$.nombreOperario", is("Juan Perez")))
+                    .andExpect(jsonPath("$.operarioNombre", is("Juan Perez")))
+                    .andExpect(jsonPath("$.operarioCorreo", is("juan@test.com")))
                     .andExpect(jsonPath("$.nombreAtraccion", is("Inflable")))
-                    .andExpect(jsonPath("$.estado", is("ACTIVA")));
+                    .andExpect(jsonPath("$.atraccionNombre", is("Inflable")))
+                    .andExpect(jsonPath("$.estado", is("ACTIVA")))
+                    .andExpect(jsonPath("$.activo", is(true)));
+
+            verify(asignacionOperarioService, times(1)).asignar(any(AsignacionRequestDTO.class));
+        }
+
+        @Test
+        @DisplayName("201 Created - Deserialización de alias frontend (operarioId) y forzarReasignacion")
+        void testAsignar_ConAliasFrontendYForzarReasignacion_Exito() throws Exception {
+            // Arrange
+            String jsonPayload = """
+                    {
+                        "operarioId": 5,
+                        "atraccionId": 1,
+                        "forzarReasignacion": true,
+                        "observaciones": "Reubicación rápida"
+                    }
+                    """;
+            when(asignacionOperarioService.asignar(argThat(dto ->
+                    dto.usuarioId().equals(5L) &&
+                    dto.atraccionId().equals(1L) &&
+                    Boolean.TRUE.equals(dto.forzarReasignacion())
+            ))).thenReturn(mockResponseDTO);
+
+            // Act & Assert
+            mockMvc.perform(post("/api/asignaciones")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(jsonPayload))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.operarioId", is(5)))
+                    .andExpect(jsonPath("$.activo", is(true)));
 
             verify(asignacionOperarioService, times(1)).asignar(any(AsignacionRequestDTO.class));
         }
@@ -250,6 +285,65 @@ class AsignacionOperarioControllerTest {
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.codigo", is(404)));
+        }
+
+        @Test
+        @DisplayName("200 OK - Liberación/Desasignación exitosa mediante DELETE /{id}")
+        void testLiberar_Exito_Ok() throws Exception {
+            // Arrange
+            AsignacionResponseDTO finalizada = new AsignacionResponseDTO(
+                    10L, 5L, "Juan Perez", "juan@test.com", 1L, "Inflable",
+                    LocalDate.now(), LocalDateTime.now(), LocalDateTime.now(), EstadoAsignacion.FINALIZADA, "Turno finalizado"
+            );
+
+            when(asignacionOperarioService.finalizar(10L)).thenReturn(finalizada);
+
+            // Act & Assert
+            mockMvc.perform(delete("/api/asignaciones/10")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(10)))
+                    .andExpect(jsonPath("$.estado", is("FINALIZADA")))
+                    .andExpect(jsonPath("$.activo", is(false)));
+
+            verify(asignacionOperarioService, times(1)).finalizar(10L);
+        }
+
+        @Test
+        @DisplayName("404 Not Found - Error al liberar con DELETE /{id} cuando no existe")
+        void testLiberar_NoExiste_NotFound() throws Exception {
+            // Arrange
+            when(asignacionOperarioService.finalizar(99L))
+                    .thenThrow(new RecursoNoEncontradoException("Asignación con ID 99 no encontrada"));
+
+            // Act & Assert
+            mockMvc.perform(delete("/api/asignaciones/99")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.codigo", is(404)));
+
+            verify(asignacionOperarioService, times(1)).finalizar(99L);
+        }
+
+        @Test
+        @DisplayName("200 OK - Liberación mediante DELETE en ruta alternativa /api/assignments/{id}")
+        void testLiberar_RutaIngles_Ok() throws Exception {
+            // Arrange
+            AsignacionResponseDTO finalizada = new AsignacionResponseDTO(
+                    10L, 5L, "Juan Perez", "juan@test.com", 1L, "Inflable",
+                    LocalDate.now(), LocalDateTime.now(), LocalDateTime.now(), EstadoAsignacion.FINALIZADA, "Turno finalizado"
+            );
+
+            when(asignacionOperarioService.finalizar(10L)).thenReturn(finalizada);
+
+            // Act & Assert
+            mockMvc.perform(delete("/api/assignments/10")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(10)))
+                    .andExpect(jsonPath("$.estado", is("FINALIZADA")));
+
+            verify(asignacionOperarioService, times(1)).finalizar(10L);
         }
     }
 

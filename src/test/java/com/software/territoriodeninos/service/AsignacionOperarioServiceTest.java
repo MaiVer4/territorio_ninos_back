@@ -116,9 +116,47 @@ class AsignacionOperarioServiceTest {
 
         assertNotNull(response);
         assertEquals(5L, response.usuarioId());
+        assertEquals(5L, response.operarioId());
         assertEquals("Carlos Operario", response.nombreOperario());
+        assertEquals("Carlos Operario", response.operarioNombre());
+        assertEquals("carlos@parque.com", response.operarioCorreo());
         assertEquals("Montaña Rusa", response.nombreAtraccion());
+        assertEquals("Montaña Rusa", response.atraccionNombre());
         assertEquals(EstadoAsignacion.ACTIVA, response.estado());
+        assertTrue(response.activo());
+        verify(asignacionRepository).save(any(AsignacionOperario.class));
+    }
+
+    @Test
+    @DisplayName("HU-10: Asignar operario con forzarReasignacion=true cierra la asignación previa y crea la nueva")
+    void asignar_ConForzarReasignacion_Exito() {
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(operarioMock));
+        when(atraccionRepository.findById(2L)).thenReturn(Optional.of(atraccionMock2));
+        when(asignacionRepository.existsByUsuarioIdAndEstado(5L, EstadoAsignacion.ACTIVA)).thenReturn(true);
+        when(asignacionRepository.findByUsuarioIdAndEstado(5L, EstadoAsignacion.ACTIVA)).thenReturn(Optional.of(asignacionActivaMock));
+
+        AsignacionOperario nuevaMock = AsignacionOperario.builder()
+                .id(101L)
+                .usuario(operarioMock)
+                .atraccion(atraccionMock2)
+                .fechaAsignacion(LocalDate.now())
+                .horaInicio(LocalDateTime.now())
+                .estado(EstadoAsignacion.ACTIVA)
+                .observaciones("Reasignado desde Montaña Rusa (Turno tarde)")
+                .build();
+
+        when(asignacionRepository.save(any(AsignacionOperario.class))).thenReturn(nuevaMock);
+
+        AsignacionRequestDTO requestForzar = new AsignacionRequestDTO(5L, 2L, "Turno tarde", true);
+        AsignacionResponseDTO response = asignacionService.asignar(requestForzar);
+
+        assertNotNull(response);
+        assertEquals(EstadoAsignacion.REASIGNADA, asignacionActivaMock.getEstado());
+        assertNotNull(asignacionActivaMock.getHoraFin());
+        assertTrue(asignacionActivaMock.getObservaciones().contains("Reasignado: Turno tarde"));
+        assertEquals("Carros Chocones", response.atraccionNombre());
+        assertEquals(5L, response.operarioId());
+        assertTrue(response.activo());
         verify(asignacionRepository).save(any(AsignacionOperario.class));
     }
 
@@ -201,6 +239,7 @@ class AsignacionOperarioServiceTest {
 
         assertNotNull(response);
         assertEquals(EstadoAsignacion.FINALIZADA, response.estado());
+        assertFalse(response.activo());
         assertNotNull(asignacionActivaMock.getHoraFin());
     }
 

@@ -39,6 +39,30 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
         Atraccion atraccion = findAndValidateAtraccionActiva(request.atraccionId());
 
         if (asignacionRepository.existsByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)) {
+            if (Boolean.TRUE.equals(request.forzarReasignacion())) {
+                AsignacionOperario asignacionActual = asignacionRepository.findByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)
+                        .orElseThrow(() -> new RecursoNoEncontradoException("El operario no tiene una asignación activa para reasignar"));
+
+                // Cerrar asignación anterior
+                asignacionActual.setEstado(EstadoAsignacion.REASIGNADA);
+                asignacionActual.setHoraFin(LocalDateTime.now());
+
+                if (request.observaciones() != null && !request.observaciones().isBlank()) {
+                    String obs = asignacionActual.getObservaciones();
+                    asignacionActual.setObservaciones((obs != null && !obs.isBlank() ? obs + " | " : "") + "Reasignado: " + request.observaciones());
+                }
+
+                // Crear nueva asignación activa
+                String nuevasObservaciones = "Reasignado desde " + asignacionActual.getAtraccion().getNombre() +
+                        (request.observaciones() != null && !request.observaciones().isBlank() ? " (" + request.observaciones() + ")" : "");
+
+                AsignacionOperario nuevaAsignacion = buildAsignacionActiva(usuario, atraccion, nuevasObservaciones);
+                AsignacionOperario guardada = asignacionRepository.save(nuevaAsignacion);
+
+                log.info("Operario {} reasignado forzosamente de {} a {}", usuario.getCorreo(),
+                        asignacionActual.getAtraccion().getNombre(), atraccion.getNombre());
+                return mapToDTO(guardada);
+            }
             throw new ConflictoException("El operario ya cuenta con una asignación activa en el parque");
         }
 
