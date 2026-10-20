@@ -1,10 +1,14 @@
 package com.software.territoriodeninos.entity;
 
+import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import jakarta.persistence.Column;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,5 +73,57 @@ class EntityModelTest {
         // Test setters
         config.setTiempoGraciaGeneralSegundos(120);
         assertEquals(120, config.getTiempoGraciaGeneralSegundos());
+    }
+
+    @Test
+    @DisplayName("TurnoCaja tiene getters, setters, builder y anotaciones JPA requeridas")
+    void testTurnoCajaModel() throws NoSuchFieldException {
+        LocalDateTime now = LocalDateTime.now();
+        BigDecimal montoBase = new BigDecimal("100000.00");
+        BigDecimal ventas = new BigDecimal("450000.00");
+        BigDecimal reportado = new BigDecimal("550000.00");
+        BigDecimal diferencia = BigDecimal.ZERO;
+
+        TurnoCaja turno = TurnoCaja.builder()
+                .id(1L)
+                .usuarioId(42L)
+                .montoBase(montoBase)
+                .fechaApertura(now)
+                .fechaCierre(now.plusHours(8))
+                .ventasEfectivoSistema(ventas)
+                .montoEfectivoReportado(reportado)
+                .diferencia(diferencia)
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .observaciones("Turno inicial")
+                .build();
+
+        assertEquals(1L, turno.getId());
+        assertEquals(42L, turno.getUsuarioId());
+        assertEquals(montoBase, turno.getMontoBase());
+        assertEquals(now, turno.getFechaApertura());
+        assertEquals(now.plusHours(8), turno.getFechaCierre());
+        assertEquals(ventas, turno.getVentasEfectivoSistema());
+        assertEquals(reportado, turno.getMontoEfectivoReportado());
+        assertEquals(diferencia, turno.getDiferencia());
+        assertEquals(EstadoTurnoCaja.ABIERTO, turno.getEstado());
+        assertEquals("Turno inicial", turno.getObservaciones());
+
+        // Verificar prePersist
+        TurnoCaja turnoNuevo = new TurnoCaja();
+        turnoNuevo.prePersist();
+        assertNotNull(turnoNuevo.getFechaApertura());
+        assertEquals(EstadoTurnoCaja.ABIERTO, turnoNuevo.getEstado());
+        assertEquals(BigDecimal.ZERO, turnoNuevo.getVentasEfectivoSistema());
+
+        // Verificar @Enumerated(EnumType.STRING) en el campo estado
+        Field estadoField = TurnoCaja.class.getDeclaredField("estado");
+        Enumerated enumerated = estadoField.getAnnotation(Enumerated.class);
+        assertNotNull(enumerated, "El campo estado debe tener la anotación @Enumerated");
+        assertEquals(EnumType.STRING, enumerated.value(), "La anotación @Enumerated debe ser de tipo STRING");
+
+        // Verificar enumeradores EstadoTurnoCaja
+        assertEquals(2, EstadoTurnoCaja.values().length);
+        assertEquals(EstadoTurnoCaja.ABIERTO, EstadoTurnoCaja.valueOf("ABIERTO"));
+        assertEquals(EstadoTurnoCaja.CERRADO, EstadoTurnoCaja.valueOf("CERRADO"));
     }
 }
