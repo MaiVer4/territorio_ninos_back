@@ -59,6 +59,11 @@ public record TurnoCajaResponseDTO(
         return base.add(ventas);
     }
 
+    @JsonProperty("totalRecaudado")
+    public BigDecimal totalRecaudado() {
+        return ventasEfectivoSistema != null ? ventasEfectivoSistema : BigDecimal.ZERO;
+    }
+
     public static TurnoCajaResponseDTO fromEntity(TurnoCaja turno) {
         return fromEntity(turno, null);
     }

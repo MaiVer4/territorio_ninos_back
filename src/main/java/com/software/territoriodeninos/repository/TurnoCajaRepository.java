@@ -22,4 +22,12 @@ public interface TurnoCajaRepository extends JpaRepository<TurnoCaja, Long> {
             Long usuarioId,
             EstadoTurnoCaja estado
     );
+
+    /**
+     * Determina si existe algún registro de turno de caja asociado al usuario.
+     *
+     * @param usuarioId ID del usuario
+     * @return true si tiene turnos de caja registrados
+     */
+    boolean existsByUsuarioId(Long usuarioId);
 }
