@@ -5,6 +5,7 @@ import com.software.territoriodeninos.dto.CierreCajaDTO;
 import com.software.territoriodeninos.dto.TurnoCajaResponseDTO;
 import org.springframework.security.core.Authentication;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface TurnoCajaService {
@@ -14,4 +15,6 @@ public interface TurnoCajaService {
     Optional<TurnoCajaResponseDTO> obtenerTurnoActivo(Authentication auth);
 
     TurnoCajaResponseDTO cerrarTurno(CierreCajaDTO dto, Authentication auth);
+
+    List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha);
 }

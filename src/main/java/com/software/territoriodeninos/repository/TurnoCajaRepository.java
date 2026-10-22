@@ -5,10 +5,28 @@ import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface TurnoCajaRepository extends JpaRepository<TurnoCaja, Long> {
+
+    /**
+     * Consulta turnos de caja en un rango de fechas de apertura ordenados descendentemente.
+     *
+     * @param inicio Fecha/hora inicial del rango
+     * @param fin Fecha/hora final del rango
+     * @return Lista de turnos en el rango
+     */
+    List<TurnoCaja> findByFechaAperturaBetweenOrderByFechaAperturaDesc(LocalDateTime inicio, LocalDateTime fin);
+
+    /**
+     * Consulta todos los turnos ordenados descendentemente por fecha de apertura.
+     *
+     * @return Lista de todos los turnos
+     */
+    List<TurnoCaja> findAllByOrderByFechaAperturaDesc();
 
     /**
      * Identifica el turno más reciente de un cajero para un estado determinado,

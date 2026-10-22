@@ -12,6 +12,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/turnos")
 @RequiredArgsConstructor
@@ -54,5 +56,14 @@ public class TurnoCajaController {
             Authentication authentication
     ) {
         return cerrarTurno(request, authentication);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
+    public ResponseEntity<List<TurnoCajaResponseDTO>> obtenerHistorialTurnos(
+            @RequestParam(required = false) String fecha
+    ) {
+        List<TurnoCajaResponseDTO> response = turnoCajaService.obtenerHistorialTurnos(fecha);
+        return ResponseEntity.ok(response);
     }
 }

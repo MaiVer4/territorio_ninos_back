@@ -64,6 +64,21 @@ public record TurnoCajaResponseDTO(
         return ventasEfectivoSistema != null ? ventasEfectivoSistema : BigDecimal.ZERO;
     }
 
+    @JsonProperty("idUsuario")
+    public Long idUsuario() {
+        return usuarioId;
+    }
+
+    @JsonProperty("nombreCajero")
+    public String nombreCajero() {
+        return cajeroNombre;
+    }
+
+    @JsonProperty("totalVentas")
+    public BigDecimal totalVentas() {
+        return ventasEfectivoSistema != null ? ventasEfectivoSistema : BigDecimal.ZERO;
+    }
+
     public static TurnoCajaResponseDTO fromEntity(TurnoCaja turno) {
         return fromEntity(turno, null);
     }

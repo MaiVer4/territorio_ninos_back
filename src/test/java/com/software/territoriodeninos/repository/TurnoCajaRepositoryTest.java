@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -123,5 +124,61 @@ class TurnoCajaRepositoryTest {
 
         assertTrue(resultado.isPresent());
         assertEquals(guardadoNuevo.getId(), resultado.get().getId());
+    }
+
+    @Test
+    @DisplayName("findByFechaAperturaBetweenOrderByFechaAperturaDesc filtra en rango y ordena desc")
+    void testFindByFechaAperturaBetweenOrderByFechaAperturaDesc() {
+        LocalDateTime baseTime = LocalDateTime.of(2026, 10, 22, 10, 0);
+
+        TurnoCaja t1 = TurnoCaja.builder()
+                .usuarioId(501L)
+                .montoBase(new BigDecimal("10000.00"))
+                .fechaApertura(baseTime.minusDays(2))
+                .estado(EstadoTurnoCaja.CERRADO)
+                .build();
+        TurnoCaja t2 = TurnoCaja.builder()
+                .usuarioId(502L)
+                .montoBase(new BigDecimal("20000.00"))
+                .fechaApertura(baseTime.plusHours(2))
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .build();
+        TurnoCaja t3 = TurnoCaja.builder()
+                .usuarioId(503L)
+                .montoBase(new BigDecimal("30000.00"))
+                .fechaApertura(baseTime.plusHours(5))
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .build();
+
+        turnoCajaRepository.save(t1);
+        turnoCajaRepository.save(t2);
+        turnoCajaRepository.save(t3);
+
+        List<TurnoCaja> resultado = turnoCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaDesc(
+                baseTime.minusHours(1),
+                baseTime.plusHours(6)
+        );
+
+        assertFalse(resultado.isEmpty());
+        assertTrue(resultado.stream().anyMatch(t -> t.getUsuarioId().equals(502L)));
+        assertTrue(resultado.stream().anyMatch(t -> t.getUsuarioId().equals(503L)));
+        assertFalse(resultado.stream().anyMatch(t -> t.getUsuarioId().equals(501L)));
+
+        int idx3 = resultado.indexOf(resultado.stream().filter(t -> t.getUsuarioId().equals(503L)).findFirst().get());
+        int idx2 = resultado.indexOf(resultado.stream().filter(t -> t.getUsuarioId().equals(502L)).findFirst().get());
+        assertTrue(idx3 < idx2, "El más reciente debe aparecer primero");
+    }
+
+    @Test
+    @DisplayName("findAllByOrderByFechaAperturaDesc retorna todos ordenados desc")
+    void testFindAllByOrderByFechaAperturaDesc() {
+        List<TurnoCaja> resultado = turnoCajaRepository.findAllByOrderByFechaAperturaDesc();
+        assertNotNull(resultado);
+        for (int i = 0; i < resultado.size() - 1; i++) {
+            assertTrue(
+                    resultado.get(i).getFechaApertura().compareTo(resultado.get(i + 1).getFechaApertura()) >= 0,
+                    "Debe estar ordenado descendentemente"
+            );
+        }
     }
 }

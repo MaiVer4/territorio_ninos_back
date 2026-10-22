@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.is;
@@ -323,6 +324,40 @@ class TurnoCajaControllerTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.codigo", is(403)));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/turnos")
+    class ObtenerHistorialTurnosTests {
+
+        @Test
+        @DisplayName("200 OK - Obtener historial completo sin filtro de fecha")
+        void testObtenerHistorialTurnos_SinFecha_Ok() throws Exception {
+            when(turnoCajaService.obtenerHistorialTurnos(null)).thenReturn(List.of(mockTurnoAbiertoResponse, mockTurnoCerradoResponse));
+
+            mockMvc.perform(get("/api/turnos"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()", is(2)))
+                    .andExpect(jsonPath("$[0].id", is(1)))
+                    .andExpect(jsonPath("$[0].idUsuario", is(10)))
+                    .andExpect(jsonPath("$[0].nombreCajero", is("Cajero Pedro")))
+                    .andExpect(jsonPath("$[0].totalVentas", is(0)));
+        }
+
+        @Test
+        @DisplayName("200 OK - Obtener historial filtrado por fecha con alias de frontend")
+        void testObtenerHistorialTurnos_ConFecha_Ok() throws Exception {
+            when(turnoCajaService.obtenerHistorialTurnos("2026-10-22")).thenReturn(List.of(mockTurnoCerradoResponse));
+
+            mockMvc.perform(get("/api/turnos").param("fecha", "2026-10-22"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()", is(1)))
+                    .andExpect(jsonPath("$[0].idTurno", is(1)))
+                    .andExpect(jsonPath("$[0].idUsuario", is(10)))
+                    .andExpect(jsonPath("$[0].nombreCajero", is("Cajero Pedro")))
+                    .andExpect(jsonPath("$[0].totalVentas", is(100000.00)))
+                    .andExpect(jsonPath("$[0].totalEsperado", is(150000.00)));
         }
     }
 }

@@ -21,8 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -112,6 +119,39 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
 
         TurnoCaja guardado = turnoCajaRepository.save(turno);
         return TurnoCajaResponseDTO.fromEntity(guardado, usuario.getNombre());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha) {
+        List<TurnoCaja> turnos;
+        if (StringUtils.hasText(fecha)) {
+            LocalDate localDate = LocalDate.parse(fecha.trim());
+            LocalDateTime inicio = localDate.atStartOfDay();
+            LocalDateTime fin = localDate.atTime(LocalTime.MAX);
+            turnos = turnoCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaDesc(inicio, fin);
+        } else {
+            turnos = turnoCajaRepository.findAllByOrderByFechaAperturaDesc();
+        }
+
+        Set<Long> usuarioIds = turnos.stream()
+                .map(TurnoCaja::getUsuarioId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, String> nombresUsuarios = usuarioRepository.findAllById(usuarioIds).stream()
+                .collect(Collectors.toMap(
+                        Usuario::getId,
+                        Usuario::getNombre,
+                        (existente, reemplazo) -> existente
+                ));
+
+        return turnos.stream()
+                .map(t -> {
+                    String nombreCajero = nombresUsuarios.getOrDefault(t.getUsuarioId(), "Cajero #" + t.getUsuarioId());
+                    return TurnoCajaResponseDTO.fromEntity(t, nombreCajero);
+                })
+                .toList();
     }
 
     private Usuario obtenerUsuarioYValidarRol(Authentication auth) {

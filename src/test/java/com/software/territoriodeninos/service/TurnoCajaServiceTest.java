@@ -26,7 +26,9 @@ import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -358,5 +360,64 @@ class TurnoCajaServiceTest {
 
         assertThrows(AccessDeniedException.class, () -> turnoCajaService.cerrarTurno(dto, authentication));
         verify(turnoCajaRepository, never()).save(any(TurnoCaja.class));
+    }
+
+    @Test
+    @DisplayName("obtenerHistorialTurnos() - Sin filtro de fecha retorna todos y mapea nombres con fallback")
+    void testObtenerHistorialTurnos_SinFecha_RetornaTodosConNombres() {
+        TurnoCaja t1 = TurnoCaja.builder()
+                .id(1L)
+                .usuarioId(10L)
+                .montoBase(new BigDecimal("50000.00"))
+                .fechaApertura(LocalDateTime.now().minusHours(2))
+                .estado(EstadoTurnoCaja.CERRADO)
+                .build();
+        TurnoCaja t2 = TurnoCaja.builder()
+                .id(2L)
+                .usuarioId(99L)
+                .montoBase(new BigDecimal("30000.00"))
+                .fechaApertura(LocalDateTime.now())
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .build();
+
+        when(turnoCajaRepository.findAllByOrderByFechaAperturaDesc()).thenReturn(List.of(t2, t1));
+        when(usuarioRepository.findAllById(any())).thenReturn(List.of(taquillero)); // Solo taquillero (id 10) existe
+
+        List<TurnoCajaResponseDTO> resultado = turnoCajaService.obtenerHistorialTurnos(null);
+
+        assertEquals(2, resultado.size());
+        assertEquals("Cajero #99", resultado.get(0).cajeroNombre());
+        assertEquals("Cajero #99", resultado.get(0).nombreCajero());
+        assertEquals(2L, resultado.get(0).idTurno());
+        assertEquals("Cajero Pedro", resultado.get(1).cajeroNombre());
+        assertEquals("Cajero Pedro", resultado.get(1).nombreCajero());
+        assertEquals(10L, resultado.get(1).idUsuario());
+        verify(turnoCajaRepository).findAllByOrderByFechaAperturaDesc();
+    }
+
+    @Test
+    @DisplayName("obtenerHistorialTurnos() - Con filtro de fecha consulta rango de fecha inicio a fin")
+    void testObtenerHistorialTurnos_ConFecha_ConsultaRango() {
+        String fechaStr = "2026-10-22";
+        TurnoCaja t1 = TurnoCaja.builder()
+                .id(1L)
+                .usuarioId(10L)
+                .montoBase(new BigDecimal("50000.00"))
+                .fechaApertura(LocalDateTime.of(2026, 10, 22, 9, 0))
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .build();
+
+        when(turnoCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaDesc(any(), any()))
+                .thenReturn(List.of(t1));
+        when(usuarioRepository.findAllById(any())).thenReturn(List.of(taquillero));
+
+        List<TurnoCajaResponseDTO> resultado = turnoCajaService.obtenerHistorialTurnos(fechaStr);
+
+        assertEquals(1, resultado.size());
+        assertEquals("Cajero Pedro", resultado.get(0).nombreCajero());
+        verify(turnoCajaRepository).findByFechaAperturaBetweenOrderByFechaAperturaDesc(
+                LocalDateTime.of(2026, 10, 22, 0, 0, 0),
+                LocalDateTime.of(2026, 10, 22, 23, 59, 59, 999999999)
+        );
     }
 }
