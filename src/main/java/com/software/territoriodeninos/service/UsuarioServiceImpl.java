@@ -37,6 +37,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final UsuarioMapper usuarioMapper;
     private final com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
     private final com.software.territoriodeninos.repository.PasswordResetTokenRepository tokenRepository;
+    private final com.software.territoriodeninos.repository.TurnoCajaRepository turnoCajaRepository;
 
     @Override
     public UsuarioResponseDTO registrar(UsuarioRegistroDTO registroDTO) {
@@ -189,6 +190,10 @@ public class UsuarioServiceImpl implements UsuarioService {
         if (asignacionRepository.existsByUsuarioId(id)) {
             throw new ConflictoException(
                     "El usuario tiene historial de asignaciones y no puede eliminarse. Use la opción de inactivar.");
+        }
+        if (turnoCajaRepository.existsByUsuarioId(id)) {
+            throw new ConflictoException(
+                    "El usuario tiene historial de turnos de caja y no puede eliminarse por trazabilidad financiera. Use la opción de inactivar.");
         }
         tokenRepository.deleteByUsuarioId(id);
         usuarioRepository.delete(usuario);

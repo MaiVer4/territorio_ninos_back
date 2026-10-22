@@ -53,6 +53,9 @@ public class UsuarioServiceTest {
     @Mock
     private com.software.territoriodeninos.repository.PasswordResetTokenRepository tokenRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.TurnoCajaRepository turnoCajaRepository;
+
     @InjectMocks
     private UsuarioServiceImpl usuarioService;
 
@@ -519,11 +522,24 @@ public class UsuarioServiceTest {
             autenticarComo("admin@test.com");
             when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
             when(asignacionRepository.existsByUsuarioId(1L)).thenReturn(false);
+            when(turnoCajaRepository.existsByUsuarioId(1L)).thenReturn(false);
 
             usuarioService.eliminar(1L);
 
             verify(tokenRepository).deleteByUsuarioId(1L);
             verify(usuarioRepository).delete(mockUsuario);
+        }
+
+        @Test
+        @DisplayName("Eliminar usuario con historial de turnos lanza ConflictoException")
+        void eliminar_ConHistorialTurnos() {
+            autenticarComo("admin@test.com");
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+            when(asignacionRepository.existsByUsuarioId(1L)).thenReturn(false);
+            when(turnoCajaRepository.existsByUsuarioId(1L)).thenReturn(true);
+
+            assertThrows(ConflictoException.class, () -> usuarioService.eliminar(1L));
+            verify(usuarioRepository, never()).delete(any());
         }
 
         @Test
