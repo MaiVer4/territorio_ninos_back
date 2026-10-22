@@ -84,8 +84,6 @@ class ClienteServiceTest {
     void testBuscarPorDocumento_NoExiste() {
         when(clienteRepository.findByNumeroDocumentoWithMenores("999999999"))
                 .thenReturn(Optional.empty());
-        when(clienteRepository.findByNumeroDocumento("999999999"))
-                .thenReturn(Optional.empty());
 
         assertThrows(RecursoNoEncontradoException.class, () ->
                 clienteService.buscarPorDocumento("999999999")

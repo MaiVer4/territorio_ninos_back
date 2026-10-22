@@ -22,4 +22,14 @@ public interface ClienteService {
      * @throws com.software.territoriodeninos.exception.ConflictoException si ya existe un cliente con el mismo documento
      */
     ClienteResponseDTO registrarCliente(ClienteRequestDTO request);
+
+    /**
+     * Actualiza los datos de contacto y menores asociados de un cliente existente.
+     *
+     * @param id Identificador único del cliente
+     * @param request Datos del cliente y menores a actualizar
+     * @return DTO con la información del cliente actualizado
+     * @throws com.software.territoriodeninos.exception.RecursoNoEncontradoException si el cliente no existe
+     */
+    ClienteResponseDTO actualizarCliente(Long id, ClienteRequestDTO request);
 }

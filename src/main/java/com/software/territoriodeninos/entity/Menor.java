@@ -60,4 +60,12 @@ public class Menor {
             this.edad = Period.between(this.fechaNacimiento, LocalDate.now()).getYears();
         }
     }
+
+    @Transient
+    public Integer getEdadActual() {
+        if (this.fechaNacimiento != null) {
+            return Period.between(this.fechaNacimiento, LocalDate.now()).getYears();
+        }
+        return this.edad;
+    }
 }

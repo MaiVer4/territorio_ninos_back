@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -190,6 +191,54 @@ class ClienteControllerTest {
                     .andExpect(jsonPath("$.errors.correo").exists());
 
             verify(clienteService, never()).registrarCliente(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/clientes/documento/{documento}")
+    class BuscarClientePorPathTests {
+
+        @Test
+        @DisplayName("200 OK cuando el cliente existe por ruta")
+        void testBuscarClientePorPath_Exitoso() throws Exception {
+            when(clienteService.buscarPorDocumento("1098765432")).thenReturn(mockClienteResponse);
+
+            mockMvc.perform(get("/api/clientes/documento/1098765432")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(1)))
+                    .andExpect(jsonPath("$.numeroDocumento", is("1098765432")))
+                    .andExpect(jsonPath("$.nombreCompleto", is("Carlos Andrés Gómez Pérez")));
+
+            verify(clienteService).buscarPorDocumento("1098765432");
+        }
+    }
+
+    @Nested
+    @DisplayName("PUT /api/clientes/{id}")
+    class ActualizarClienteTests {
+
+        @Test
+        @DisplayName("200 OK cuando se actualiza cliente exitosamente")
+        void testActualizarCliente_Exitoso() throws Exception {
+            ClienteRequestDTO request = new ClienteRequestDTO(
+                    "1098765432",
+                    "Carlos",
+                    "Gómez",
+                    "3119876543",
+                    "nuevo.correo@example.com",
+                    null
+            );
+
+            when(clienteService.actualizarCliente(eq(1L), any(ClienteRequestDTO.class))).thenReturn(mockClienteResponse);
+
+            mockMvc.perform(put("/api/clientes/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(1)));
+
+            verify(clienteService).actualizarCliente(eq(1L), any(ClienteRequestDTO.class));
         }
     }
 }

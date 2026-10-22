@@ -41,6 +41,39 @@ public class ClienteController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/documento/{documento}")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
+    @Operation(summary = "Buscar cliente por documento (Path)", description = "Obtiene los datos de un cliente a partir de su número de identificación en la ruta")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Cliente encontrado"),
+        @ApiResponse(responseCode = "404", description = "Cliente no encontrado"),
+        @ApiResponse(responseCode = "403", description = "No autorizado")
+    })
+    public ResponseEntity<ClienteResponseDTO> buscarPorDocumentoPath(
+            @Parameter(description = "Número de documento del cliente a buscar", required = true)
+            @PathVariable("documento") String documento
+    ) {
+        ClienteResponseDTO response = clienteService.buscarPorDocumento(documento);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
+    @Operation(summary = "Actualizar cliente", description = "Actualiza los datos de un cliente y agrega o actualiza menores asociados")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Cliente actualizado exitosamente"),
+        @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos"),
+        @ApiResponse(responseCode = "404", description = "Cliente no encontrado"),
+        @ApiResponse(responseCode = "403", description = "No autorizado")
+    })
+    public ResponseEntity<ClienteResponseDTO> actualizarCliente(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody ClienteRequestDTO request
+    ) {
+        ClienteResponseDTO response = clienteService.actualizarCliente(id, request);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     @Operation(summary = "Registrar nuevo cliente", description = "Registra un cliente acudiente y opcionalmente sus menores a cargo")
