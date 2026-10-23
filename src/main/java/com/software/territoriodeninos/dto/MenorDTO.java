@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 
@@ -35,8 +36,9 @@ public record MenorDTO(
     @Schema(description = "Fecha de nacimiento del menor", example = "2018-05-15")
     LocalDate fechaNacimiento,
 
-    @Min(value = 0, message = "La edad mínima es 0")
-    @Max(value = 17, message = "La edad máxima para un menor es 17 años")
+    @NotNull(message = "La edad del menor es obligatoria")
+    @Min(value = 1, message = "La edad del menor debe ser de al menos 1 año")
+    @Max(value = 17, message = "La edad del menor no puede superar los 17 años")
     @Schema(description = "Edad del menor en años", example = "6")
     Integer edad
 ) {
