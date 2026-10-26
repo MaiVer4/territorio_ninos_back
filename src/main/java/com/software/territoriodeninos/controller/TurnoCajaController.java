@@ -17,10 +17,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/turnos")
 @RequiredArgsConstructor
-public class TurnoCajaController {
+public class TurnoCajaController implements TurnoCajaApi {
 
     private final TurnoCajaService turnoCajaService;
 
+    @Override
     @PostMapping("/abrir")
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<TurnoCajaResponseDTO> abrirTurno(
@@ -31,6 +32,7 @@ public class TurnoCajaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Override
     @GetMapping("/activo")
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<TurnoCajaResponseDTO> obtenerTurnoActivo(Authentication authentication) {
@@ -39,6 +41,7 @@ public class TurnoCajaController {
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
+    @Override
     @PutMapping("/cerrar")
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<TurnoCajaResponseDTO> cerrarTurno(
@@ -49,6 +52,7 @@ public class TurnoCajaController {
         return ResponseEntity.ok(response);
     }
 
+    @Override
     @PostMapping("/cerrar")
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<TurnoCajaResponseDTO> cerrarTurnoPost(
@@ -58,6 +62,7 @@ public class TurnoCajaController {
         return cerrarTurno(request, authentication);
     }
 
+    @Override
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
     public ResponseEntity<List<TurnoCajaResponseDTO>> obtenerHistorialTurnos(

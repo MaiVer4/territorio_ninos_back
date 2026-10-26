@@ -40,28 +40,7 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
 
         if (asignacionRepository.existsByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)) {
             if (Boolean.TRUE.equals(request.forzarReasignacion())) {
-                AsignacionOperario asignacionActual = asignacionRepository.findByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)
-                        .orElseThrow(() -> new RecursoNoEncontradoException("El operario no tiene una asignación activa para reasignar"));
-
-                // Cerrar asignación anterior
-                asignacionActual.setEstado(EstadoAsignacion.REASIGNADA);
-                asignacionActual.setHoraFin(LocalDateTime.now());
-
-                if (request.observaciones() != null && !request.observaciones().isBlank()) {
-                    String obs = asignacionActual.getObservaciones();
-                    asignacionActual.setObservaciones((obs != null && !obs.isBlank() ? obs + " | " : "") + "Reasignado: " + request.observaciones());
-                }
-
-                // Crear nueva asignación activa
-                String nuevasObservaciones = "Reasignado desde " + asignacionActual.getAtraccion().getNombre() +
-                        (request.observaciones() != null && !request.observaciones().isBlank() ? " (" + request.observaciones() + ")" : "");
-
-                AsignacionOperario nuevaAsignacion = buildAsignacionActiva(usuario, atraccion, nuevasObservaciones);
-                AsignacionOperario guardada = asignacionRepository.save(nuevaAsignacion);
-
-                log.info("Operario {} reasignado forzosamente de {} a {}", usuario.getCorreo(),
-                        asignacionActual.getAtraccion().getNombre(), atraccion.getNombre());
-                return mapToDTO(guardada);
+                return ejecutarReasignacion(usuario, atraccion, request.observaciones(), true);
             }
             throw new ConflictoException("El operario ya cuenta con una asignación activa en el parque");
         }
@@ -78,29 +57,37 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
         Usuario usuario = findAndValidateOperario(request.usuarioId());
         Atraccion nuevaAtraccion = findAndValidateAtraccionActiva(request.nuevaAtraccionId());
 
+        return ejecutarReasignacion(usuario, nuevaAtraccion, request.motivo(), false);
+    }
+
+    private AsignacionResponseDTO ejecutarReasignacion(Usuario usuario, Atraccion nuevaAtraccion, String motivo, boolean forzado) {
         AsignacionOperario asignacionActual = asignacionRepository.findByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)
                 .orElseThrow(() -> new RecursoNoEncontradoException("El operario no tiene una asignación activa para reasignar"));
 
         // Cerrar asignación anterior
         asignacionActual.setEstado(EstadoAsignacion.REASIGNADA);
         asignacionActual.setHoraFin(LocalDateTime.now());
-        
-        if (request.motivo() != null && !request.motivo().isBlank()) {
+
+        if (motivo != null && !motivo.isBlank()) {
             String obs = asignacionActual.getObservaciones();
-            asignacionActual.setObservaciones((obs != null && !obs.isBlank() ? obs + " | " : "") + "Reasignado: " + request.motivo());
+            asignacionActual.setObservaciones((obs != null && !obs.isBlank() ? obs + " | " : "") + "Reasignado: " + motivo);
         }
 
         // Crear nueva asignación activa
         String nuevasObservaciones = "Reasignado desde " + asignacionActual.getAtraccion().getNombre() +
-                (request.motivo() != null && !request.motivo().isBlank() ? " (" + request.motivo() + ")" : "");
-        
-        AsignacionOperario nuevaAsignacion = buildAsignacionActiva(usuario, nuevaAtraccion, nuevasObservaciones);
+                (motivo != null && !motivo.isBlank() ? " (" + motivo + ")" : "");
 
+        AsignacionOperario nuevaAsignacion = buildAsignacionActiva(usuario, nuevaAtraccion, nuevasObservaciones);
         AsignacionOperario guardada = asignacionRepository.save(nuevaAsignacion);
-        
-        log.info("Operario {} reasignado de {} a {}", usuario.getCorreo(),
-                asignacionActual.getAtraccion().getNombre(), nuevaAtraccion.getNombre());
-                
+
+        if (forzado) {
+            log.info("Operario {} reasignado forzosamente de {} a {}", usuario.getCorreo(),
+                    asignacionActual.getAtraccion().getNombre(), nuevaAtraccion.getNombre());
+        } else {
+            log.info("Operario {} reasignado de {} a {}", usuario.getCorreo(),
+                    asignacionActual.getAtraccion().getNombre(), nuevaAtraccion.getNombre());
+        }
+
         return mapToDTO(guardada);
     }
 
