@@ -1,19 +1,18 @@
 package com.software.territoriodeninos.security;
 
+import com.software.territoriodeninos.util.HashUtil;
 import io.jsonwebtoken.Claims;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
+import java.util.Date;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Lista negra en memoria de JWT revocados (logout).
+ * Lista negra en memoria de JWT revocados (logout) y gestión de revocación de sesiones por usuario.
  * Almacena el hash SHA-256 del token hasta su expiración natural.
  */
 @Service
@@ -21,6 +20,8 @@ public class TokenBlacklistService {
 
     private final JwtUtil jwtUtil;
     private final Map<String, Instant> revocados = new ConcurrentHashMap<>();
+    private final Set<String> usuariosBloqueados = ConcurrentHashMap.newKeySet();
+    private final Map<String, Instant> revocadoAntesDePorUsuario = new ConcurrentHashMap<>();
 
     public TokenBlacklistService(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
@@ -35,7 +36,7 @@ public class TokenBlacklistService {
             Instant expira = claims.getExpiration() != null
                     ? claims.getExpiration().toInstant()
                     : Instant.now().plusSeconds(86_400);
-            revocados.put(hash(token), expira);
+            revocados.put(HashUtil.sha256Hex(token), expira);
         } catch (Exception e) {
             // Si el token ya es inválido o no parseable, no requiere revocación
         }
@@ -45,7 +46,7 @@ public class TokenBlacklistService {
         if (token == null || token.isBlank()) {
             return false;
         }
-        String tokenHash = hash(token);
+        String tokenHash = HashUtil.sha256Hex(token);
         Instant expira = revocados.get(tokenHash);
         if (expira == null) {
             return false;
@@ -57,18 +58,47 @@ public class TokenBlacklistService {
         return true;
     }
 
+    public void bloquearUsuario(String correo) {
+        if (correo != null && !correo.isBlank()) {
+            usuariosBloqueados.add(correo.trim().toLowerCase());
+        }
+    }
+
+    public void desbloquearUsuario(String correo) {
+        if (correo != null && !correo.isBlank()) {
+            usuariosBloqueados.remove(correo.trim().toLowerCase());
+        }
+    }
+
+    public void revocarTokensEmitidosAntesDeAhora(String correo) {
+        if (correo != null && !correo.isBlank()) {
+            revocadoAntesDePorUsuario.put(correo.trim().toLowerCase(), Instant.now());
+        }
+    }
+
+    public boolean esSesionUsuarioRevocada(String correo, Date issuedAt) {
+        if (correo == null || correo.isBlank()) {
+            return false;
+        }
+        String key = correo.trim().toLowerCase();
+        if (usuariosBloqueados.contains(key)) {
+            return true;
+        }
+        Instant corte = revocadoAntesDePorUsuario.get(key);
+        if (corte != null) {
+            if (issuedAt == null) {
+                return true;
+            }
+            return !issuedAt.toInstant().isAfter(corte);
+        }
+        return false;
+    }
+
     @Scheduled(fixedRate = 900_000)
     public void purgarExpirados() {
         Instant ahora = Instant.now();
         revocados.entrySet().removeIf(e -> ahora.isAfter(e.getValue()));
-    }
-
-    private String hash(String token) {
-        try {
-            byte[] h = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(h);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 no disponible", e);
-        }
+        Instant limiteHistorico = ahora.minusSeconds(172_800);
+        revocadoAntesDePorUsuario.entrySet().removeIf(e -> e.getValue().isBefore(limiteHistorico));
     }
 }

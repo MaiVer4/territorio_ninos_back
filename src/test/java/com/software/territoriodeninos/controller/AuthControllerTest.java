@@ -301,5 +301,20 @@ class AuthControllerTest {
 
             verify(authService, times(1)).cerrarSesion(token);
         }
+
+        @Test
+        @DisplayName("POST /api/auth/logout - 409 Conflict cuando taquillero tiene caja abierta")
+        void testLogout_TaquilleroConCajaAbierta_Conflict() throws Exception {
+            String token = "Bearer token-de-prueba";
+            doThrow(new com.software.territoriodeninos.exception.ConflictoException("No puedes cerrar sesión teniendo una caja activa sin cerrar."))
+                    .when(authService).cerrarSesion(token);
+
+            mockMvc.perform(post("/api/auth/logout")
+                            .header("Authorization", token)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.codigo", is(409)))
+                    .andExpect(jsonPath("$.detalles", is("No puedes cerrar sesión teniendo una caja activa sin cerrar.")));
+        }
     }
 }

@@ -359,5 +359,17 @@ class TurnoCajaControllerTest {
                     .andExpect(jsonPath("$[0].totalVentas", is(100000.00)))
                     .andExpect(jsonPath("$[0].totalEsperado", is(150000.00)));
         }
+
+        @Test
+        @DisplayName("400 Bad Request - Formato de fecha inválido al consultar historial")
+        void testObtenerHistorialTurnos_FechaInvalida_BadRequest() throws Exception {
+            when(turnoCajaService.obtenerHistorialTurnos("invalida"))
+                    .thenThrow(new ReglaNegocioException("Formato de fecha inválido: 'invalida'. Use el formato YYYY-MM-DD."));
+
+            mockMvc.perform(get("/api/turnos").param("fecha", "invalida"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.codigo", is(400)))
+                    .andExpect(jsonPath("$.detalles", is("Formato de fecha inválido: 'invalida'. Use el formato YYYY-MM-DD.")));
+        }
     }
 }

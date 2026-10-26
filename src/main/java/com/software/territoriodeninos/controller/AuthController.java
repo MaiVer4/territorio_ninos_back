@@ -54,26 +54,8 @@ public class AuthController implements AuthApi {
     @Override
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        
-        if (auth != null && auth.isAuthenticated()) {
-            boolean esTaquillero = auth.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_TAQUILLERO"));
-                    
-            if (esTaquillero) {
-                // TODO: HU-04 Validar si el TAQUILLERO tiene una caja abierta (Integración con M03 - Caja).
-                // if (cajaService.tieneCajaAbierta(auth.getName())) {
-                //     throw new ConflictoException("No puedes cerrar sesión teniendo una caja activa sin cerrar.");
-                // }
-            }
-            
-            authService.cerrarSesion(authHeader);
-            // Limpiar el contexto de seguridad
-            org.springframework.security.core.context.SecurityContextHolder.clearContext();
-        } else if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            authService.cerrarSesion(authHeader);
-        }
-        
+        authService.cerrarSesion(authHeader);
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         return ResponseEntity.ok(java.util.Map.of("mensaje", "Sesión cerrada exitosamente."));
     }
 }

@@ -17,7 +17,6 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
     private final ConfiguracionParqueRepository repository;
 
     @Override
-    @Transactional(readOnly = true)
     public ConfiguracionParqueDTO obtenerConfiguracion() {
         return mapToDTO(obtenerOCrearConfiguracion());
     }

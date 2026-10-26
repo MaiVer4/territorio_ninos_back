@@ -38,6 +38,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
     private final com.software.territoriodeninos.repository.PasswordResetTokenRepository tokenRepository;
     private final com.software.territoriodeninos.repository.TurnoCajaRepository turnoCajaRepository;
+    private final com.software.territoriodeninos.security.TokenBlacklistService tokenBlacklistService;
 
     @Override
     public UsuarioResponseDTO registrar(UsuarioRegistroDTO registroDTO) {
@@ -97,6 +98,9 @@ public class UsuarioServiceImpl implements UsuarioService {
 
         verificarPermisosModificacion(usuario, false);
 
+        String correoAnterior = usuario.getCorreo();
+        boolean cambioCorreo = false;
+
         if (StringUtils.hasText(updateDTO.getNombre())) {
             usuario.setNombre(updateDTO.getNombre());
         }
@@ -106,7 +110,10 @@ public class UsuarioServiceImpl implements UsuarioService {
                     usuarioRepository.existsByCorreo(updateDTO.getCorreo())) {
                 throw new ConflictoException("El correo " + updateDTO.getCorreo() + " ya está en uso");
             }
-            usuario.setCorreo(updateDTO.getCorreo());
+            if (!usuario.getCorreo().equalsIgnoreCase(updateDTO.getCorreo())) {
+                usuario.setCorreo(updateDTO.getCorreo());
+                cambioCorreo = true;
+            }
         }
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -126,7 +133,14 @@ public class UsuarioServiceImpl implements UsuarioService {
             if (nuevoEstado != EstadoUsuario.ACTIVO) {
                 verificarNoEsUltimoAdminNiPropio(usuario);
             }
-            usuario.setEstado(nuevoEstado);
+            if (nuevoEstado != usuario.getEstado()) {
+                usuario.setEstado(nuevoEstado);
+                if (nuevoEstado == EstadoUsuario.ACTIVO) {
+                    tokenBlacklistService.desbloquearUsuario(usuario.getCorreo());
+                } else {
+                    tokenBlacklistService.bloquearUsuario(usuario.getCorreo());
+                }
+            }
         }
 
         if (StringUtils.hasText(updateDTO.getRol())) {
@@ -139,7 +153,15 @@ public class UsuarioServiceImpl implements UsuarioService {
             if (nombreRolEnum != NombreRol.ADMINISTRADOR) {
                 verificarNoEsUltimoAdminNiPropio(usuario);
             }
-            usuario.setRol(rol);
+            if (usuario.getRol() == null || usuario.getRol().getNombre() != nombreRolEnum) {
+                usuario.setRol(rol);
+                tokenBlacklistService.revocarTokensEmitidosAntesDeAhora(usuario.getCorreo());
+            }
+        }
+
+        if (cambioCorreo) {
+            tokenBlacklistService.revocarTokensEmitidosAntesDeAhora(correoAnterior);
+            tokenBlacklistService.revocarTokensEmitidosAntesDeAhora(usuario.getCorreo());
         }
 
         return usuarioMapper.toResponseDTO(usuario);
@@ -156,6 +178,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         }
 
         usuario.setPassword(passwordEncoder.encode(request.getNuevaContrasena()));
+        tokenBlacklistService.revocarTokensEmitidosAntesDeAhora(usuario.getCorreo());
     }
 
     @Override
@@ -163,6 +186,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = findUsuarioById(id);
         verificarNoEsUltimoAdminNiPropio(usuario);
         usuario.inactivar();
+        tokenBlacklistService.bloquearUsuario(usuario.getCorreo());
         return usuarioMapper.toResponseDTO(usuario);
     }
 
@@ -170,6 +194,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     public UsuarioResponseDTO activar(Long id) {
         Usuario usuario = findUsuarioById(id);
         usuario.setEstado(EstadoUsuario.ACTIVO);
+        tokenBlacklistService.desbloquearUsuario(usuario.getCorreo());
         log.info("Usuario {} reactivado", usuario.getCorreo());
         return usuarioMapper.toResponseDTO(usuario);
     }
@@ -195,8 +220,10 @@ public class UsuarioServiceImpl implements UsuarioService {
             throw new ConflictoException(
                     "El usuario tiene historial de turnos de caja y no puede eliminarse por trazabilidad financiera. Use la opción de inactivar.");
         }
+        String correo = usuario.getCorreo();
         tokenRepository.deleteByUsuarioId(id);
         usuarioRepository.delete(usuario);
+        tokenBlacklistService.bloquearUsuario(correo);
     }
 
     // --- Métodos Privados Auxiliares ---

@@ -4,12 +4,15 @@ import com.software.territoriodeninos.dto.AuthResponseDTO;
 import com.software.territoriodeninos.dto.LoginRequestDTO;
 import com.software.territoriodeninos.entity.PasswordResetToken;
 import com.software.territoriodeninos.entity.Rol;
+import com.software.territoriodeninos.entity.TurnoCaja;
 import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.CredencialesInvalidasException;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
 import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
+import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import com.software.territoriodeninos.util.EstadoUsuario;
 import com.software.territoriodeninos.util.NombreRol;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +59,9 @@ public class AuthServiceTest {
 
     @Mock
     private com.software.territoriodeninos.security.TokenBlacklistService tokenBlacklistService;
+
+    @Mock
+    private com.software.territoriodeninos.repository.TurnoCajaRepository turnoCajaRepository;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -301,6 +307,7 @@ public class AuthServiceTest {
 
             assertEquals("newHashedPass", mockUsuario.getPassword());
             verify(tokenRepository).delete(resetToken);
+            verify(tokenBlacklistService).revocarTokensEmitidosAntesDeAhora(mockUsuario.getCorreo());
         }
 
         @Test
@@ -383,6 +390,51 @@ public class AuthServiceTest {
             authService.cerrarSesion("Basic 12345");
 
             verify(tokenBlacklistService, never()).revocar(anyString());
+        }
+
+        @Test
+        @DisplayName("Taquillero con turno de caja abierto lanza ConflictoException al cerrar sesión")
+        void cerrarSesion_TaquilleroConCajaAbierta_LanzaConflictoException() {
+            String header = "Bearer jwt-taquillero";
+            when(jwtUtil.extraerTokenDelHeader(header)).thenReturn("jwt-taquillero");
+            when(jwtUtil.extraerCorreo("jwt-taquillero")).thenReturn("taquillero@test.com");
+
+            Usuario taquillero = new Usuario();
+            taquillero.setId(10L);
+            taquillero.setCorreo("taquillero@test.com");
+            Rol rolTaquillero = new Rol();
+            rolTaquillero.setNombre(NombreRol.TAQUILLERO);
+            taquillero.setRol(rolTaquillero);
+
+            when(usuarioRepository.findByCorreo("taquillero@test.com")).thenReturn(Optional.of(taquillero));
+            when(turnoCajaRepository.findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(10L, EstadoTurnoCaja.ABIERTO))
+                    .thenReturn(Optional.of(new TurnoCaja()));
+
+            assertThrows(ConflictoException.class, () -> authService.cerrarSesion(header));
+            verify(tokenBlacklistService, never()).revocar(anyString());
+        }
+
+        @Test
+        @DisplayName("Taquillero sin turno de caja abierto cierra sesión normalmente")
+        void cerrarSesion_TaquilleroSinCajaAbierta_Revoca() {
+            String header = "Bearer jwt-taquillero";
+            when(jwtUtil.extraerTokenDelHeader(header)).thenReturn("jwt-taquillero");
+            when(jwtUtil.extraerCorreo("jwt-taquillero")).thenReturn("taquillero@test.com");
+
+            Usuario taquillero = new Usuario();
+            taquillero.setId(10L);
+            taquillero.setCorreo("taquillero@test.com");
+            Rol rolTaquillero = new Rol();
+            rolTaquillero.setNombre(NombreRol.TAQUILLERO);
+            taquillero.setRol(rolTaquillero);
+
+            when(usuarioRepository.findByCorreo("taquillero@test.com")).thenReturn(Optional.of(taquillero));
+            when(turnoCajaRepository.findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(10L, EstadoTurnoCaja.ABIERTO))
+                    .thenReturn(Optional.empty());
+
+            authService.cerrarSesion(header);
+
+            verify(tokenBlacklistService, times(1)).revocar("jwt-taquillero");
         }
     }
 

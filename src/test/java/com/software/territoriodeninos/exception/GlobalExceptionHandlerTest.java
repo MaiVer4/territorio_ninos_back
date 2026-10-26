@@ -180,6 +180,18 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("handleDateTimeParseException retorna 400")
+    void handleDateTimeParseException_Retorna400() {
+        java.time.format.DateTimeParseException ex = new java.time.format.DateTimeParseException("Text could not be parsed", "invalida", 0);
+
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleDateTimeParseException(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Formato de fecha inválido", response.getBody().getMensaje());
+        assertEquals("El formato de la fecha especificada es inválido. Use el formato YYYY-MM-DD.", response.getBody().getDetalles());
+    }
+
+    @Test
     @DisplayName("handleGlobalException retorna 500")
     void handleGlobalException_Retorna500() {
         Exception ex = new RuntimeException("Error inesperado");

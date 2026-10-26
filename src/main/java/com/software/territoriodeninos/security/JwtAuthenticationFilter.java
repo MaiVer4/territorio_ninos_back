@@ -67,6 +67,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Claims claims = jwtUtil.extraerClaims(token);
                 if (claims != null && claims.getExpiration() != null && !claims.getExpiration().before(new Date())) {
                     String correo = claims.getSubject();
+                    if (tokenBlacklistService.esSesionUsuarioRevocada(correo, claims.getIssuedAt())) {
+                        throw new TokenInvalidoException("La sesión ha sido invalidada. Inicie sesión nuevamente.");
+                    }
                     String rol = (String) claims.get("rol");
                     
                     List<SimpleGrantedAuthority> authorities = (rol != null && !rol.isBlank())

@@ -72,4 +72,42 @@ class TokenBlacklistServiceTest {
 
         assertFalse(blacklistService.estaRevocado(sampleToken));
     }
+
+    @Test
+    @DisplayName("Bloquear y desbloquear usuario invalida o habilita su sesión")
+    void bloquearYDesbloquearUsuario() {
+        String correo = "usuario@test.com";
+        Date issuedAt = new Date();
+
+        assertFalse(blacklistService.esSesionUsuarioRevocada(correo, issuedAt));
+
+        blacklistService.bloquearUsuario(correo);
+        assertTrue(blacklistService.esSesionUsuarioRevocada(correo, issuedAt));
+
+        blacklistService.desbloquearUsuario(correo);
+        assertFalse(blacklistService.esSesionUsuarioRevocada(correo, issuedAt));
+    }
+
+    @Test
+    @DisplayName("Revocar tokens emitidos antes de ahora invalida tokens viejos pero no nuevos")
+    void revocarTokensEmitidosAntesDeAhora() throws InterruptedException {
+        String correo = "cambio@test.com";
+        Date tokenViejo = new Date(System.currentTimeMillis() - 5000);
+
+        Thread.sleep(10);
+        blacklistService.revocarTokensEmitidosAntesDeAhora(correo);
+        Thread.sleep(10);
+
+        Date tokenNuevo = new Date(System.currentTimeMillis() + 5000);
+
+        assertTrue(blacklistService.esSesionUsuarioRevocada(correo, tokenViejo));
+        assertFalse(blacklistService.esSesionUsuarioRevocada(correo, tokenNuevo));
+    }
+
+    @Test
+    @DisplayName("esSesionUsuarioRevocada con correo nulo o en blanco retorna false")
+    void esSesionUsuarioRevocada_CorreoInvalido() {
+        assertFalse(blacklistService.esSesionUsuarioRevocada(null, new Date()));
+        assertFalse(blacklistService.esSesionUsuarioRevocada("   ", new Date()));
+    }
 }

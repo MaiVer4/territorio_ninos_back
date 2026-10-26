@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -126,7 +127,12 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
     public List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha) {
         List<TurnoCaja> turnos;
         if (StringUtils.hasText(fecha)) {
-            LocalDate localDate = LocalDate.parse(fecha.trim());
+            LocalDate localDate;
+            try {
+                localDate = LocalDate.parse(fecha.trim());
+            } catch (DateTimeParseException e) {
+                throw new ReglaNegocioException("Formato de fecha inválido: '" + fecha + "'. Use el formato YYYY-MM-DD.");
+            }
             LocalDateTime inicio = localDate.atStartOfDay();
             LocalDateTime fin = localDate.atTime(LocalTime.MAX);
             turnos = turnoCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaDesc(inicio, fin);

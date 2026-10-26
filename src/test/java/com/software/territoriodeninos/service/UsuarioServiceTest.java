@@ -56,6 +56,9 @@ public class UsuarioServiceTest {
     @Mock
     private com.software.territoriodeninos.repository.TurnoCajaRepository turnoCajaRepository;
 
+    @Mock
+    private com.software.territoriodeninos.security.TokenBlacklistService tokenBlacklistService;
+
     @InjectMocks
     private UsuarioServiceImpl usuarioService;
 
@@ -350,6 +353,7 @@ public class UsuarioServiceTest {
 
             assertEquals("newHashedPass", mockUsuario.getPassword());
             verify(passwordEncoder).encode("NewPassword123");
+            verify(tokenBlacklistService).revocarTokensEmitidosAntesDeAhora(mockUsuario.getCorreo());
         }
 
         @Test
@@ -436,6 +440,20 @@ public class UsuarioServiceTest {
             usuarioService.inactivar(1L);
 
             assertEquals(EstadoUsuario.INACTIVO, mockUsuario.getEstado());
+            verify(tokenBlacklistService).bloquearUsuario(mockUsuario.getCorreo());
+        }
+
+        @Test
+        @DisplayName("Activar usuario existente cambia estado a ACTIVO")
+        void activar_Exitoso() {
+            mockUsuario.setEstado(EstadoUsuario.INACTIVO);
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+            when(usuarioMapper.toResponseDTO(mockUsuario)).thenReturn(mockResponseDTO);
+
+            usuarioService.activar(1L);
+
+            assertEquals(EstadoUsuario.ACTIVO, mockUsuario.getEstado());
+            verify(tokenBlacklistService).desbloquearUsuario(mockUsuario.getCorreo());
         }
 
         @Test
@@ -528,6 +546,7 @@ public class UsuarioServiceTest {
 
             verify(tokenRepository).deleteByUsuarioId(1L);
             verify(usuarioRepository).delete(mockUsuario);
+            verify(tokenBlacklistService).bloquearUsuario(mockUsuario.getCorreo());
         }
 
         @Test

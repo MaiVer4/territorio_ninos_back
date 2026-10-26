@@ -4,29 +4,33 @@ import com.software.territoriodeninos.dto.AuthResponseDTO;
 import com.software.territoriodeninos.dto.LoginRequestDTO;
 import com.software.territoriodeninos.entity.PasswordResetToken;
 import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.CuentaBloqueadaException;
 import com.software.territoriodeninos.exception.CuentaInactivaException;
 import com.software.territoriodeninos.exception.CredencialesInvalidasException;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
 import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
+import com.software.territoriodeninos.repository.TurnoCajaRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
 import com.software.territoriodeninos.security.LoginAttemptService;
+import com.software.territoriodeninos.security.TokenBlacklistService;
+import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import com.software.territoriodeninos.util.EstadoUsuario;
+import com.software.territoriodeninos.util.HashUtil;
+import com.software.territoriodeninos.util.NombreRol;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,7 +52,8 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
     private final LoginAttemptService loginAttemptService;
-    private final com.software.territoriodeninos.security.TokenBlacklistService tokenBlacklistService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final TurnoCajaRepository turnoCajaRepository;
 
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
@@ -152,6 +157,7 @@ public class AuthServiceImpl implements AuthService {
 
         Usuario usuario = resetToken.getUsuario();
         usuario.setPassword(passwordEncoder.encode(nuevaContrasena));
+        tokenBlacklistService.revocarTokensEmitidosAntesDeAhora(usuario.getCorreo());
 
         tokenRepository.delete(resetToken);
         log.info("Contraseña actualizada exitosamente para usuario ID: {}", usuario.getId());
@@ -167,20 +173,40 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void cerrarSesion(String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = jwtUtil.extraerTokenDelHeader(authHeader);
-            tokenBlacklistService.revocar(token);
-            log.info("Token JWT revocado en logout");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return;
         }
+        String token = jwtUtil.extraerTokenDelHeader(authHeader);
+        if (token == null || token.isBlank()) {
+            return;
+        }
+
+        String correo = null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            correo = auth.getName();
+        } else {
+            try {
+                correo = jwtUtil.extraerCorreo(token);
+            } catch (Exception e) {
+                log.debug("No se pudo extraer el correo del token: {}", e.getMessage());
+            }
+        }
+
+        if (correo != null) {
+            Usuario usuario = usuarioRepository.findByCorreo(correo).orElse(null);
+            if (usuario != null && usuario.getRol() != null && usuario.getRol().getNombre() == NombreRol.TAQUILLERO) {
+                if (turnoCajaRepository.findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(usuario.getId(), EstadoTurnoCaja.ABIERTO).isPresent()) {
+                    throw new ConflictoException("No puedes cerrar sesión teniendo una caja activa sin cerrar.");
+                }
+            }
+        }
+
+        tokenBlacklistService.revocar(token);
+        log.info("Token JWT revocado en logout");
     }
 
     private String sha256Hex(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hashBytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Error al inicializar algoritmo SHA-256", e);
-        }
+        return HashUtil.sha256Hex(input);
     }
 }

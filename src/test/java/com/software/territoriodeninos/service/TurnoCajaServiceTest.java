@@ -420,4 +420,11 @@ class TurnoCajaServiceTest {
                 LocalDateTime.of(2026, 10, 22, 23, 59, 59, 999999999)
         );
     }
+
+    @Test
+    @DisplayName("obtenerHistorialTurnos() - Fecha malformada lanza ReglaNegocioException")
+    void testObtenerHistorialTurnos_FechaInvalida_LanzaReglaNegocioException() {
+        assertThrows(ReglaNegocioException.class, () -> turnoCajaService.obtenerHistorialTurnos("22-10-2026"));
+        verifyNoInteractions(turnoCajaRepository);
+    }
 }
