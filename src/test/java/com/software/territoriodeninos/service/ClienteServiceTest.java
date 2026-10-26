@@ -117,7 +117,6 @@ class ClienteServiceTest {
         );
 
         when(clienteRepository.findByNumeroDocumentoWithMenores("1098765432")).thenReturn(Optional.empty());
-        when(clienteRepository.findByNumeroDocumento("1098765432")).thenReturn(Optional.empty());
         when(clienteRepository.save(any(Cliente.class))).thenAnswer(invocation -> {
             Cliente c = invocation.getArgument(0);
             c.setId(1L);
@@ -159,7 +158,6 @@ class ClienteServiceTest {
         );
 
         when(clienteRepository.findByNumeroDocumentoWithMenores("1098765432")).thenReturn(Optional.empty());
-        when(clienteRepository.findByNumeroDocumento("1098765432")).thenReturn(Optional.empty());
         when(clienteRepository.save(any(Cliente.class))).thenAnswer(invocation -> {
             Cliente c = invocation.getArgument(0);
             c.setId(1L);

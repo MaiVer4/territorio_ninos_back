@@ -14,10 +14,16 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     
     @Override
     @EntityGraph(attributePaths = {"rol"})
+    Optional<Usuario> findById(Long id);
+
+    @Override
+    @EntityGraph(attributePaths = {"rol"})
     List<Usuario> findAll();
 
+    @EntityGraph(attributePaths = {"rol"})
     Optional<Usuario> findByCorreo(String correo);
     
+    @EntityGraph(attributePaths = {"rol"})
     Optional<Usuario> findByCorreoAndEstado(String correo, EstadoUsuario estado);
     
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"rol"})

@@ -12,6 +12,10 @@ import java.util.Optional;
 @Repository
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
+    @Override
+    @EntityGraph(attributePaths = {"menores"})
+    Optional<Cliente> findById(Long id);
+
     /**
      * Busca un cliente por su número de documento único.
      *

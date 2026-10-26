@@ -73,9 +73,6 @@ public class ClienteServiceImpl implements ClienteService {
         String doc = request.numeroDocumento() != null ? request.numeroDocumento().trim() : "";
 
         Optional<Cliente> optCliente = clienteRepository.findByNumeroDocumentoWithMenores(doc);
-        if (optCliente.isEmpty()) {
-            optCliente = clienteRepository.findByNumeroDocumento(doc);
-        }
 
         Cliente cliente;
         if (optCliente.isPresent()) {
