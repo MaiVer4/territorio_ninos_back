@@ -25,6 +25,10 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final AtraccionRepository atraccionRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private AtraccionService atraccionService;
+
     @Override
     public TarifaTiempoResponseDTO crear(TarifaTiempoRequestDTO request) {
         Atraccion atraccion = findAtraccion(request.atraccionId());
@@ -43,6 +47,9 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
                 .build();
 
         TarifaTiempo guardada = tarifaTiempoRepository.save(tarifa);
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
         log.info("Tarifa de tiempo creada para atracción {} de {} min: ${}",
                 atraccion.getNombre(), guardada.getDuracionMinutos(), guardada.getPrecio());
         return mapToDTO(guardada);
@@ -87,6 +94,10 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
             tarifa.setActivo(request.activo());
         }
 
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
+
         log.info("Tarifa de tiempo con ID {} actualizada", id);
         return mapToDTO(tarifa);
     }
@@ -94,6 +105,9 @@ public class TarifaTiempoServiceImpl implements TarifaTiempoService {
     @Override
     public void eliminar(Long id) {
         tarifaTiempoRepository.delete(findTarifa(id));
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
         log.info("Tarifa de tiempo con ID {} eliminada", id);
     }
 

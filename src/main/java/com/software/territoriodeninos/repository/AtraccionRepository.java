@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface AtraccionRepository extends JpaRepository<Atraccion, Long> {
     List<Atraccion> findByEstado(EstadoAtraccion estado);
+    List<Atraccion> findByEstadoOrderByNombreAsc(EstadoAtraccion estado);
     Optional<Atraccion> findByNombreIgnoreCase(String nombre);
     boolean existsByNombreIgnoreCase(String nombre);
 }

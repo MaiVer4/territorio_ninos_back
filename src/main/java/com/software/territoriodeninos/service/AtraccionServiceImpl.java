@@ -2,18 +2,30 @@ package com.software.territoriodeninos.service;
 
 import com.software.territoriodeninos.dto.AtraccionRequestDTO;
 import com.software.territoriodeninos.dto.AtraccionResponseDTO;
+import com.software.territoriodeninos.dto.CatalogoAtraccionVentaDTO;
+import com.software.territoriodeninos.dto.TarifaEventoResponseDTO;
+import com.software.territoriodeninos.dto.TarifaTiempoResponseDTO;
 import com.software.territoriodeninos.entity.Atraccion;
+import com.software.territoriodeninos.entity.TarifaEvento;
+import com.software.territoriodeninos.entity.TarifaTiempo;
 import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
+import com.software.territoriodeninos.repository.AsignacionOperarioRepository;
 import com.software.territoriodeninos.repository.AtraccionRepository;
+import com.software.territoriodeninos.repository.TarifaEventoRepository;
+import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoAtraccion;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -22,7 +34,16 @@ import java.util.List;
 public class AtraccionServiceImpl implements AtraccionService {
 
     private final AtraccionRepository atraccionRepository;
-    private final com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
+    private final AsignacionOperarioRepository asignacionRepository;
+    private final TarifaTiempoRepository tarifaTiempoRepository;
+    private final TarifaEventoRepository tarifaEventoRepository;
+
+    @Setter
+    @Value("${app.catalogo.cache-ttl-ms:5000}")
+    private long cacheTtlMs = 5000L;
+
+    private record CachedCatalogo(long expiresAt, List<CatalogoAtraccionVentaDTO> data) {}
+    private final AtomicReference<CachedCatalogo> catalogoCache = new AtomicReference<>(null);
 
     @Override
     public AtraccionResponseDTO crear(AtraccionRequestDTO request) {
@@ -38,6 +59,7 @@ public class AtraccionServiceImpl implements AtraccionService {
         aplicarAtributosOpcionales(builder, request);
 
         Atraccion guardada = atraccionRepository.save(builder.build());
+        invalidarCacheCatalogo();
         log.info("Atracción creada: {}", guardada.getNombre());
         return mapToDTO(guardada);
     }
@@ -80,6 +102,7 @@ public class AtraccionServiceImpl implements AtraccionService {
 
         aplicarAtributosOpcionales(atraccion, request);
 
+        invalidarCacheCatalogo();
         log.info("Atracción actualizada: {}", atraccion.getNombre());
         return mapToDTO(atraccion);
     }
@@ -94,6 +117,7 @@ public class AtraccionServiceImpl implements AtraccionService {
                 verificarSinOperariosActivos(atraccion);
             }
             atraccion.setEstado(estado);
+            invalidarCacheCatalogo();
             log.info("Estado de atracción {} cambiado a {}", atraccion.getNombre(), estado);
         } catch (IllegalArgumentException e) {
             throw new ConflictoException("Estado de atracción inválido: " + nuevoEstado);
@@ -108,7 +132,90 @@ public class AtraccionServiceImpl implements AtraccionService {
         verificarSinOperariosActivos(atraccion);
 
         atraccion.setEstado(EstadoAtraccion.INACTIVO);
+        invalidarCacheCatalogo();
         log.info("Atracción {} marcada como inactiva", atraccion.getNombre());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CatalogoAtraccionVentaDTO> obtenerCatalogoVenta() {
+        long now = System.currentTimeMillis();
+        CachedCatalogo cached = catalogoCache.get();
+        if (cached != null && now < cached.expiresAt()) {
+            log.debug("Retornando catálogo de ventas desde caché en memoria");
+            return cached.data();
+        }
+
+        // 1. Atracciones activas ordenadas por nombre
+        List<Atraccion> atraccionesActivas = atraccionRepository.findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO);
+        if (atraccionesActivas.isEmpty()) {
+            List<CatalogoAtraccionVentaDTO> vacio = Collections.emptyList();
+            catalogoCache.set(new CachedCatalogo(now + cacheTtlMs, vacio));
+            return vacio;
+        }
+
+        List<Long> atraccionIds = atraccionesActivas.stream().map(Atraccion::getId).toList();
+
+        // 2. Batch query: Tarifas de tiempo activas ordenadas por duracionMinutos ASC
+        List<TarifaTiempo> tarifasTiempo = tarifaTiempoRepository
+                .findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(atraccionIds);
+        Map<Long, List<TarifaTiempoResponseDTO>> tarifasTiempoPorAtraccion = tarifasTiempo.stream()
+                .collect(Collectors.groupingBy(
+                        t -> t.getAtraccion().getId(),
+                        Collectors.mapping(this::mapTarifaTiempoToDTO, Collectors.toList())
+                ));
+
+        // 3. Batch query: Tarifas de evento activas ordenadas por intentos ASC
+        List<TarifaEvento> tarifasEvento = tarifaEventoRepository
+                .findByAtraccionIdInAndActivoTrueOrderByIntentosAsc(atraccionIds);
+        Map<Long, List<TarifaEventoResponseDTO>> tarifasEventoPorAtraccion = tarifasEvento.stream()
+                .collect(Collectors.groupingBy(
+                        t -> t.getAtraccion().getId(),
+                        Collectors.mapping(this::mapTarifaEventoToDTO, Collectors.toList())
+                ));
+
+        // 4. Batch query: Atracciones con operario activo asignado
+        Set<Long> atraccionesConOperario = asignacionRepository
+                .findAtraccionIdsConAsignacionEnEstado(atraccionIds, EstadoAsignacion.ACTIVA);
+
+        // 5. Ensamblar DTOs con cálculo de aforo disponible en tiempo real
+        List<CatalogoAtraccionVentaDTO> catalogo = atraccionesActivas.stream().map(atraccion -> {
+            Long id = atraccion.getId();
+            List<TarifaTiempoResponseDTO> tt = tarifasTiempoPorAtraccion.getOrDefault(id, Collections.emptyList());
+            List<TarifaEventoResponseDTO> te = tarifasEventoPorAtraccion.getOrDefault(id, Collections.emptyList());
+            boolean tieneOperario = atraccionesConOperario.contains(id);
+
+            int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
+            int ocupacionActual = 0; // Ocupación calculada en tiempo real de boletas/turnos activos
+            int aforoDisponible = Math.max(0, capacidad - ocupacionActual);
+
+            return new CatalogoAtraccionVentaDTO(
+                    id,
+                    atraccion.getNombre(),
+                    atraccion.getDescripcion(),
+                    atraccion.getTipo() != null ? atraccion.getTipo().name() : "TEMPORIZADA",
+                    atraccion.getEstado() != null ? atraccion.getEstado().name() : "ACTIVO",
+                    atraccion.getTarifaMinuto(),
+                    atraccion.getDuracionMinutosBase(),
+                    atraccion.getToleranciaMinutos(),
+                    atraccion.getCaidasLimite(),
+                    capacidad,
+                    ocupacionActual,
+                    aforoDisponible,
+                    tieneOperario,
+                    tt,
+                    te
+            );
+        }).toList();
+
+        catalogoCache.set(new CachedCatalogo(now + cacheTtlMs, catalogo));
+        return catalogo;
+    }
+
+    @Override
+    public void invalidarCacheCatalogo() {
+        catalogoCache.set(null);
+        log.debug("Caché de catálogo de ventas invalidada");
     }
 
     // --- Métodos Privados Auxiliares ---
@@ -154,6 +261,30 @@ public class AtraccionServiceImpl implements AtraccionService {
                 atraccion.getDuracionMinutosBase(),
                 atraccion.getToleranciaMinutos(),
                 atraccion.getCaidasLimite()
+        );
+    }
+
+    private TarifaTiempoResponseDTO mapTarifaTiempoToDTO(TarifaTiempo tarifa) {
+        return new TarifaTiempoResponseDTO(
+                tarifa.getId(),
+                tarifa.getAtraccion().getId(),
+                tarifa.getAtraccion().getNombre(),
+                tarifa.getDuracionMinutos(),
+                tarifa.getPrecio(),
+                tarifa.getActivo(),
+                tarifa.getFechaCreacion()
+        );
+    }
+
+    private TarifaEventoResponseDTO mapTarifaEventoToDTO(TarifaEvento tarifa) {
+        return new TarifaEventoResponseDTO(
+                tarifa.getId(),
+                tarifa.getAtraccion().getId(),
+                tarifa.getAtraccion().getNombre(),
+                tarifa.getIntentos(),
+                tarifa.getPrecio(),
+                tarifa.getActivo(),
+                tarifa.getFechaCreacion()
         );
     }
 }

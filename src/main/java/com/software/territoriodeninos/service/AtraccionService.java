@@ -2,6 +2,7 @@ package com.software.territoriodeninos.service;
 
 import com.software.territoriodeninos.dto.AtraccionRequestDTO;
 import com.software.territoriodeninos.dto.AtraccionResponseDTO;
+import com.software.territoriodeninos.dto.CatalogoAtraccionVentaDTO;
 import java.util.List;
 
 public interface AtraccionService {
@@ -12,4 +13,6 @@ public interface AtraccionService {
     AtraccionResponseDTO actualizar(Long id, AtraccionRequestDTO request);
     AtraccionResponseDTO cambiarEstado(Long id, String nuevoEstado);
     void eliminar(Long id);
+    List<CatalogoAtraccionVentaDTO> obtenerCatalogoVenta();
+    void invalidarCacheCatalogo();
 }

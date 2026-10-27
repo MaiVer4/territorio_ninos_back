@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,9 @@ public interface TarifaTiempoRepository extends JpaRepository<TarifaTiempo, Long
 
     @EntityGraph(attributePaths = {"atraccion"})
     List<TarifaTiempo> findByAtraccionIdAndActivoTrue(Long atraccionId);
+
+    @EntityGraph(attributePaths = {"atraccion"})
+    List<TarifaTiempo> findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(Collection<Long> atraccionIds);
 
     boolean existsByAtraccionIdAndDuracionMinutos(Long atraccionId, Integer duracionMinutos);
     Optional<TarifaTiempo> findByAtraccionIdAndDuracionMinutos(Long atraccionId, Integer duracionMinutos);

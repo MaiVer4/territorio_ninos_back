@@ -32,6 +32,12 @@ class AtraccionServiceTest {
     @Mock
     private com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.TarifaTiempoRepository tarifaTiempoRepository;
+
+    @Mock
+    private com.software.territoriodeninos.repository.TarifaEventoRepository tarifaEventoRepository;
+
     @InjectMocks
     private AtraccionServiceImpl atraccionService;
 
@@ -164,5 +170,75 @@ class AtraccionServiceTest {
                 com.software.territoriodeninos.util.EstadoAsignacion.ACTIVA)).thenReturn(true);
 
         assertThrows(ConflictoException.class, () -> atraccionService.cambiarEstado(1L, "MANTENIMIENTO"));
+    }
+
+    @Test
+    void obtenerCatalogoVenta_ExitoYOrdenamientoTarifas() {
+        Atraccion atraccion1 = Atraccion.builder()
+                .id(1L)
+                .nombre("Autos Chocones")
+                .estado(EstadoAtraccion.ACTIVO)
+                .capacidadMaxima(10)
+                .duracionMinutosBase(15)
+                .tarifaMinuto(new BigDecimal("1500.00"))
+                .build();
+
+        com.software.territoriodeninos.entity.TarifaTiempo tt1 = com.software.territoriodeninos.entity.TarifaTiempo.builder()
+                .id(101L)
+                .atraccion(atraccion1)
+                .duracionMinutos(15)
+                .precio(new BigDecimal("15000.00"))
+                .activo(true)
+                .build();
+
+        com.software.territoriodeninos.entity.TarifaTiempo tt2 = com.software.territoriodeninos.entity.TarifaTiempo.builder()
+                .id(102L)
+                .atraccion(atraccion1)
+                .duracionMinutos(30)
+                .precio(new BigDecimal("25000.00"))
+                .activo(true)
+                .build();
+
+        com.software.territoriodeninos.entity.TarifaEvento te1 = com.software.territoriodeninos.entity.TarifaEvento.builder()
+                .id(201L)
+                .atraccion(atraccion1)
+                .intentos(3)
+                .precio(new BigDecimal("10000.00"))
+                .activo(true)
+                .build();
+
+        when(atraccionRepository.findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO)).thenReturn(List.of(atraccion1));
+        when(tarifaTiempoRepository.findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(List.of(1L)))
+                .thenReturn(List.of(tt1, tt2));
+        when(tarifaEventoRepository.findByAtraccionIdInAndActivoTrueOrderByIntentosAsc(List.of(1L)))
+                .thenReturn(List.of(te1));
+        when(asignacionRepository.findAtraccionIdsConAsignacionEnEstado(List.of(1L), com.software.territoriodeninos.util.EstadoAsignacion.ACTIVA))
+                .thenReturn(java.util.Set.of(1L));
+
+        atraccionService.invalidarCacheCatalogo();
+        List<com.software.territoriodeninos.dto.CatalogoAtraccionVentaDTO> catalogo = atraccionService.obtenerCatalogoVenta();
+
+        assertNotNull(catalogo);
+        assertEquals(1, catalogo.size());
+        var item = catalogo.get(0);
+        assertEquals("Autos Chocones", item.nombre());
+        assertTrue(item.tieneOperarioAsignado());
+        assertEquals(10, item.aforoDisponible());
+        assertTrue(item.tieneCupo());
+        assertEquals(2, item.tarifasTiempo().size());
+        assertEquals(15, item.tarifasTiempo().get(0).duracionMinutos());
+        assertEquals(30, item.tarifasTiempo().get(1).duracionMinutos());
+        assertEquals(1, item.tarifasEvento().size());
+        assertEquals(3, item.tarifasEvento().get(0).intentos());
+
+        // Segunda llamada dentro del TTL: debe servirse de caché sin volver a consultar repositorios
+        List<com.software.territoriodeninos.dto.CatalogoAtraccionVentaDTO> cachedCatalogo = atraccionService.obtenerCatalogoVenta();
+        assertSame(catalogo, cachedCatalogo);
+        verify(atraccionRepository, times(1)).findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO);
+
+        // Invalidación forzada
+        atraccionService.invalidarCacheCatalogo();
+        atraccionService.obtenerCatalogoVenta();
+        verify(atraccionRepository, times(2)).findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO);
     }
 }

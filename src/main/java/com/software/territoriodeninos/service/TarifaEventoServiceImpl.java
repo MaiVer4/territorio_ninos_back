@@ -25,6 +25,10 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
     private final TarifaEventoRepository tarifaEventoRepository;
     private final AtraccionRepository atraccionRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private AtraccionService atraccionService;
+
     @Override
     public TarifaEventoResponseDTO crear(TarifaEventoRequestDTO request) {
         Atraccion atraccion = findAtraccion(request.atraccionId());
@@ -43,6 +47,9 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
                 .build();
 
         TarifaEvento guardada = tarifaEventoRepository.save(tarifa);
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
         log.info("Tarifa de evento creada para atracción {} con {} intentos: ${}",
                 atraccion.getNombre(), guardada.getIntentos(), guardada.getPrecio());
         return mapToDTO(guardada);
@@ -87,6 +94,10 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
             tarifa.setActivo(request.activo());
         }
 
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
+
         log.info("Tarifa de evento con ID {} actualizada", id);
         return mapToDTO(tarifa);
     }
@@ -94,6 +105,9 @@ public class TarifaEventoServiceImpl implements TarifaEventoService {
     @Override
     public void eliminar(Long id) {
         tarifaEventoRepository.delete(findTarifa(id));
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
         log.info("Tarifa de evento con ID {} eliminada", id);
     }
 
