@@ -1,12 +1,16 @@
 package com.software.territoriodeninos.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+
+import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
@@ -56,4 +60,12 @@ public class ConfiguracionParqueDTO {
     @NotNull(message = "El tiempo de gracia en segundos es obligatorio")
     @Min(value = 0, message = "El tiempo de gracia debe ser mayor o igual a 0")
     private Integer tiempoGraciaGeneralSegundos;
+
+    @Schema(description = "Indica si se aplican impuestos en las ventas del parque", example = "true")
+    private Boolean aplicaImpuesto;
+
+    @DecimalMin(value = "0.00", message = "El porcentaje de impuesto no puede ser negativo")
+    @DecimalMax(value = "100.00", message = "El porcentaje de impuesto no puede superar 100%")
+    @Schema(description = "Porcentaje de impuesto a aplicar (ej. 19.00 para IVA)", example = "19.00")
+    private BigDecimal porcentajeImpuesto;
 }

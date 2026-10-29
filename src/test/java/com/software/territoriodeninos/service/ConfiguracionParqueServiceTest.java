@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -40,6 +41,8 @@ class ConfiguracionParqueServiceTest {
                 .telefono("+57 300 123 4567")
                 .pieTicketLegal("Boleto válido únicamente para el día de emisión.")
                 .tiempoGraciaGeneralSegundos(60)
+                .aplicaImpuesto(true)
+                .porcentajeImpuesto(new BigDecimal("19.00"))
                 .build();
     }
 
@@ -65,6 +68,8 @@ class ConfiguracionParqueServiceTest {
             assertEquals("+57 300 123 4567", resultado.getTelefono());
             assertEquals("Boleto válido únicamente para el día de emisión.", resultado.getPieTicketLegal());
             assertEquals(60, resultado.getTiempoGraciaGeneralSegundos());
+            assertTrue(resultado.getAplicaImpuesto());
+            assertEquals(new BigDecimal("19.00"), resultado.getPorcentajeImpuesto());
             verify(repository, times(1)).findFirstByOrderByIdAsc();
             verify(repository, never()).save(any());
         }
@@ -91,6 +96,8 @@ class ConfiguracionParqueServiceTest {
             assertEquals("901.458.789-2", resultado.getNit());
             assertEquals(60, resultado.getTiempoGraciaGeneralSegundos());
             assertNotNull(resultado.getPieTicketLegal());
+            assertTrue(resultado.getAplicaImpuesto());
+            assertEquals(new BigDecimal("0.00"), resultado.getPorcentajeImpuesto());
             verify(repository, times(1)).findFirstByOrderByIdAsc();
             verify(repository, times(1)).save(any(ConfiguracionParque.class));
         }
@@ -111,6 +118,8 @@ class ConfiguracionParqueServiceTest {
                     .telefono("+57 311 000 0000")
                     .pieTicketLegal("Nuevo pie de página legal")
                     .tiempoGraciaGeneralSegundos(120)
+                    .aplicaImpuesto(true)
+                    .porcentajeImpuesto(new BigDecimal("8.00"))
                     .build();
 
             when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(configuracionExistente));
@@ -128,6 +137,8 @@ class ConfiguracionParqueServiceTest {
             assertEquals("+57 311 000 0000", resultado.getTelefono());
             assertEquals("Nuevo pie de página legal", resultado.getPieTicketLegal());
             assertEquals(120, resultado.getTiempoGraciaGeneralSegundos());
+            assertTrue(resultado.getAplicaImpuesto());
+            assertEquals(new BigDecimal("8.00"), resultado.getPorcentajeImpuesto());
             verify(repository, times(1)).save(configuracionExistente);
         }
 
@@ -142,6 +153,8 @@ class ConfiguracionParqueServiceTest {
                     .telefono("3001112233")
                     .pieTicketLegal("Condiciones generales")
                     .tiempoGraciaGeneralSegundos(90)
+                    .aplicaImpuesto(false)
+                    .porcentajeImpuesto(new BigDecimal("0.00"))
                     .build();
 
             when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
@@ -163,6 +176,8 @@ class ConfiguracionParqueServiceTest {
             assertEquals("Nuevo Parque", resultado.getNombreParque());
             assertEquals("111.222.333-4", resultado.getNit());
             assertEquals(90, resultado.getTiempoGraciaGeneralSegundos());
+            assertFalse(resultado.getAplicaImpuesto());
+            assertEquals(new BigDecimal("0.00"), resultado.getPorcentajeImpuesto());
             verify(repository, times(2)).save(any(ConfiguracionParque.class));
         }
     }

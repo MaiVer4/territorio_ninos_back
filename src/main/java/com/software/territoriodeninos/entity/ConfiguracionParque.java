@@ -3,6 +3,8 @@ package com.software.territoriodeninos.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "configuracion_parque")
 @Getter
@@ -46,4 +48,12 @@ public class ConfiguracionParque {
     @Column(nullable = false)
     @Builder.Default
     private Integer tiempoGraciaGeneralSegundos = 60;
+
+    @Column(name = "aplica_impuesto", nullable = false)
+    @Builder.Default
+    private Boolean aplicaImpuesto = true;
+
+    @Column(name = "porcentaje_impuesto", precision = 5, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal porcentajeImpuesto = BigDecimal.ZERO;
 }

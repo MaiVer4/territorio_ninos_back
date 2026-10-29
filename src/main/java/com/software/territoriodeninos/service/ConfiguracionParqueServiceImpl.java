@@ -8,6 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 @Slf4j
 @Service
 @Transactional
@@ -40,6 +43,12 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
         config.setMensajePie(dto.getMensajePie());
         config.setPieTicketLegal(dto.getPieTicketLegal() != null ? dto.getPieTicketLegal() : dto.getPoliticasSeguridad());
         config.setTiempoGraciaGeneralSegundos(dto.getTiempoGraciaGeneralSegundos());
+        if (dto.getAplicaImpuesto() != null) {
+            config.setAplicaImpuesto(dto.getAplicaImpuesto());
+        }
+        if (dto.getPorcentajeImpuesto() != null) {
+            config.setPorcentajeImpuesto(dto.getPorcentajeImpuesto().setScale(2, RoundingMode.HALF_UP));
+        }
 
         ConfiguracionParque guardada = repository.save(config);
         log.info("Configuración general del parque actualizada");
@@ -65,6 +74,8 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
                 .mensajePie("¡Gracias por su visita a Territorio de Niños!")
                 .pieTicketLegal("Territorio de Niños S.A.S. - El cuidado de los menores es responsabilidad del acudiente. Boleto válido únicamente para el día de emisión.")
                 .tiempoGraciaGeneralSegundos(60)
+                .aplicaImpuesto(true)
+                .porcentajeImpuesto(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
                 .build();
         return repository.save(defaultConf);
     }
@@ -86,6 +97,8 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
                 .mensajePie(c.getMensajePie())
                 .pieTicketLegal(pieTicketLegal)
                 .tiempoGraciaGeneralSegundos(c.getTiempoGraciaGeneralSegundos())
+                .aplicaImpuesto(c.getAplicaImpuesto() != null ? c.getAplicaImpuesto() : true)
+                .porcentajeImpuesto(c.getPorcentajeImpuesto() != null ? c.getPorcentajeImpuesto().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
                 .build();
     }
 }

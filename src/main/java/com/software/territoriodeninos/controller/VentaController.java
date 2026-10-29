@@ -1,10 +1,13 @@
 package com.software.territoriodeninos.controller;
 
 import com.software.territoriodeninos.dto.CatalogoAtraccionVentaDTO;
+import com.software.territoriodeninos.dto.CotizacionRequestDTO;
+import com.software.territoriodeninos.dto.CotizacionResponseDTO;
 import com.software.territoriodeninos.dto.ItemVentaValidacionDTO;
 import com.software.territoriodeninos.dto.ResultadoValidacionVentaDTO;
 import com.software.territoriodeninos.service.AforoValidatorService;
 import com.software.territoriodeninos.service.AtraccionService;
+import com.software.territoriodeninos.service.VentaCalculoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -30,6 +33,7 @@ public class VentaController {
 
     private final AtraccionService atraccionService;
     private final AforoValidatorService aforoValidatorService;
+    private final VentaCalculoService ventaCalculoService;
 
     @GetMapping("/catalogo")
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
@@ -63,5 +67,22 @@ public class VentaController {
             @Valid @RequestBody @NotEmpty(message = "La lista de ítems a validar no puede estar vacía") List<@Valid ItemVentaValidacionDTO> items
     ) {
         return ResponseEntity.ok(aforoValidatorService.validarItemsVenta(items));
+    }
+
+    @PostMapping("/cotizar")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
+    @Operation(
+        summary = "Cotizar venta previamente",
+        description = "Calcula subtotales, base gravable, impuestos dinámicos según ConfiguracionParque y total neto con redondeo comercial HALF_UP"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Cotización calculada exitosamente"),
+        @ApiResponse(responseCode = "400", description = "Valores nulos, negativos o inconsistencia en tarifas"),
+        @ApiResponse(responseCode = "404", description = "Atracción o tarifa referenciada no encontrada")
+    })
+    public ResponseEntity<CotizacionResponseDTO> cotizarVenta(
+            @Valid @RequestBody CotizacionRequestDTO request
+    ) {
+        return ResponseEntity.ok(ventaCalculoService.cotizarVenta(request));
     }
 }

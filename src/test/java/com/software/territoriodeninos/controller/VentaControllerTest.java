@@ -6,6 +6,7 @@ import com.software.territoriodeninos.exception.GlobalExceptionHandler;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.service.AforoValidatorService;
 import com.software.territoriodeninos.service.AtraccionService;
+import com.software.territoriodeninos.service.VentaCalculoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class VentaControllerTest {
 
     @Mock
     private AforoValidatorService aforoValidatorService;
+
+    @Mock
+    private VentaCalculoService ventaCalculoService;
 
     @InjectMocks
     private VentaController ventaController;
@@ -171,5 +175,66 @@ class VentaControllerTest {
                 .andExpect(jsonPath("$.detalles", containsString("Inconsistencia en el precio")));
 
         verify(aforoValidatorService).validarItemsVenta(anyList());
+    }
+
+    @Test
+    @DisplayName("POST /api/ventas/cotizar - Retorna 200 OK con desglose financiero exacto")
+    void testCotizarVenta_Exitoso() throws Exception {
+        ItemCotizacionDTO item = new ItemCotizacionDTO(
+                1L, 10L, null, "Piscina de Pelotas - 15 min", 2, new BigDecimal("15000.00"), new BigDecimal("30000.00")
+        );
+        CotizacionRequestDTO request = new CotizacionRequestDTO(List.of(item), null, BigDecimal.ZERO);
+
+        CotizacionResponseDTO responseDTO = new CotizacionResponseDTO(
+                List.of(new BigDecimal("30000.00")),
+                List.of(item),
+                new BigDecimal("30000.00"),
+                new BigDecimal("0.00"),
+                new BigDecimal("30000.00"),
+                new BigDecimal("19.00"),
+                new BigDecimal("5700.00"),
+                new BigDecimal("35700.00")
+        );
+
+        when(ventaCalculoService.cotizarVenta(org.mockito.ArgumentMatchers.any(CotizacionRequestDTO.class)))
+                .thenReturn(responseDTO);
+
+        mockMvc.perform(post("/api/ventas/cotizar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subtotales", hasSize(1)))
+                .andExpect(jsonPath("$.subtotales[0]", is(30000.00)))
+                .andExpect(jsonPath("$.subtotal", is(30000.00)))
+                .andExpect(jsonPath("$.descuento", is(0.00)))
+                .andExpect(jsonPath("$.baseGravable", is(30000.00)))
+                .andExpect(jsonPath("$.porcentajeImpuesto", is(19.00)))
+                .andExpect(jsonPath("$.impuestos", is(5700.00)))
+                .andExpect(jsonPath("$.totalNeto", is(35700.00)))
+                .andExpect(jsonPath("$.total", is(35700.00)));
+
+        verify(ventaCalculoService).cotizarVenta(org.mockito.ArgumentMatchers.any(CotizacionRequestDTO.class));
+    }
+
+    @Test
+    @DisplayName("POST /api/ventas/cotizar - Retorna 400 Bad Request cuando el servicio lanza ReglaNegocioException")
+    void testCotizarVenta_FalloReglaNegocio() throws Exception {
+        ItemCotizacionDTO item = new ItemCotizacionDTO(
+                1L, 10L, null, "Piscina de Pelotas", 1, new BigDecimal("10000.00"), null
+        );
+        CotizacionRequestDTO request = new CotizacionRequestDTO(List.of(item), null, new BigDecimal("50000.00"));
+
+        when(ventaCalculoService.cotizarVenta(org.mockito.ArgumentMatchers.any(CotizacionRequestDTO.class)))
+                .thenThrow(new ReglaNegocioException("El descuento no puede ser superior al subtotal de la venta"));
+
+        mockMvc.perform(post("/api/ventas/cotizar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo", is(400)))
+                .andExpect(jsonPath("$.mensaje", is("Regla de negocio no cumplida")))
+                .andExpect(jsonPath("$.detalles", containsString("El descuento no puede ser superior al subtotal")));
+
+        verify(ventaCalculoService).cotizarVenta(org.mockito.ArgumentMatchers.any(CotizacionRequestDTO.class));
     }
 }
