@@ -12,6 +12,7 @@ import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.repository.AsignacionOperarioRepository;
 import com.software.territoriodeninos.repository.AtraccionRepository;
+import com.software.territoriodeninos.repository.DetalleVentaRepository;
 import com.software.territoriodeninos.repository.TarifaEventoRepository;
 import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.util.EstadoAsignacion;
@@ -37,6 +38,7 @@ public class AtraccionServiceImpl implements AtraccionService {
     private final AsignacionOperarioRepository asignacionRepository;
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final TarifaEventoRepository tarifaEventoRepository;
+    private final DetalleVentaRepository detalleVentaRepository;
 
     @Setter
     @Value("${app.catalogo.cache-ttl-ms:5000}")
@@ -178,7 +180,21 @@ public class AtraccionServiceImpl implements AtraccionService {
         Set<Long> atraccionesConOperario = asignacionRepository
                 .findAtraccionIdsConAsignacionEnEstado(atraccionIds, EstadoAsignacion.ACTIVA);
 
-        // 5. Ensamblar DTOs con cálculo de aforo disponible en tiempo real
+        // 5. Batch query: Ocupación actual calculada en base a boletas activas (últimos 15 minutos)
+        Map<Long, Integer> ocupacionPorAtraccion = new HashMap<>();
+        if (detalleVentaRepository != null && !atraccionIds.isEmpty()) {
+            java.time.LocalDateTime ventanaBase = java.time.LocalDateTime.now().minusMinutes(15);
+            List<Object[]> rows = detalleVentaRepository.countBoletasActivasPorAtraccionIds(atraccionIds, ventanaBase);
+            if (rows != null) {
+                for (Object[] row : rows) {
+                    if (row != null && row.length >= 2 && row[0] instanceof Long atrId && row[1] instanceof Number count) {
+                        ocupacionPorAtraccion.put(atrId, count.intValue());
+                    }
+                }
+            }
+        }
+
+        // 6. Ensamblar DTOs con cálculo de aforo disponible en tiempo real
         List<CatalogoAtraccionVentaDTO> catalogo = atraccionesActivas.stream().map(atraccion -> {
             Long id = atraccion.getId();
             List<TarifaTiempoResponseDTO> tt = tarifasTiempoPorAtraccion.getOrDefault(id, Collections.emptyList());
@@ -186,7 +202,7 @@ public class AtraccionServiceImpl implements AtraccionService {
             boolean tieneOperario = atraccionesConOperario.contains(id);
 
             int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
-            int ocupacionActual = 0; // Ocupación calculada en tiempo real de boletas/turnos activos
+            int ocupacionActual = ocupacionPorAtraccion.getOrDefault(id, 0);
             int aforoDisponible = Math.max(0, capacidad - ocupacionActual);
 
             return new CatalogoAtraccionVentaDTO(

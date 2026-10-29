@@ -118,9 +118,26 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
     @Transactional(readOnly = true)
     public AsignacionResponseDTO obtenerActivaPorOperario(Long usuarioId) {
         ensureUsuarioExists(usuarioId);
+        validarAccesoOperario(usuarioId);
         AsignacionOperario asignacion = asignacionRepository.findByUsuarioIdAndEstado(usuarioId, EstadoAsignacion.ACTIVA)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró una asignación activa para el operario con ID: " + usuarioId));
         return mapToDTO(asignacion);
+    }
+
+    private void validarAccesoOperario(Long usuarioId) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            boolean esOperario = auth.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_OPERARIO".equals(a.getAuthority()));
+            boolean esAdminOTaquillero = auth.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMINISTRADOR".equals(a.getAuthority()) || "ROLE_TAQUILLERO".equals(a.getAuthority()));
+            if (esOperario && !esAdminOTaquillero) {
+                Usuario usuarioAuth = usuarioRepository.findByCorreo(auth.getName()).orElse(null);
+                if (usuarioAuth != null && !usuarioAuth.getId().equals(usuarioId)) {
+                    throw new org.springframework.security.access.AccessDeniedException("No tiene permisos para consultar la asignación de otro operario.");
+                }
+            }
+        }
     }
 
     @Override

@@ -55,4 +55,17 @@ public record DetalleVentaRequestDTO(
             cantidad = 1;
         }
     }
+
+    public DetalleVentaRequestDTO(
+            Long atraccionId,
+            Long menorId,
+            TipoTarifa tipoTarifa,
+            Long tarifaTiempoId,
+            Long tarifaEventoId,
+            Integer cantidad,
+            BigDecimal precioUnitario
+    ) {
+        this(atraccionId, menorId, tipoTarifa, tarifaTiempoId, tarifaEventoId, cantidad, precioUnitario,
+                precioUnitario != null && cantidad != null ? precioUnitario.multiply(BigDecimal.valueOf(cantidad)) : null);
+    }
 }

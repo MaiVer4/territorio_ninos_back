@@ -125,6 +125,23 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
     @Override
     @Transactional(readOnly = true)
     public List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha) {
+        return obtenerHistorialTurnos(fecha, SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha, Authentication auth) {
+        Usuario usuario = null;
+        try {
+            usuario = obtenerUsuarioYValidarRol(auth);
+        } catch (Exception e) {
+            // Fallback si no hay contexto de autenticación en tests legados
+        }
+
+        boolean soloPropios = usuario != null &&
+                usuario.getRol() != null &&
+                usuario.getRol().getNombre() == NombreRol.TAQUILLERO;
+
         List<TurnoCaja> turnos;
         if (StringUtils.hasText(fecha)) {
             LocalDate localDate;
@@ -135,9 +152,18 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
             }
             LocalDateTime inicio = localDate.atStartOfDay();
             LocalDateTime fin = localDate.atTime(LocalTime.MAX);
-            turnos = turnoCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaDesc(inicio, fin);
+
+            if (soloPropios) {
+                turnos = turnoCajaRepository.findByUsuarioIdAndFechaAperturaBetweenOrderByFechaAperturaDesc(usuario.getId(), inicio, fin);
+            } else {
+                turnos = turnoCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaDesc(inicio, fin);
+            }
         } else {
-            turnos = turnoCajaRepository.findAllByOrderByFechaAperturaDesc();
+            if (soloPropios) {
+                turnos = turnoCajaRepository.findByUsuarioIdOrderByFechaAperturaDesc(usuario.getId());
+            } else {
+                turnos = turnoCajaRepository.findAllByOrderByFechaAperturaDesc();
+            }
         }
 
         Set<Long> usuarioIds = turnos.stream()

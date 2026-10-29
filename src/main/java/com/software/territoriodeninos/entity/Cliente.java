@@ -51,6 +51,12 @@ public class Cliente {
         }
     }
 
+    public String getNombreCompleto() {
+        String n = nombres != null ? nombres.trim() : "";
+        String a = apellidos != null ? apellidos.trim() : "";
+        return (n + " " + a).trim();
+    }
+
     public void addMenor(Menor menor) {
         if (this.menores == null) {
             this.menores = new ArrayList<>();

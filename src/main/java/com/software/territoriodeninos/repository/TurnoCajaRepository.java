@@ -48,4 +48,18 @@ public interface TurnoCajaRepository extends JpaRepository<TurnoCaja, Long> {
      * @return true si tiene turnos de caja registrados
      */
     boolean existsByUsuarioId(Long usuarioId);
+
+    /**
+     * Consulta el histórico de turnos de un cajero específico ordenado descendentemente.
+     */
+    List<TurnoCaja> findByUsuarioIdOrderByFechaAperturaDesc(Long usuarioId);
+
+    /**
+     * Consulta el histórico de turnos de un cajero específico filtrado por rango de fechas.
+     */
+    List<TurnoCaja> findByUsuarioIdAndFechaAperturaBetweenOrderByFechaAperturaDesc(
+            Long usuarioId,
+            LocalDateTime inicio,
+            LocalDateTime fin
+    );
 }

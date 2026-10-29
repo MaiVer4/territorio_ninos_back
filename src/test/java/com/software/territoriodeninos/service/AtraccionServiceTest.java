@@ -38,6 +38,9 @@ class AtraccionServiceTest {
     @Mock
     private com.software.territoriodeninos.repository.TarifaEventoRepository tarifaEventoRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.DetalleVentaRepository detalleVentaRepository;
+
     @InjectMocks
     private AtraccionServiceImpl atraccionService;
 

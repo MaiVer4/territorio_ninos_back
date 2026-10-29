@@ -17,4 +17,6 @@ public interface TurnoCajaService {
     TurnoCajaResponseDTO cerrarTurno(CierreCajaDTO dto, Authentication auth);
 
     List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha);
+
+    List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha, Authentication auth);
 }

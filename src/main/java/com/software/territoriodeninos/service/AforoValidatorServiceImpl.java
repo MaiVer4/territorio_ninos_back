@@ -30,6 +30,7 @@ public class AforoValidatorServiceImpl implements AforoValidatorService {
     private final AtraccionRepository atraccionRepository;
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final TarifaEventoRepository tarifaEventoRepository;
+    private final com.software.territoriodeninos.repository.DetalleVentaRepository detalleVentaRepository;
 
     @Override
     public int validarCapacidadAtraccion(Long atraccionId, int cantidadTickets) {
@@ -49,7 +50,15 @@ public class AforoValidatorServiceImpl implements AforoValidatorService {
         }
 
         int capacidadMaxima = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
-        int ocupacionActual = 0; // Ocupación actual en tiempo real de menores en curso
+        int duracionVentanaMinutos = (atraccion.getDuracionMinutosBase() != null && atraccion.getDuracionMinutosBase() > 0)
+                ? atraccion.getDuracionMinutosBase()
+                : 15;
+        java.time.LocalDateTime desde = java.time.LocalDateTime.now().minusMinutes(duracionVentanaMinutos);
+        int ocupacionActual = 0;
+        if (detalleVentaRepository != null) {
+            Integer count = detalleVentaRepository.countBoletasActivasPorAtraccion(atraccionId, desde);
+            ocupacionActual = count != null ? count : 0;
+        }
         int aforoDisponible = Math.max(0, capacidadMaxima - ocupacionActual);
 
         if (cantidadTickets > aforoDisponible) {

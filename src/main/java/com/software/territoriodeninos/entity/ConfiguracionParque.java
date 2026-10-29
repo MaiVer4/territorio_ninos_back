@@ -49,11 +49,28 @@ public class ConfiguracionParque {
     @Builder.Default
     private Integer tiempoGraciaGeneralSegundos = 60;
 
-    @Column(name = "aplica_impuesto", nullable = false)
+    @Column(name = "aplica_impuesto", nullable = false, columnDefinition = "boolean default true")
     @Builder.Default
     private Boolean aplicaImpuesto = true;
 
-    @Column(name = "porcentaje_impuesto", precision = 5, scale = 2, nullable = false)
+    @Column(name = "porcentaje_impuesto", precision = 5, scale = 2, nullable = false, columnDefinition = "numeric(5,2) default 0.00")
     @Builder.Default
     private BigDecimal porcentajeImpuesto = BigDecimal.ZERO;
+
+    @PrePersist
+    @PreUpdate
+    protected void asegurarValoresPorDefecto() {
+        if (this.aplicaImpuesto == null) {
+            this.aplicaImpuesto = true;
+        }
+        if (this.porcentajeImpuesto == null) {
+            this.porcentajeImpuesto = BigDecimal.ZERO.setScale(2, java.math.RoundingMode.HALF_UP);
+        }
+        if (this.tiempoGraciaGeneralSegundos == null) {
+            this.tiempoGraciaGeneralSegundos = 60;
+        }
+        if (this.anchoPapelMm == null) {
+            this.anchoPapelMm = 80;
+        }
+    }
 }

@@ -39,6 +39,9 @@ class AforoValidatorServiceTest {
     @Mock
     private TarifaEventoRepository tarifaEventoRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.DetalleVentaRepository detalleVentaRepository;
+
     @InjectMocks
     private AforoValidatorServiceImpl aforoValidatorService;
 

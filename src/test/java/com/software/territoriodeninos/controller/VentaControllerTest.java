@@ -7,6 +7,10 @@ import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.service.AforoValidatorService;
 import com.software.territoriodeninos.service.AtraccionService;
 import com.software.territoriodeninos.service.VentaCalculoService;
+import com.software.territoriodeninos.service.VentaService;
+import com.software.territoriodeninos.util.EstadoVenta;
+import com.software.territoriodeninos.util.MetodoPago;
+import com.software.territoriodeninos.util.TipoTarifa;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +52,9 @@ class VentaControllerTest {
 
     @Mock
     private VentaCalculoService ventaCalculoService;
+
+    @Mock
+    private VentaService ventaService;
 
     @InjectMocks
     private VentaController ventaController;
@@ -236,5 +243,83 @@ class VentaControllerTest {
                 .andExpect(jsonPath("$.detalles", containsString("El descuento no puede ser superior al subtotal")));
 
         verify(ventaCalculoService).cotizarVenta(org.mockito.ArgumentMatchers.any(CotizacionRequestDTO.class));
+    }
+
+    @Test
+    @DisplayName("POST /api/ventas - Retorna 201 Created cuando la venta se procesa exitosamente")
+    void testProcesarVenta_Exitoso() throws Exception {
+        DetalleVentaRequestDTO itemDTO = new DetalleVentaRequestDTO(
+                1L, 10L, TipoTarifa.TIEMPO, 1L, null, 1, new BigDecimal("15000.00")
+        );
+        VentaProcesarRequestDTO request = new VentaProcesarRequestDTO(
+                50L, 2L, MetodoPago.EFECTIVO, new BigDecimal("20000.00"), BigDecimal.ZERO, null, List.of(itemDTO)
+        );
+
+        VentaResponseDTO responseDTO = new VentaResponseDTO(
+                100L, 50L, "Carlos Gómez", "123456", 2L,
+                new BigDecimal("15000.00"), new BigDecimal("15000.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("20000.00"), new BigDecimal("5000.00"),
+                MetodoPago.EFECTIVO, EstadoVenta.COMPLETADA, null, "Sin notas", List.of()
+        );
+
+        when(ventaService.procesarVenta(org.mockito.ArgumentMatchers.any(VentaProcesarRequestDTO.class), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(responseDTO);
+
+        mockMvc.perform(post("/api/ventas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(100)))
+                .andExpect(jsonPath("$.clienteId", is(50)))
+                .andExpect(jsonPath("$.montoTotal", is(15000.00)))
+                .andExpect(jsonPath("$.montoRecibido", is(20000.00)))
+                .andExpect(jsonPath("$.cambio", is(5000.00)))
+                .andExpect(jsonPath("$.metodoPago", is("EFECTIVO")))
+                .andExpect(jsonPath("$.estadoVenta", is("COMPLETADA")));
+
+        verify(ventaService).procesarVenta(org.mockito.ArgumentMatchers.any(VentaProcesarRequestDTO.class), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("GET /api/ventas/{id} - Retorna 200 OK con los detalles de la venta")
+    void testObtenerVenta_Exitoso() throws Exception {
+        VentaResponseDTO responseDTO = new VentaResponseDTO(
+                100L, 50L, "Carlos Gómez", "123456", 2L,
+                new BigDecimal("15000.00"), new BigDecimal("15000.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("20000.00"), new BigDecimal("5000.00"),
+                MetodoPago.EFECTIVO, EstadoVenta.COMPLETADA, null, null, List.of()
+        );
+
+        when(ventaService.obtenerVentaPorId(100L)).thenReturn(responseDTO);
+
+        mockMvc.perform(get("/api/ventas/100")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(100)))
+                .andExpect(jsonPath("$.clienteNombre", is("Carlos Gómez")));
+
+        verify(ventaService).obtenerVentaPorId(100L);
+    }
+
+    @Test
+    @DisplayName("GET /api/ventas/turno/{turnoId} - Retorna 200 OK con lista de ventas")
+    void testListarVentasPorTurno_Exitoso() throws Exception {
+        VentaResponseDTO v1 = new VentaResponseDTO(
+                101L, 50L, "Carlos Gómez", "123456", 2L,
+                new BigDecimal("15000.00"), new BigDecimal("15000.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("15000.00"), BigDecimal.ZERO,
+                MetodoPago.TARJETA_DEBITO, EstadoVenta.COMPLETADA, null, null, List.of()
+        );
+
+        when(ventaService.listarVentasPorTurno(org.mockito.ArgumentMatchers.eq(2L), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(v1));
+
+        mockMvc.perform(get("/api/ventas/turno/2")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id", is(101)));
+
+        verify(ventaService).listarVentasPorTurno(org.mockito.ArgumentMatchers.eq(2L), org.mockito.ArgumentMatchers.any());
     }
 }
