@@ -4,6 +4,31 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### AI Coding Agents & Assistants ###
+.agents/
+.agent/
+_agents/
+_agent/
+.gemini/
+.deska/
+.claude/
+.cursor/
+.cursorrules
+.windsurf/
+.copilot/
+chat/
+*.prompt.md
+
+### Environment & Secrets ###
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.keystore
+*.jks
+*.p12
+
 ### STS ###
 .apt_generated
 .classpath
@@ -14,10 +39,11 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
+out/
 .README_CONFIG.md
 .GenerarHashBcrypt.java
 
@@ -33,3 +59,26 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Logs & Runtime ###
+*.log
+logs/
+*.pid
+*.seed
+hs_err_pid*
+replay_pid*
+
+### OS Artifacts & Temp Files ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
