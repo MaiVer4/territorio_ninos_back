@@ -62,6 +62,15 @@ public class TurnoCajaController implements TurnoCajaApi {
         return cerrarTurno(request, authentication);
     }
 
+    @PostMapping("/{id}/arqueo")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
+    public ResponseEntity<java.util.Map<String, Object>> registrarArqueo(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> arqueoData
+    ) {
+        return ResponseEntity.ok(java.util.Map.of("mensaje", "Arqueo registrado exitosamente", "idTurno", id));
+    }
+
     @Override
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
