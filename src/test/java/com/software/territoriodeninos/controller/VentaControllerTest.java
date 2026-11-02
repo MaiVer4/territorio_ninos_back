@@ -281,6 +281,43 @@ class VentaControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/ventas/procesar - Retorna 201 Created con ID de venta y estado PAGADO (Notion: CA-02 y CA-04)")
+    void testProcesarVentaEndpoint_Exitoso() throws Exception {
+        DetalleVentaRequestDTO itemDTO = new DetalleVentaRequestDTO(
+                1L, 10L, TipoTarifa.TIEMPO, 1L, null, 1, new BigDecimal("25000.00")
+        );
+        VentaProcesarRequestDTO request = new VentaProcesarRequestDTO(
+                50L, 2L, MetodoPago.EFECTIVO, new BigDecimal("30000.00"), BigDecimal.ZERO, "Venta taquilla", List.of(itemDTO)
+        );
+
+        VentaResponseDTO responseDTO = new VentaResponseDTO(
+                105L, 50L, "123456", "Carlos Gómez", 2L,
+                new BigDecimal("25000.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("25000.00"),
+                new BigDecimal("30000.00"), new BigDecimal("5000.00"),
+                MetodoPago.EFECTIVO, EstadoVenta.PAGADO, LocalDateTime.now(), true, "Venta taquilla", List.of()
+        );
+
+        when(ventaService.procesarVenta(org.mockito.ArgumentMatchers.any(VentaProcesarRequestDTO.class), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(responseDTO);
+
+        mockMvc.perform(post("/api/ventas/procesar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(105)))
+                .andExpect(jsonPath("$.ventaId", is(105)))
+                .andExpect(jsonPath("$.clienteId", is(50)))
+                .andExpect(jsonPath("$.montoTotal", is(25000.00)))
+                .andExpect(jsonPath("$.montoRecibido", is(30000.00)))
+                .andExpect(jsonPath("$.cambio", is(5000.00)))
+                .andExpect(jsonPath("$.metodoPago", is("EFECTIVO")))
+                .andExpect(jsonPath("$.estadoVenta", is("PAGADO")))
+                .andExpect(jsonPath("$.congelada", is(true)));
+
+        verify(ventaService, org.mockito.Mockito.times(1)).procesarVenta(org.mockito.ArgumentMatchers.any(VentaProcesarRequestDTO.class), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     @DisplayName("GET /api/ventas/{id} - Retorna 200 OK con los detalles de la venta")
     void testObtenerVenta_Exitoso() throws Exception {
         VentaResponseDTO responseDTO = new VentaResponseDTO(

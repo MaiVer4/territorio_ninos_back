@@ -107,7 +107,7 @@ class VentaRepositoryTest {
         Venta guardada = ventaRepository.save(venta);
 
         assertNotNull(guardada.getId());
-        assertEquals(EstadoVenta.COMPLETADA, guardada.getEstadoVenta());
+        assertEquals(EstadoVenta.PAGADO, guardada.getEstadoVenta());
         assertNotNull(guardada.getFechaVenta());
         assertEquals(1, guardada.getDetalles().size());
 

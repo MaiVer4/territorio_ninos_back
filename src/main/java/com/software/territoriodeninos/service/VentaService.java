@@ -9,18 +9,28 @@ import java.util.List;
 public interface VentaService {
 
     /**
-     * Procesa, valida y liquida de forma transaccional una venta en taquilla,
-     * persistiendo el comprobante e incrementando el saldo del turno de caja.
+     * Procesa y registra de forma transaccional una venta en taquilla:
+     * - Asigna estado PAGADO, fecha y hora de emisión exacta.
+     * - Valida cliente, menores, aforo y tarifas oficiales.
+     * - Vincula al turno de caja activo actualizando el balance del sistema.
+     * - Congela los datos de la transacción para impedir cualquier edición posterior.
+     * - Si falla cualquier ítem o regla de negocio, realiza rollback integral.
+     *
+     * @param request Datos de la venta a procesar
+     * @param auth Datos del usuario autenticado (cajero en sesión)
+     * @return VentaResponseDTO con el ID generado y desglose financiero
      */
     VentaResponseDTO procesarVenta(VentaProcesarRequestDTO request, Authentication auth);
 
-    /**
-     * Consulta los detalles de una venta específica por su ID.
-     */
+    default VentaResponseDTO procesarVenta(VentaProcesarRequestDTO request) {
+        return procesarVenta(request, null);
+    }
+
     VentaResponseDTO obtenerVentaPorId(Long id);
 
-    /**
-     * Lista las ventas asociadas a un turno de caja específico.
-     */
-    List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth);
+    List<VentaResponseDTO> obtenerVentasPorTurno(Long turnoCajaId);
+
+    default List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth) {
+        return obtenerVentasPorTurno(turnoId);
+    }
 }

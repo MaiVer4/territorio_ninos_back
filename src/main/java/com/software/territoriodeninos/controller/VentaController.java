@@ -65,7 +65,7 @@ public class VentaController implements VentaApi {
     }
 
     @Override
-    @PostMapping
+    @PostMapping({"", "/procesar"})
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<VentaResponseDTO> procesarVenta(
             @Valid @RequestBody VentaProcesarRequestDTO request,

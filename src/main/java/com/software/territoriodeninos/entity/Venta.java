@@ -29,47 +29,51 @@ public class Venta {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "cliente_id", nullable = false)
+    @JoinColumn(name = "cliente_id", nullable = false, updatable = false)
     private Cliente cliente;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "turno_caja_id", nullable = false)
+    @JoinColumn(name = "turno_caja_id", nullable = false, updatable = false)
     private TurnoCaja turnoCaja;
 
-    @Column(name = "monto_total", nullable = false, precision = 12, scale = 2)
+    @Column(name = "monto_total", nullable = false, precision = 12, scale = 2, updatable = false)
     private BigDecimal montoTotal;
 
-    @Column(name = "subtotal", precision = 12, scale = 2)
+    @Column(name = "subtotal", precision = 12, scale = 2, updatable = false)
     private BigDecimal subtotal;
 
-    @Column(name = "descuento", precision = 12, scale = 2)
+    @Column(name = "descuento", precision = 12, scale = 2, updatable = false)
     @Builder.Default
     private BigDecimal descuento = BigDecimal.ZERO;
 
-    @Column(name = "impuestos", precision = 12, scale = 2)
+    @Column(name = "impuestos", precision = 12, scale = 2, updatable = false)
     @Builder.Default
     private BigDecimal impuestos = BigDecimal.ZERO;
 
-    @Column(name = "monto_recibido", precision = 12, scale = 2)
+    @Column(name = "monto_recibido", precision = 12, scale = 2, updatable = false)
     private BigDecimal montoRecibido;
 
-    @Column(name = "cambio", precision = 12, scale = 2)
+    @Column(name = "cambio", precision = 12, scale = 2, updatable = false)
     @Builder.Default
     private BigDecimal cambio = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "metodo_pago", nullable = false, length = 30)
+    @Column(name = "metodo_pago", nullable = false, length = 30, updatable = false)
     private MetodoPago metodoPago;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "estado_venta", nullable = false, length = 20)
+    @Column(name = "estado_venta", nullable = false, length = 20, updatable = false)
     @Builder.Default
-    private EstadoVenta estadoVenta = EstadoVenta.COMPLETADA;
+    private EstadoVenta estadoVenta = EstadoVenta.PAGADO;
 
     @Column(name = "fecha_venta", nullable = false, updatable = false)
     private LocalDateTime fechaVenta;
 
-    @Column(name = "observaciones", length = 500)
+    @Column(name = "congelada", nullable = false, updatable = false)
+    @Builder.Default
+    private Boolean congelada = true;
+
+    @Column(name = "observaciones", length = 500, updatable = false)
     private String observaciones;
 
     @OneToMany(mappedBy = "venta", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
@@ -82,7 +86,7 @@ public class Venta {
             this.fechaVenta = LocalDateTime.now();
         }
         if (this.estadoVenta == null) {
-            this.estadoVenta = EstadoVenta.COMPLETADA;
+            this.estadoVenta = EstadoVenta.PAGADO;
         }
         if (this.descuento == null) {
             this.descuento = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -93,9 +97,26 @@ public class Venta {
         if (this.montoTotal == null) {
             this.montoTotal = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
+        if (this.congelada == null) {
+            this.congelada = true;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        if (Boolean.TRUE.equals(this.congelada)) {
+            throw new com.software.territoriodeninos.exception.ReglaNegocioException(
+                    "Una venta ya procesada y congelada no puede ser modificada."
+            );
+        }
     }
 
     public void addDetalle(DetalleVenta detalle) {
+        if (Boolean.TRUE.equals(this.congelada) && this.id != null) {
+            throw new com.software.territoriodeninos.exception.ReglaNegocioException(
+                    "No se pueden añadir detalles a una venta ya congelada."
+            );
+        }
         if (this.detalles == null) {
             this.detalles = new ArrayList<>();
         }
@@ -104,6 +125,11 @@ public class Venta {
     }
 
     public void removeDetalle(DetalleVenta detalle) {
+        if (Boolean.TRUE.equals(this.congelada) && this.id != null) {
+            throw new com.software.territoriodeninos.exception.ReglaNegocioException(
+                    "No se pueden remover detalles de una venta ya congelada."
+            );
+        }
         if (this.detalles != null) {
             this.detalles.remove(detalle);
             detalle.setVenta(null);
