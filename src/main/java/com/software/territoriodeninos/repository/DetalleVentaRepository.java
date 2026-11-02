@@ -41,7 +41,7 @@ public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Long
     @org.springframework.data.jpa.repository.Query(
         "SELECT COALESCE(SUM(d.cantidad), 0) FROM DetalleVenta d " +
         "WHERE d.atraccion.id = :atraccionId " +
-        "AND d.venta.estadoVenta = com.software.territoriodeninos.util.EstadoVenta.COMPLETADA " +
+        "AND d.venta.estadoVenta IN (com.software.territoriodeninos.util.EstadoVenta.PAGADO, com.software.territoriodeninos.util.EstadoVenta.COMPLETADA) " +
         "AND d.venta.fechaVenta >= :desde"
     )
     Integer countBoletasActivasPorAtraccion(
@@ -55,7 +55,7 @@ public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Long
     @org.springframework.data.jpa.repository.Query(
         "SELECT d.atraccion.id, COALESCE(SUM(d.cantidad), 0) FROM DetalleVenta d " +
         "WHERE d.atraccion.id IN :atraccionIds " +
-        "AND d.venta.estadoVenta = com.software.territoriodeninos.util.EstadoVenta.COMPLETADA " +
+        "AND d.venta.estadoVenta IN (com.software.territoriodeninos.util.EstadoVenta.PAGADO, com.software.territoriodeninos.util.EstadoVenta.COMPLETADA) " +
         "AND d.venta.fechaVenta >= :desde " +
         "GROUP BY d.atraccion.id"
     )

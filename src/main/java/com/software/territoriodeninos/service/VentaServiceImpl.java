@@ -10,9 +10,11 @@ import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import com.software.territoriodeninos.util.EstadoVenta;
 import com.software.territoriodeninos.util.MetodoPago;
+import com.software.territoriodeninos.util.NombreRol;
 import com.software.territoriodeninos.util.TipoTarifa;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +46,7 @@ public class VentaServiceImpl implements VentaService {
     private final AforoValidatorService aforoValidatorService;
     private final VentaCalculoService ventaCalculoService;
     private final UUIDGeneratorService uuidGeneratorService;
+    private final AtraccionService atraccionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -74,6 +78,21 @@ public class VentaServiceImpl implements VentaService {
 
         // 2. Resolver y Validar TurnoCaja Activo (Notion: CA-02)
         TurnoCaja turnoCaja = resolverTurnoCajaActivo(request.turnoCajaId(), auth);
+
+        // 2.1 Validar aforo acumulado para ítems con TipoTarifa.MINUTO_BASE
+        Map<Long, Integer> cantidadesMinutoBasePorAtraccion = new HashMap<>();
+        for (DetalleVentaRequestDTO itemDto : request.items()) {
+            if (itemDto != null && TipoTarifa.MINUTO_BASE.equals(itemDto.tipoTarifa())) {
+                if (itemDto.atraccionId() == null) {
+                    throw new ReglaNegocioException("El ID de la atracción es obligatorio para cada ítem");
+                }
+                int cant = (itemDto.cantidad() != null && itemDto.cantidad() > 0) ? itemDto.cantidad() : 1;
+                cantidadesMinutoBasePorAtraccion.merge(itemDto.atraccionId(), cant, Integer::sum);
+            }
+        }
+        for (Map.Entry<Long, Integer> entry : cantidadesMinutoBasePorAtraccion.entrySet()) {
+            aforoValidatorService.validarCapacidadAtraccion(entry.getKey(), entry.getValue());
+        }
 
         // 3. Validar Ítems Individuales y Preparar Liquidación
         List<ItemCotizacionDTO> itemsParaCotizar = new ArrayList<>();
@@ -123,11 +142,10 @@ public class VentaServiceImpl implements VentaService {
             }
 
             if (TipoTarifa.MINUTO_BASE.equals(itemDto.tipoTarifa())) {
-                if (itemDto.precioUnitario().compareTo(atraccion.getTarifaMinuto()) != 0) {
+                if (atraccion.getTarifaMinuto() == null || itemDto.precioUnitario().compareTo(atraccion.getTarifaMinuto()) != 0) {
                     throw new ReglaNegocioException("El precio unitario enviado ($" + itemDto.precioUnitario() +
                             ") no coincide con la tarifa base por minuto de la atracción ($" + atraccion.getTarifaMinuto() + ")");
                 }
-                aforoValidatorService.validarCapacidadAtraccion(atraccion.getId(), cantidad);
             }
 
             itemsParaCotizar.add(new ItemCotizacionDTO(
@@ -228,6 +246,11 @@ public class VentaServiceImpl implements VentaService {
             log.info("Balance de ventas en efectivo del turno #{} actualizado a ${}", turnoCaja.getId(), turnoCaja.getVentasEfectivoSistema());
         }
 
+        // 8. Invalidar caché del catálogo de atracciones para reflejar aforo en tiempo real
+        if (atraccionService != null) {
+            atraccionService.invalidarCacheCatalogo();
+        }
+
         log.info("Venta ID #{} procesada y congelada exitosamente con estado PAGADO por total ${}", ventaGuardada.getId(), montoTotal);
         return mapToResponseDTO(ventaGuardada, ticketsGuardados);
     }
@@ -259,15 +282,15 @@ public class VentaServiceImpl implements VentaService {
                 .toList();
     }
 
-    private TurnoCaja resolverTurnoCajaActivo(Long turnoCajaId, Authentication auth) {
-        if (turnoCajaId != null) {
-            TurnoCaja turno = turnoCajaRepository.findById(turnoCajaId)
-                    .orElseThrow(() -> new RecursoNoEncontradoException("Turno de caja no encontrado con ID: " + turnoCajaId));
-            if (!EstadoTurnoCaja.ABIERTO.equals(turno.getEstado())) {
-                throw new ReglaNegocioException("El turno de caja especificado (ID " + turnoCajaId + ") no se encuentra ABIERTO");
-            }
-            return turno;
+    @Override
+    @Transactional(readOnly = true)
+    public List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth) {
+        if (turnoId == null) {
+            throw new ReglaNegocioException("El ID del turno de caja es obligatorio");
         }
+
+        TurnoCaja turno = turnoCajaRepository.findById(turnoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Turno de caja no encontrado con ID: " + turnoId));
 
         if (auth == null) {
             auth = SecurityContextHolder.getContext().getAuthentication();
@@ -275,10 +298,43 @@ public class VentaServiceImpl implements VentaService {
 
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             Usuario usuario = usuarioRepository.findByCorreo(auth.getName()).orElse(null);
-            if (usuario != null) {
-                return turnoCajaRepository.findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(usuario.getId(), EstadoTurnoCaja.ABIERTO)
-                        .orElseThrow(() -> new ReglaNegocioException("No se encontró ningún turno de caja ABIERTO para el cajero en sesión"));
+            if (usuario != null && usuario.getRol() != null
+                    && NombreRol.TAQUILLERO.equals(usuario.getRol().getNombre())
+                    && !turno.getUsuarioId().equals(usuario.getId())) {
+                throw new AccessDeniedException("No tiene permisos para ver las ventas de otro cajero.");
             }
+        }
+
+        return obtenerVentasPorTurno(turnoId);
+    }
+
+    private TurnoCaja resolverTurnoCajaActivo(Long turnoCajaId, Authentication auth) {
+        if (auth == null) {
+            auth = SecurityContextHolder.getContext().getAuthentication();
+        }
+
+        Usuario usuarioAutenticado = null;
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            usuarioAutenticado = usuarioRepository.findByCorreo(auth.getName()).orElse(null);
+        }
+
+        if (turnoCajaId != null) {
+            TurnoCaja turno = turnoCajaRepository.findById(turnoCajaId)
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Turno de caja no encontrado con ID: " + turnoCajaId));
+            if (!EstadoTurnoCaja.ABIERTO.equals(turno.getEstado())) {
+                throw new ReglaNegocioException("El turno de caja especificado (ID " + turnoCajaId + ") no se encuentra ABIERTO");
+            }
+            if (usuarioAutenticado != null && usuarioAutenticado.getRol() != null
+                    && NombreRol.TAQUILLERO.equals(usuarioAutenticado.getRol().getNombre())
+                    && !turno.getUsuarioId().equals(usuarioAutenticado.getId())) {
+                throw new AccessDeniedException("No puede registrar ventas en el turno de caja de otro cajero.");
+            }
+            return turno;
+        }
+
+        if (usuarioAutenticado != null) {
+            return turnoCajaRepository.findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(usuarioAutenticado.getId(), EstadoTurnoCaja.ABIERTO)
+                    .orElseThrow(() -> new ReglaNegocioException("No se encontró ningún turno de caja ABIERTO para el cajero en sesión"));
         }
 
         return turnoCajaRepository.findAllByOrderByFechaAperturaDesc().stream()
@@ -308,8 +364,7 @@ public class VentaServiceImpl implements VentaService {
                 ? tickets.stream().map(this::mapTicketToDTO).toList()
                 : List.of();
 
-        String nombreCompletoCliente = (v.getCliente().getNombres() != null ? v.getCliente().getNombres() : "") +
-                (v.getCliente().getApellidos() != null ? " " + v.getCliente().getApellidos() : "");
+        String nombreCompletoCliente = v.getCliente() != null ? v.getCliente().getNombreCompleto() : "";
 
         return new VentaResponseDTO(
                 v.getId(),

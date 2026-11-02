@@ -25,4 +25,7 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     @EntityGraph(attributePaths = {"detalleVenta", "detalleVenta.atraccion", "detalleVenta.venta", "menor"})
     List<Ticket> findByDetalleVentaVentaIdInOrderByFechaEmisionAsc(Collection<Long> ventaIds);
+
+    @org.springframework.data.jpa.repository.Query("SELECT t.uuidCodigo FROM Ticket t WHERE t.uuidCodigo IN :uuids")
+    java.util.Set<UUID> findExistingUuids(@org.springframework.data.repository.query.Param("uuids") Collection<UUID> uuids);
 }

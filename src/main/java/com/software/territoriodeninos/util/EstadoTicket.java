@@ -1,6 +1,7 @@
 package com.software.territoriodeninos.util;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.software.territoriodeninos.exception.ReglaNegocioException;
 
 public enum EstadoTicket {
     PAGADO,
@@ -13,6 +14,12 @@ public enum EstadoTicket {
         if (value == null || value.isBlank()) {
             return PAGADO;
         }
-        return EstadoTicket.valueOf(value.trim().toUpperCase());
+        try {
+            return EstadoTicket.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ReglaNegocioException(
+                    "Estado de ticket inválido: '" + value + "'. Valores permitidos: PAGADO, EN_USO, CONSUMIDO, ANULADO"
+            );
+        }
     }
 }

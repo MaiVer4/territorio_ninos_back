@@ -30,7 +30,5 @@ public interface VentaService {
 
     List<VentaResponseDTO> obtenerVentasPorTurno(Long turnoCajaId);
 
-    default List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth) {
-        return obtenerVentasPorTurno(turnoId);
-    }
+    List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth);
 }

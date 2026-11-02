@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
@@ -65,6 +66,9 @@ class VentaServiceTest {
 
     @Mock
     private UUIDGeneratorService uuidGeneratorService;
+
+    @Mock
+    private AtraccionService atraccionService;
 
     @Mock
     private Authentication authentication;
@@ -179,6 +183,7 @@ class VentaServiceTest {
         verify(turnoCajaRepository).save(turnoCajaMock);
         verify(ventaRepository).save(any(Venta.class));
         verify(ticketRepository).saveAll(anyList());
+        verify(atraccionService).invalidarCacheCatalogo();
     }
 
     @Test
@@ -353,5 +358,100 @@ class VentaServiceTest {
 
         // 2. Intentar removeDetalle en venta congelada existente
         assertThrows(ReglaNegocioException.class, () -> ventaCongelada.removeDetalle(detalle));
+    }
+
+    @Test
+    @DisplayName("Seguridad OWASP A01: Taquillero no puede registrar ventas en el turno de caja de otro cajero")
+    void testProcesarVenta_TaquilleroEnTurnoAjeno_LanzaAccessDeniedException() {
+        Usuario taquillero = Usuario.builder()
+                .id(2L)
+                .correo("taquillero@test.com")
+                .rol(Rol.builder().id(2L).nombre(com.software.territoriodeninos.util.NombreRol.TAQUILLERO).build())
+                .build();
+        turnoCajaMock.setUsuarioId(99L); // Turno de otro usuario
+
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("taquillero@test.com");
+        when(authentication.getName()).thenReturn("taquillero@test.com");
+        when(usuarioRepository.findByCorreo("taquillero@test.com")).thenReturn(Optional.of(taquillero));
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(clienteMock));
+        when(turnoCajaRepository.findById(5L)).thenReturn(Optional.of(turnoCajaMock));
+
+        DetalleVentaRequestDTO itemDTO = new DetalleVentaRequestDTO(
+                20L, null, TipoTarifa.TIEMPO, 100L, null, 1, new BigDecimal("10000.00"), null
+        );
+        VentaProcesarRequestDTO request = new VentaProcesarRequestDTO(
+                1L, 5L, MetodoPago.EFECTIVO, new BigDecimal("20000.00"), BigDecimal.ZERO, null, List.of(itemDTO)
+        );
+
+        assertThrows(AccessDeniedException.class, () -> ventaService.procesarVenta(request, authentication));
+    }
+
+    @Test
+    @DisplayName("listarVentasPorTurno: Lanza RecursoNoEncontradoException si el turno no existe")
+    void testListarVentasPorTurno_TurnoNoExiste_LanzaRecursoNoEncontradoException() {
+        when(turnoCajaRepository.findById(999L)).thenReturn(Optional.empty());
+        assertThrows(RecursoNoEncontradoException.class, () -> ventaService.listarVentasPorTurno(999L, authentication));
+    }
+
+    @Test
+    @DisplayName("Seguridad OWASP A01: Taquillero no puede consultar ventas del turno de otro cajero")
+    void testListarVentasPorTurno_TaquilleroConsultaTurnoAjeno_LanzaAccessDeniedException() {
+        Usuario taquillero = Usuario.builder()
+                .id(2L)
+                .correo("taquillero@test.com")
+                .rol(Rol.builder().id(2L).nombre(com.software.territoriodeninos.util.NombreRol.TAQUILLERO).build())
+                .build();
+        turnoCajaMock.setUsuarioId(99L);
+
+        when(turnoCajaRepository.findById(5L)).thenReturn(Optional.of(turnoCajaMock));
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("taquillero@test.com");
+        when(authentication.getName()).thenReturn("taquillero@test.com");
+        when(usuarioRepository.findByCorreo("taquillero@test.com")).thenReturn(Optional.of(taquillero));
+
+        assertThrows(AccessDeniedException.class, () -> ventaService.listarVentasPorTurno(5L, authentication));
+    }
+
+    @Test
+    @DisplayName("Aforo: Múltiples ítems de MINUTO_BASE acumulan y validan capacidad agrupada por atracción")
+    void testProcesarVenta_MultiplesMinutoBase_ValidaCapacidadAcumulada() {
+        DetalleVentaRequestDTO item1 = new DetalleVentaRequestDTO(
+                20L, null, TipoTarifa.MINUTO_BASE, null, null, 2, new BigDecimal("1000.00"), new BigDecimal("2000.00")
+        );
+        DetalleVentaRequestDTO item2 = new DetalleVentaRequestDTO(
+                20L, null, TipoTarifa.MINUTO_BASE, null, null, 3, new BigDecimal("1000.00"), new BigDecimal("3000.00")
+        );
+        VentaProcesarRequestDTO request = new VentaProcesarRequestDTO(
+                1L, 5L, MetodoPago.EFECTIVO, new BigDecimal("10000.00"), BigDecimal.ZERO, null, List.of(item1, item2)
+        );
+
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(clienteMock));
+        when(turnoCajaRepository.findById(5L)).thenReturn(Optional.of(turnoCajaMock));
+        when(atraccionRepository.findById(20L)).thenReturn(Optional.of(atraccionMock));
+
+        CotizacionResponseDTO cotizacionMock = new CotizacionResponseDTO(
+                List.of(new BigDecimal("2000.00"), new BigDecimal("3000.00")),
+                List.of(),
+                new BigDecimal("5000.00"),
+                BigDecimal.ZERO,
+                new BigDecimal("5000.00"),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                new BigDecimal("5000.00")
+        );
+        when(ventaCalculoService.cotizarVenta(any(CotizacionRequestDTO.class))).thenReturn(cotizacionMock);
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(i -> {
+            Venta v = i.getArgument(0);
+            v.setId(777L);
+            return v;
+        });
+        when(uuidGeneratorService.generarUuidsUnicos(anyInt())).thenReturn(List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
+
+        ventaService.procesarVenta(request, authentication);
+
+        // Se verifica que la capacidad se validó para la suma acumulada (2 + 3 = 5 tickets)
+        verify(aforoValidatorService).validarCapacidadAtraccion(20L, 5);
+        verify(atraccionService).invalidarCacheCatalogo();
     }
 }

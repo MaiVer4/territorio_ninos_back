@@ -1,6 +1,7 @@
 package com.software.territoriodeninos.util;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.software.territoriodeninos.exception.ReglaNegocioException;
 
 public enum EstadoVenta {
     PAGADO,
@@ -21,6 +22,12 @@ public enum EstadoVenta {
         if ("COMPLETADA".equals(clean) || "COMPLETADO".equals(clean)) {
             return COMPLETADA;
         }
-        return EstadoVenta.valueOf(clean);
+        try {
+            return EstadoVenta.valueOf(clean);
+        } catch (IllegalArgumentException ex) {
+            throw new ReglaNegocioException(
+                    "Estado de venta inválido: '" + value + "'. Valores permitidos: PAGADO, COMPLETADA, PENDIENTE, ANULADA, CANCELADA"
+            );
+        }
     }
 }

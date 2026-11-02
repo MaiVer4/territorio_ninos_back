@@ -27,8 +27,11 @@ BEGIN
             metodo_pago VARCHAR(30) NOT NULL,
             estado_venta VARCHAR(20) NOT NULL DEFAULT 'COMPLETADA',
             fecha_venta TIMESTAMP NOT NULL DEFAULT NOW(),
+            congelada BOOLEAN NOT NULL DEFAULT TRUE,
             observaciones VARCHAR(500)
         );
+
+        ALTER TABLE ventas ADD COLUMN IF NOT EXISTS congelada BOOLEAN NOT NULL DEFAULT TRUE;
 
         CREATE INDEX IF NOT EXISTS idx_venta_turno_caja ON ventas (turno_caja_id, fecha_venta DESC);
         CREATE INDEX IF NOT EXISTS idx_venta_cliente ON ventas (cliente_id);

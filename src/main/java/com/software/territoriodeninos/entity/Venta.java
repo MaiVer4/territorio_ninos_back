@@ -69,7 +69,7 @@ public class Venta {
     @Column(name = "fecha_venta", nullable = false, updatable = false)
     private LocalDateTime fechaVenta;
 
-    @Column(name = "congelada", nullable = false, updatable = false)
+    @Column(name = "congelada", nullable = false, updatable = false, columnDefinition = "boolean default true")
     @Builder.Default
     private Boolean congelada = true;
 
