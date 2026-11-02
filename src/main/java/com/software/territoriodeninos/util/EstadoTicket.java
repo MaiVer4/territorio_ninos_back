@@ -6,7 +6,9 @@ import com.software.territoriodeninos.exception.ReglaNegocioException;
 public enum EstadoTicket {
     PAGADO,
     EN_USO,
+    PAUSADO,
     CONSUMIDO,
+    VENCIDO,
     ANULADO;
 
     @JsonCreator
@@ -18,7 +20,7 @@ public enum EstadoTicket {
             return EstadoTicket.valueOf(value.trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new ReglaNegocioException(
-                    "Estado de ticket inválido: '" + value + "'. Valores permitidos: PAGADO, EN_USO, CONSUMIDO, ANULADO"
+                    "Estado de ticket inválido: '" + value + "'. Valores permitidos: PAGADO, EN_USO, PAUSADO, CONSUMIDO, VENCIDO, ANULADO"
             );
         }
     }

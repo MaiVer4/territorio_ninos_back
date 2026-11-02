@@ -161,4 +161,33 @@ class TicketPrintFormatterTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no pueden ser nulos");
     }
+
+    @Test
+    @DisplayName("HU-22.05 CA-02: Debe estampar la marca visible ** REIMPRESIÓN ** cuando esReimpresion es true")
+    void formatear_debeEstamparMarcaReimpresionCuandoEsReimpresionEsTrue() {
+        TicketPrintDataDTO ticketReimpreso = TicketPrintDataDTO.builder()
+                .uuidTicket(testUuid)
+                .nombreAtraccion("PISCINA DE PELOTAS")
+                .nombreMenor("Sofia Restrepo")
+                .tiempoOModalidad("30 min")
+                .precioUnitario(new BigDecimal("30000.00"))
+                .fechaEmision(LocalDateTime.of(2026, 11, 2, 14, 30, 0))
+                .esReimpresion(true)
+                .build();
+
+        String payload = formatter.formatear(ticketReimpreso, testConfig);
+
+        assertThat(payload).contains(TicketPrintFormatter.MARCA_REIMPRESION);
+        int idxTitulo = payload.indexOf("BOLETO DE ENTRADA");
+        int idxMarca = payload.indexOf(TicketPrintFormatter.MARCA_REIMPRESION);
+        assertThat(idxTitulo).isLessThan(idxMarca);
+    }
+
+    @Test
+    @DisplayName("HU-22.05 CA-02: NO debe contener marca de reimpresión si esReimpresion es false")
+    void formatear_noDebeContenerMarcaReimpresionCuandoEsReimpresionEsFalse() {
+        String payload = formatter.formatear(testTicket, testConfig);
+
+        assertThat(payload).doesNotContain(TicketPrintFormatter.MARCA_REIMPRESION);
+    }
 }

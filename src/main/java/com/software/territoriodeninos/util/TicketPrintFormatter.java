@@ -28,6 +28,7 @@ public class TicketPrintFormatter {
     public static final String ESC_BOLD_ON = "\u001BE\u0001";      // ESC E 1 : Negrita activada
     public static final String ESC_BOLD_OFF = "\u001BE\u0000";     // ESC E 0 : Negrita desactivada
     public static final String GS_AUTO_CUT = "\u001DV\u0042\u0000";// GS V 66 0 (0x1D 0x56 0x42 0x00) : Corte automático parcial (CA-02)
+    public static final String MARCA_REIMPRESION = "** REIMPRESIÓN **"; // Marca visible para boletas reimpresas (HU-22.05 / Notion: CA-02)
 
     public static final int MAX_PIE_LEGAL_LENGTH = 2000;
     public static final int COLS_80MM = 48;
@@ -90,6 +91,9 @@ public class TicketPrintFormatter {
         // 4. Título del Comprobante / Boleta
         sb.append(ESC_BOLD_ON);
         sb.append("BOLETO DE ENTRADA").append(LF);
+        if (ticket.esReimpresionSegura()) {
+            sb.append(MARCA_REIMPRESION).append(LF);
+        }
         sb.append(ESC_BOLD_OFF);
         sb.append(generarLinea('-', anchoCols)).append(LF);
 

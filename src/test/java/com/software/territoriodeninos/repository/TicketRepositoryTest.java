@@ -217,4 +217,50 @@ class TicketRepositoryTest {
             ticketRepository.saveAndFlush(t2);
         });
     }
+
+    @Test
+    @DisplayName("buscarPorDocumentoAcudiente - Búsqueda indexada por cédula de acudiente con respuesta menor a 500ms (HU-23.02 / CA-01)")
+    void buscarPorDocumentoAcudiente_recuperaTicketsYRespondeEnMenosDe500ms() {
+        UUID uuid = UUID.randomUUID();
+        Ticket ticket = Ticket.builder()
+                .uuidCodigo(uuid)
+                .detalleVenta(detalleVenta)
+                .menor(menor)
+                .estadoTicket(EstadoTicket.PAGADO)
+                .fechaEmision(LocalDateTime.now())
+                .build();
+        ticketRepository.saveAndFlush(ticket);
+
+        long inicio = System.currentTimeMillis();
+        List<Ticket> tickets = ticketRepository.buscarPorDocumentoAcudiente(cliente.getNumeroDocumento());
+        long duracionMs = System.currentTimeMillis() - inicio;
+
+        assertTrue(duracionMs < 500, "La búsqueda indexada por cédula debe responder en menos de 500ms (demoró " + duracionMs + "ms)");
+        assertFalse(tickets.isEmpty());
+        assertEquals(uuid, tickets.get(0).getUuidCodigo());
+        assertNotNull(tickets.get(0).getDetalleVenta().getVenta().getCliente());
+        assertEquals(cliente.getNumeroDocumento(), tickets.get(0).getDetalleVenta().getVenta().getCliente().getNumeroDocumento());
+    }
+
+    @Test
+    @DisplayName("findByUuidCodigo - Búsqueda indexada por clave primaria UUID con respuesta menor a 500ms (HU-23.02 / CA-01)")
+    void findByUuidCodigo_respondeEnMenosDe500ms() {
+        UUID uuid = UUID.randomUUID();
+        Ticket ticket = Ticket.builder()
+                .uuidCodigo(uuid)
+                .detalleVenta(detalleVenta)
+                .menor(menor)
+                .estadoTicket(EstadoTicket.PAGADO)
+                .fechaEmision(LocalDateTime.now())
+                .build();
+        ticketRepository.saveAndFlush(ticket);
+
+        long inicio = System.currentTimeMillis();
+        Optional<Ticket> optTicket = ticketRepository.findByUuidCodigo(uuid);
+        long duracionMs = System.currentTimeMillis() - inicio;
+
+        assertTrue(duracionMs < 500, "La búsqueda indexada por UUID debe responder en menos de 500ms (demoró " + duracionMs + "ms)");
+        assertTrue(optTicket.isPresent());
+        assertEquals(uuid, optTicket.get().getUuidCodigo());
+    }
 }
