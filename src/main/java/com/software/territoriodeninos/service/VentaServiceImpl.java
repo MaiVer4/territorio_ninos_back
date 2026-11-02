@@ -43,6 +43,7 @@ public class VentaServiceImpl implements VentaService {
     private final TurnoCajaRepository turnoCajaRepository;
     private final UsuarioRepository usuarioRepository;
     private final AtraccionRepository atraccionRepository;
+    private final AuditoriaOperacionService auditoriaOperacionService;
     private final AforoValidatorService aforoValidatorService;
     private final VentaCalculoService ventaCalculoService;
     private final UUIDGeneratorService uuidGeneratorService;
@@ -235,6 +236,18 @@ public class VentaServiceImpl implements VentaService {
         }
         List<Ticket> ticketsGuardados = ticketRepository.saveAll(ticketsGenerados);
         log.info("Se generaron y persistieron {} tickets para la venta ID #{}", ticketsGuardados.size(), ventaGuardada.getId());
+
+        // Registro inmutable de emisión en auditoría (HU-38.04)
+        for (Ticket t : ticketsGuardados) {
+            auditoriaOperacionService.registrarTransicionTicket(
+                    t.getUuidCodigo(),
+                    null,
+                    EstadoTicket.PAGADO.name(),
+                    "Emisión de ticket tras venta exitosa #" + ventaGuardada.getId(),
+                    turnoCaja.getUsuarioId(),
+                    "Terminal Taquilla"
+            );
+        }
 
         // 7. Actualizar Balance del Turno de Caja (Notion: CA-02)
         if (MetodoPago.EFECTIVO.equals(request.metodoPago())) {

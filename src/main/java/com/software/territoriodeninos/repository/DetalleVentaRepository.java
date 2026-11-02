@@ -63,4 +63,20 @@ public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Long
             @org.springframework.data.repository.query.Param("atraccionIds") java.util.Collection<Long> atraccionIds,
             @org.springframework.data.repository.query.Param("desde") java.time.LocalDateTime desde
     );
+
+    /**
+     * Calcula ingresos brutos agrupados por atracción dentro de un rango temporal (HU-37.02).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT d.atraccion.id, COALESCE(SUM(d.subtotal), 0)
+        FROM DetalleVenta d
+        WHERE d.venta.estadoVenta IN (com.software.territoriodeninos.util.EstadoVenta.PAGADO, com.software.territoriodeninos.util.EstadoVenta.COMPLETADA)
+          AND d.venta.fechaVenta >= :inicio
+          AND d.venta.fechaVenta <= :fin
+        GROUP BY d.atraccion.id
+    """)
+    List<Object[]> sumIngresosBrutosPorAtraccion(
+            @org.springframework.data.repository.query.Param("inicio") java.time.LocalDateTime inicio,
+            @org.springframework.data.repository.query.Param("fin") java.time.LocalDateTime fin
+    );
 }

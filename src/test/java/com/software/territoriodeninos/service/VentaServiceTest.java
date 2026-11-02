@@ -71,6 +71,9 @@ class VentaServiceTest {
     private AtraccionService atraccionService;
 
     @Mock
+    private AuditoriaOperacionService auditoriaOperacionService;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks

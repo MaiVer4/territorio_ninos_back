@@ -62,4 +62,30 @@ public interface TurnoCajaRepository extends JpaRepository<TurnoCaja, Long> {
             LocalDateTime inicio,
             LocalDateTime fin
     );
+
+    /**
+     * Consulta turnos cerrados filtrando por rango de fechas y opcionalmente cajero (HU-36.01).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT t FROM TurnoCaja t
+        WHERE t.estado = com.software.territoriodeninos.util.EstadoTurnoCaja.CERRADO
+          AND t.fechaApertura >= :inicio
+          AND t.fechaApertura <= :fin
+          AND (:usuarioId IS NULL OR t.usuarioId = :usuarioId)
+        ORDER BY t.fechaCierre DESC NULLS LAST, t.fechaApertura DESC
+    """)
+    List<TurnoCaja> findTurnosCerradosPorFiltros(
+            @org.springframework.data.repository.query.Param("inicio") LocalDateTime inicio,
+            @org.springframework.data.repository.query.Param("fin") LocalDateTime fin,
+            @org.springframework.data.repository.query.Param("usuarioId") Long usuarioId
+    );
+
+    /**
+     * Consulta derivada para turnos filtrados por estado y rango de fechas (HU-36.01).
+     */
+    List<TurnoCaja> findByEstadoAndFechaAperturaBetweenOrderByFechaCierreDesc(
+            EstadoTurnoCaja estado,
+            LocalDateTime inicio,
+            LocalDateTime fin
+    );
 }

@@ -28,6 +28,12 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     List<Venta> findByTurnoCajaIdOrderByFechaVentaDesc(Long turnoCajaId);
 
     /**
+     * Consulta en lote las ventas correspondientes a múltiples turnos de caja para evitar N+1 en conciliación.
+     */
+    @EntityGraph(attributePaths = {"cliente", "turnoCaja"})
+    List<Venta> findByTurnoCajaIdIn(java.util.Collection<Long> turnoCajaIds);
+
+    /**
      * Consulta el histórico de ventas de un turno de caja filtrado por estado (ej. COMPLETADA).
      */
     @EntityGraph(attributePaths = {"cliente", "turnoCaja", "detalles", "detalles.atraccion", "detalles.menor"})
@@ -64,5 +70,20 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
             @Param("turnoCajaId") Long turnoCajaId,
             @Param("metodoPago") MetodoPago metodoPago,
             @Param("estadoVenta") EstadoVenta estadoVenta
+    );
+
+    /**
+     * Calcula ventas totales agrupadas por método de pago dentro de un rango temporal (HU-40.03).
+     */
+    @Query("""
+        SELECT v.metodoPago, COALESCE(SUM(v.montoTotal), 0)
+        FROM Venta v
+        WHERE v.estadoVenta IN (com.software.territoriodeninos.util.EstadoVenta.PAGADO, com.software.territoriodeninos.util.EstadoVenta.COMPLETADA)
+          AND v.fechaVenta >= :inicio AND v.fechaVenta <= :fin
+        GROUP BY v.metodoPago
+    """)
+    List<Object[]> sumVentasPorMetodoPago(
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fin") LocalDateTime fin
     );
 }

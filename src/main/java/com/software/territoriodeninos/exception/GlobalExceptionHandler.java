@@ -36,6 +36,40 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(AforoCompletoException.class)
+    public ResponseEntity<ErrorResponse> handleAforoCompleto(AforoCompletoException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "Aforo completo en la atracción",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(EstacionNoAutorizadaException.class)
+    public ResponseEntity<ErrorResponse> handleEstacionNoAutorizada(EstacionNoAutorizadaException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                "Estación física no autorizada",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(TicketInvalidoOperacionException.class)
+    public ResponseEntity<ErrorResponse> handleTicketInvalidoOperacion(TicketInvalidoOperacionException ex) {
+        HttpStatus status = ex.getStatus() != null ? ex.getStatus() : HttpStatus.CONFLICT;
+        String titulo = status == HttpStatus.UNPROCESSABLE_ENTITY
+                ? "Boleto incompatible o no procesable"
+                : "Estado inválido del ticket";
+        ErrorResponse errorResponse = new ErrorResponse(
+                status.value(),
+                titulo,
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, status);
+    }
+
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<ErrorResponse> handleCredencialesInvalidas(CredencialesInvalidasException ex) {
         ErrorResponse errorResponse = new ErrorResponse(
@@ -126,6 +160,26 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 "Tipo de parámetro inválido",
                 detalle
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingServletRequestParameter(org.springframework.web.bind.MissingServletRequestParameterException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Parámetro requerido ausente",
+                "El parámetro requerido '" + ex.getParameterName() + "' no fue proporcionado en la solicitud."
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(jakarta.validation.ConstraintViolationException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Error de validación",
+                ex.getMessage()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
