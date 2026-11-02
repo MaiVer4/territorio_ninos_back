@@ -23,6 +23,20 @@ public interface AsignacionOperarioRepository extends JpaRepository<AsignacionOp
     
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"usuario", "usuario.rol", "atraccion"})
     Optional<AsignacionOperario> findByUsuarioIdAndEstado(Long usuarioId, EstadoAsignacion estado);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"usuario", "usuario.rol", "atraccion"})
+    Optional<AsignacionOperario> findByUsuarioIdAndFechaAsignacionAndEstado(
+            Long usuarioId,
+            java.time.LocalDate fechaAsignacion,
+            EstadoAsignacion estado
+    );
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"usuario", "usuario.rol", "atraccion"})
+    Optional<AsignacionOperario> findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+            Long usuarioId,
+            java.time.LocalDate fechaAsignacion,
+            EstadoAsignacion estado
+    );
     
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"usuario", "usuario.rol", "atraccion"})
     List<AsignacionOperario> findByEstado(EstadoAsignacion estado);

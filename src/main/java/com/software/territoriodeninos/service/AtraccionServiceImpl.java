@@ -254,6 +254,8 @@ public class AtraccionServiceImpl implements AtraccionService {
         if (request.duracionMinutosBase() != null) builder.duracionMinutosBase(request.duracionMinutosBase());
         if (request.toleranciaMinutos() != null) builder.toleranciaMinutos(request.toleranciaMinutos());
         if (request.caidasLimite() != null) builder.caidasLimite(request.caidasLimite());
+        if (request.edadMinima() != null) builder.edadMinima(request.edadMinima());
+        if (request.edadMaxima() != null) builder.edadMaxima(request.edadMaxima());
     }
 
     private void aplicarAtributosOpcionales(Atraccion atraccion, AtraccionRequestDTO request) {
@@ -262,6 +264,8 @@ public class AtraccionServiceImpl implements AtraccionService {
         if (request.duracionMinutosBase() != null) atraccion.setDuracionMinutosBase(request.duracionMinutosBase());
         if (request.toleranciaMinutos() != null) atraccion.setToleranciaMinutos(request.toleranciaMinutos());
         if (request.caidasLimite() != null) atraccion.setCaidasLimite(request.caidasLimite());
+        atraccion.setEdadMinima(request.edadMinima());
+        atraccion.setEdadMaxima(request.edadMaxima());
     }
 
     private AtraccionResponseDTO mapToDTO(Atraccion atraccion) {
@@ -276,7 +280,9 @@ public class AtraccionServiceImpl implements AtraccionService {
                 atraccion.getCapacidadMaxima(),
                 atraccion.getDuracionMinutosBase(),
                 atraccion.getToleranciaMinutos(),
-                atraccion.getCaidasLimite()
+                atraccion.getCaidasLimite(),
+                atraccion.getEdadMinima(),
+                atraccion.getEdadMaxima()
         );
     }
 

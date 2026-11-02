@@ -48,6 +48,9 @@ public class Ticket implements Persistable<UUID> {
     @Column(name = "fecha_emision", nullable = false, updatable = false)
     private LocalDateTime fechaEmision;
 
+    @Column(name = "fecha_consumo")
+    private LocalDateTime fechaConsumo;
+
     @Transient
     @Builder.Default
     private boolean isNew = true;

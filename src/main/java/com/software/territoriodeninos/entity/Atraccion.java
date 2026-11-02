@@ -57,6 +57,12 @@ public class Atraccion {
     @Builder.Default
     private Integer caidasLimite = 3;
 
+    @Column(name = "edad_minima")
+    private Integer edadMinima;
+
+    @Column(name = "edad_maxima")
+    private Integer edadMaxima;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;
 
