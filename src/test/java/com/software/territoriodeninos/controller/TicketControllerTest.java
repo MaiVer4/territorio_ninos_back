@@ -3,6 +3,7 @@ package com.software.territoriodeninos.controller;
 import com.software.territoriodeninos.exception.GlobalExceptionHandler;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.service.QrCodeService;
+import com.software.territoriodeninos.service.TicketPrintService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,13 +26,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("TicketControllerTest - Pruebas unitarias Web con MockMvc para GET /api/tickets/{uuid}/qr (HU-20.03)")
+@DisplayName("TicketControllerTest - Pruebas unitarias Web con MockMvc para tickets (HU-20.03, HU-21.03)")
 class TicketControllerTest {
 
     private MockMvc mockMvc;
 
     @Mock
     private QrCodeService qrCodeService;
+
+    @Mock
+    private TicketPrintService ticketPrintService;
 
     @InjectMocks
     private TicketController ticketController;
@@ -82,6 +86,45 @@ class TicketControllerTest {
     @DisplayName("GET /api/tickets/{uuid}/qr - Retorna 400 Bad Request si el UUID tiene formato inválido")
     void obtenerQrTicket_uuidInvalido_retorna400() throws Exception {
         mockMvc.perform(get("/api/tickets/{uuid}/qr", "uuid-no-valido-1234"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, containsString(MediaType.APPLICATION_JSON_VALUE)))
+                .andExpect(jsonPath("$.codigo", is(400)))
+                .andExpect(jsonPath("$.mensaje", is("Tipo de parámetro inválido")));
+    }
+
+    @Test
+    @DisplayName("GET /api/tickets/{uuid}/print-payload - Retorna 200 OK con Content-Type text/plain y texto ESC/POS estructurado (HU-21.03)")
+    void obtenerPrintPayload_exito_retorna200() throws Exception {
+        String mockEscPosPayload = "\u001B@\u001Ba\u0001TERRITORIO DE NIÑOS\nBOLETO\n\u001DV\u0042\u0000";
+        when(ticketPrintService.generarPayloadImpresion(ticketUuid)).thenReturn(mockEscPosPayload);
+
+        mockMvc.perform(get("/api/tickets/{uuid}/print-payload", ticketUuid))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, containsString("text/plain")))
+                .andExpect(content().string(mockEscPosPayload));
+
+        verify(ticketPrintService).generarPayloadImpresion(ticketUuid);
+    }
+
+    @Test
+    @DisplayName("GET /api/tickets/{uuid}/print-payload - Retorna 404 Not Found si el ticket no existe")
+    void obtenerPrintPayload_ticketNoEncontrado_retorna404() throws Exception {
+        when(ticketPrintService.generarPayloadImpresion(ticketUuid))
+                .thenThrow(new RecursoNoEncontradoException("Ticket no encontrado con UUID: " + ticketUuid));
+
+        mockMvc.perform(get("/api/tickets/{uuid}/print-payload", ticketUuid))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, containsString(MediaType.APPLICATION_JSON_VALUE)))
+                .andExpect(jsonPath("$.codigo", is(404)))
+                .andExpect(jsonPath("$.mensaje", is("Recurso no encontrado")));
+
+        verify(ticketPrintService).generarPayloadImpresion(ticketUuid);
+    }
+
+    @Test
+    @DisplayName("GET /api/tickets/{uuid}/print-payload - Retorna 400 Bad Request si el UUID es inválido")
+    void obtenerPrintPayload_uuidInvalido_retorna400() throws Exception {
+        mockMvc.perform(get("/api/tickets/{uuid}/print-payload", "invalido-1234"))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, containsString(MediaType.APPLICATION_JSON_VALUE)))
                 .andExpect(jsonPath("$.codigo", is(400)))

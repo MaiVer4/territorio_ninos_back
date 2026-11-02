@@ -33,4 +33,23 @@ public interface TicketApi {
             @Parameter(description = "UUID único del ticket", required = true)
             @PathVariable UUID uuid
     );
+
+    @Operation(
+        summary = "Obtener payload estructurado ESC/POS para impresión térmica de un ticket",
+        description = "Genera el texto estructurado con comandos ESC/POS (encabezados centrados, datos institucionales de ConfiguracionParque, datos del ticket, pie legal de hasta 2000 caracteres y comando de corte automático GS V 66 0) listo para enviar al spooler térmico"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Payload ESC/POS generado exitosamente",
+            content = @Content(mediaType = "text/plain;charset=UTF-8")),
+        @ApiResponse(responseCode = "400", description = "Formato de UUID inválido",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)),
+        @ApiResponse(responseCode = "404", description = "Ticket no encontrado con el UUID proporcionado",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)),
+        @ApiResponse(responseCode = "403", description = "No autorizado",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
+    })
+    ResponseEntity<String> obtenerPrintPayload(
+            @Parameter(description = "UUID único del ticket", required = true)
+            @PathVariable UUID uuid
+    );
 }
