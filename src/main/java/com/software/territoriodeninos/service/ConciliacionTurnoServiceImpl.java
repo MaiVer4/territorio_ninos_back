@@ -27,7 +27,13 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -85,9 +91,8 @@ public class ConciliacionTurnoServiceImpl implements ConciliacionTurnoService {
         TurnoCaja turno = turnoCajaRepository.findById(turnoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el turno de caja con ID: " + turnoId));
 
-        ReporteTurnoDTO reporteTurno = construirReporteTurno(turno);
-
         List<Venta> ventas = ventaRepository.findByTurnoCajaIdOrderByFechaVentaDesc(turnoId);
+        ReporteTurnoDTO reporteTurno = construirReporteTurno(turno, null, ventas);
 
         List<DetalleTurnoAuditadoDTO.VentaAuditadaDTO> ventasAuditadas = ventas.stream().map(venta -> {
             List<DetalleTurnoAuditadoDTO.DetalleLineaAuditadaDTO> lineas = venta.getDetalles().stream().map(detalle -> {

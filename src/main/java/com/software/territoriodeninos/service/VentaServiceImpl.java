@@ -1,10 +1,30 @@
 package com.software.territoriodeninos.service;
 
-import com.software.territoriodeninos.dto.*;
-import com.software.territoriodeninos.entity.*;
+import com.software.territoriodeninos.dto.CotizacionRequestDTO;
+import com.software.territoriodeninos.dto.CotizacionResponseDTO;
+import com.software.territoriodeninos.dto.DetalleVentaRequestDTO;
+import com.software.territoriodeninos.dto.DetalleVentaResponseDTO;
+import com.software.territoriodeninos.dto.ItemCotizacionDTO;
+import com.software.territoriodeninos.dto.TicketResponseDTO;
+import com.software.territoriodeninos.dto.VentaProcesarRequestDTO;
+import com.software.territoriodeninos.dto.VentaResponseDTO;
+import com.software.territoriodeninos.entity.Atraccion;
+import com.software.territoriodeninos.entity.Cliente;
+import com.software.territoriodeninos.entity.DetalleVenta;
+import com.software.territoriodeninos.entity.Menor;
+import com.software.territoriodeninos.entity.Ticket;
+import com.software.territoriodeninos.entity.TurnoCaja;
+import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.entity.Venta;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
-import com.software.territoriodeninos.repository.*;
+import com.software.territoriodeninos.repository.AtraccionRepository;
+import com.software.territoriodeninos.repository.ClienteRepository;
+import com.software.territoriodeninos.repository.MenorRepository;
+import com.software.territoriodeninos.repository.TicketRepository;
+import com.software.territoriodeninos.repository.TurnoCajaRepository;
+import com.software.territoriodeninos.repository.UsuarioRepository;
+import com.software.territoriodeninos.repository.VentaRepository;
 import com.software.territoriodeninos.util.EstadoAtraccion;
 import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.EstadoTurnoCaja;
@@ -36,7 +56,6 @@ import java.util.stream.Collectors;
 public class VentaServiceImpl implements VentaService {
 
     private final VentaRepository ventaRepository;
-    private final DetalleVentaRepository detalleVentaRepository;
     private final TicketRepository ticketRepository;
     private final ClienteRepository clienteRepository;
     private final MenorRepository menorRepository;
@@ -99,6 +118,8 @@ public class VentaServiceImpl implements VentaService {
         List<ItemCotizacionDTO> itemsParaCotizar = new ArrayList<>();
         List<Atraccion> atraccionesPorItem = new ArrayList<>();
         List<Menor> menoresPorItem = new ArrayList<>();
+        Map<Long, Atraccion> atraccionesCache = new HashMap<>();
+        Map<Long, Menor> menoresCache = new HashMap<>();
 
         for (int i = 0; i < request.items().size(); i++) {
             DetalleVentaRequestDTO itemDto = request.items().get(i);
@@ -109,8 +130,10 @@ public class VentaServiceImpl implements VentaService {
                 throw new ReglaNegocioException("El ID de la atracción es obligatorio para cada ítem");
             }
 
-            Atraccion atraccion = atraccionRepository.findById(itemDto.atraccionId())
-                    .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + itemDto.atraccionId()));
+            Atraccion atraccion = atraccionesCache.computeIfAbsent(itemDto.atraccionId(), id ->
+                    atraccionRepository.findById(id)
+                            .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + id))
+            );
 
             if (!EstadoAtraccion.ACTIVO.equals(atraccion.getEstado())) {
                 throw new ReglaNegocioException("La atracción '" + atraccion.getNombre() +
@@ -119,8 +142,10 @@ public class VentaServiceImpl implements VentaService {
 
             Menor menor = null;
             if (itemDto.menorId() != null) {
-                menor = menorRepository.findById(itemDto.menorId())
-                        .orElseThrow(() -> new RecursoNoEncontradoException("Menor no encontrado con ID: " + itemDto.menorId()));
+                menor = menoresCache.computeIfAbsent(itemDto.menorId(), id ->
+                        menorRepository.findById(id)
+                                .orElseThrow(() -> new RecursoNoEncontradoException("Menor no encontrado con ID: " + id))
+                );
                 if (menor.getCliente() == null || !menor.getCliente().getId().equals(cliente.getId())) {
                     throw new ReglaNegocioException("El menor con ID " + itemDto.menorId() +
                             " no está vinculado al cliente acudiente con ID " + cliente.getId());

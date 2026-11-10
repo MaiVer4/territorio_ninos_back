@@ -60,8 +60,8 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
                 .orElseGet(this::crearConfiguracionPorDefecto);
     }
 
-    private ConfiguracionParque crearConfiguracionPorDefecto() {
-        ConfiguracionParque defaultConf = ConfiguracionParque.builder()
+    private ConfiguracionParque construirEntidadPorDefecto() {
+        return ConfiguracionParque.builder()
                 .nombreParque("Territorio de Niños")
                 .nombreComercial("Territorio de Niños")
                 .razonSocial("Territorio de Niños S.A.S.")
@@ -77,7 +77,16 @@ public class ConfiguracionParqueServiceImpl implements ConfiguracionParqueServic
                 .aplicaImpuesto(true)
                 .porcentajeImpuesto(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
                 .build();
-        return repository.save(defaultConf);
+    }
+
+    private ConfiguracionParque crearConfiguracionPorDefecto() {
+        ConfiguracionParque defaultConf = construirEntidadPorDefecto();
+        try {
+            return repository.save(defaultConf);
+        } catch (Exception ex) {
+            log.debug("Retornando configuración por defecto en memoria (contexto de solo lectura): {}", ex.getMessage());
+            return defaultConf;
+        }
     }
 
     private ConfiguracionParqueDTO mapToDTO(ConfiguracionParque c) {

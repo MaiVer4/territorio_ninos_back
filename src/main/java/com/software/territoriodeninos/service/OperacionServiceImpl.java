@@ -1,10 +1,47 @@
 package com.software.territoriodeninos.service;
 
-import com.software.territoriodeninos.dto.*;
-import com.software.territoriodeninos.entity.*;
-import com.software.territoriodeninos.exception.*;
-import com.software.territoriodeninos.repository.*;
-import com.software.territoriodeninos.util.*;
+import com.software.territoriodeninos.dto.AforoActualDTO;
+import com.software.territoriodeninos.dto.ColaAtraccionResponseDTO;
+import com.software.territoriodeninos.dto.EscaneoQrRequestDTO;
+import com.software.territoriodeninos.dto.EstacionTrabajoDTO;
+import com.software.territoriodeninos.dto.InicioSesionRequestDTO;
+import com.software.territoriodeninos.dto.PausaGeneralRequestDTO;
+import com.software.territoriodeninos.dto.PausaRequestDTO;
+import com.software.territoriodeninos.dto.RegistroIntentoEventoDTO;
+import com.software.territoriodeninos.dto.SesionJuegoResponseDTO;
+import com.software.territoriodeninos.dto.SincronizacionRelojResponseDTO;
+import com.software.territoriodeninos.dto.ValidacionTicketResponseDTO;
+import com.software.territoriodeninos.entity.AsignacionOperario;
+import com.software.territoriodeninos.entity.Atraccion;
+import com.software.territoriodeninos.entity.Cliente;
+import com.software.territoriodeninos.entity.DetalleVenta;
+import com.software.territoriodeninos.entity.LogEscaneoQr;
+import com.software.territoriodeninos.entity.LogIncidentePausa;
+import com.software.territoriodeninos.entity.Menor;
+import com.software.territoriodeninos.entity.SesionJuego;
+import com.software.territoriodeninos.entity.TarifaEvento;
+import com.software.territoriodeninos.entity.TarifaTiempo;
+import com.software.territoriodeninos.entity.Ticket;
+import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.entity.Venta;
+import com.software.territoriodeninos.exception.AforoCompletoException;
+import com.software.territoriodeninos.exception.EstacionNoAutorizadaException;
+import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
+import com.software.territoriodeninos.exception.ReglaNegocioException;
+import com.software.territoriodeninos.exception.TicketInvalidoOperacionException;
+import com.software.territoriodeninos.repository.AsignacionOperarioRepository;
+import com.software.territoriodeninos.repository.AtraccionRepository;
+import com.software.territoriodeninos.repository.LogEscaneoQrRepository;
+import com.software.territoriodeninos.repository.LogIncidentePausaRepository;
+import com.software.territoriodeninos.repository.SesionJuegoRepository;
+import com.software.territoriodeninos.repository.TarifaEventoRepository;
+import com.software.territoriodeninos.repository.TarifaTiempoRepository;
+import com.software.territoriodeninos.repository.TicketRepository;
+import com.software.territoriodeninos.repository.UsuarioRepository;
+import com.software.territoriodeninos.util.EstadoAsignacion;
+import com.software.territoriodeninos.util.EstadoSesionJuego;
+import com.software.territoriodeninos.util.EstadoTicket;
+import com.software.territoriodeninos.util.NombreRol;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -32,7 +69,6 @@ public class OperacionServiceImpl implements OperacionService {
     private final AtraccionRepository atraccionRepository;
     private final TicketRepository ticketRepository;
     private final SesionJuegoRepository sesionJuegoRepository;
-    private final DetalleVentaRepository detalleVentaRepository;
     private final LogEscaneoQrRepository logEscaneoQrRepository;
     private final LogIncidentePausaRepository logIncidentePausaRepository;
     private final TarifaTiempoRepository tarifaTiempoRepository;
@@ -87,6 +123,12 @@ public class OperacionServiceImpl implements OperacionService {
     }
 
     @Override
+    @Transactional(noRollbackFor = {
+            AforoCompletoException.class,
+            RecursoNoEncontradoException.class,
+            TicketInvalidoOperacionException.class,
+            EstacionNoAutorizadaException.class
+    })
     public ValidacionTicketResponseDTO escanearTicket(EscaneoQrRequestDTO request, Authentication auth, String clientIp) {
         if (request == null || request.uuid() == null || request.atraccionId() == null) {
             throw new ReglaNegocioException("Los parámetros de lectura QR (UUID del ticket y atraccionId) son obligatorios.");
@@ -314,44 +356,8 @@ public class OperacionServiceImpl implements OperacionService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        int segundosRestantes = 0;
-        if (sesion.getHoraFin() != null) {
-            long diff = Duration.between(now, sesion.getHoraFin()).toSeconds();
-            segundosRestantes = (int) Math.max(0, diff);
-        }
-
-        sesion.setEstadoSesion(EstadoSesionJuego.PAUSADA);
-        sesion.setTiempoRestantePausa(segundosRestantes);
-        sesion.setFechaPausa(now);
-        sesionJuegoRepository.save(sesion);
-
-        if (sesion.getTicket() != null) {
-            sesion.getTicket().setEstadoTicket(EstadoTicket.PAUSADO);
-            ticketRepository.save(sesion.getTicket());
-            auditoriaOperacionService.registrarTransicionTicket(
-                    sesion.getTicket().getUuidCodigo(),
-                    EstadoTicket.EN_USO.name(),
-                    EstadoTicket.PAUSADO.name(),
-                    "Pausa individual: " + request.motivo().trim(),
-                    operario.getId(),
-                    "Terminal Operario"
-            );
-        }
-
-        String tipoPausa = (request.motivo().toLowerCase().contains("tecnic") ||
-                            request.motivo().toLowerCase().contains("mantenimiento") ||
-                            request.motivo().toLowerCase().contains("falla")) ? "TECNICA" : "OPERATIVA";
-
-        LogIncidentePausa logPausa = LogIncidentePausa.builder()
-                .sesionJuego(sesion)
-                .atraccion(sesion.getAtraccion())
-                .operario(operario)
-                .motivo(request.motivo().trim())
-                .tipoPausa(tipoPausa)
-                .esPausaGeneral(false)
-                .fechaInicioPausa(now)
-                .build();
-        logIncidentePausaRepository.save(logPausa);
+        String motivoTrimmed = request.motivo().trim();
+        aplicarPausaASesion(sesion, operario, motivoTrimmed, "Pausa individual: " + motivoTrimmed, false, now);
 
         log.info("Sesión ID #{} pausada por operario {}. Motivo: {}", sesionId, operario.getCorreo(), request.motivo());
 
@@ -443,42 +449,11 @@ public class OperacionServiceImpl implements OperacionService {
         );
 
         LocalDateTime now = LocalDateTime.now();
-        String tipoPausaGeneral = (request.motivo().toLowerCase().contains("tecnic") ||
-                                   request.motivo().toLowerCase().contains("mantenimiento") ||
-                                   request.motivo().toLowerCase().contains("falla")) ? "TECNICA" : "OPERATIVA";
+        String motivoTrimmed = request.motivo().trim();
+        String motivoAuditoria = "Pausa general en estación " + atraccion.getNombre() + ": " + motivoTrimmed;
 
         for (SesionJuego s : sesionesEnCurso) {
-            long diff = s.getHoraFin() != null ? Duration.between(now, s.getHoraFin()).toSeconds() : 0;
-            int remaining = (int) Math.max(0, diff);
-
-            s.setEstadoSesion(EstadoSesionJuego.PAUSADA);
-            s.setTiempoRestantePausa(remaining);
-            s.setFechaPausa(now);
-            sesionJuegoRepository.save(s);
-
-            if (s.getTicket() != null) {
-                s.getTicket().setEstadoTicket(EstadoTicket.PAUSADO);
-                ticketRepository.save(s.getTicket());
-                auditoriaOperacionService.registrarTransicionTicket(
-                        s.getTicket().getUuidCodigo(),
-                        EstadoTicket.EN_USO.name(),
-                        EstadoTicket.PAUSADO.name(),
-                        "Pausa general en estación " + atraccion.getNombre() + ": " + request.motivo().trim(),
-                        operario.getId(),
-                        "Terminal Operario"
-                );
-            }
-
-            LogIncidentePausa logPausa = LogIncidentePausa.builder()
-                    .sesionJuego(s)
-                    .atraccion(atraccion)
-                    .operario(operario)
-                    .motivo(request.motivo().trim())
-                    .tipoPausa(tipoPausaGeneral)
-                    .esPausaGeneral(true)
-                    .fechaInicioPausa(now)
-                    .build();
-            logIncidentePausaRepository.save(logPausa);
+            aplicarPausaASesion(s, operario, motivoTrimmed, motivoAuditoria, true, now);
         }
 
         log.warn("Pausa general aplicada en atracción {} por operario {}. Sesiones pausadas: {}. Motivo: {}",
@@ -524,20 +499,7 @@ public class OperacionServiceImpl implements OperacionService {
 
         // Actualización atómica de ticket a CONSUMIDO (HU-32.03) y auditoría (HU-38.04)
         Ticket ticket = sesion.getTicket();
-        if (ticket != null) {
-            String estadoAnterior = ticket.getEstadoTicket() != null ? ticket.getEstadoTicket().name() : "EN_USO";
-            ticket.setEstadoTicket(EstadoTicket.CONSUMIDO);
-            ticket.setFechaConsumo(now);
-            ticketRepository.save(ticket);
-            auditoriaOperacionService.registrarTransicionTicket(
-                    ticket.getUuidCodigo(),
-                    estadoAnterior,
-                    EstadoTicket.CONSUMIDO.name(),
-                    "Salida formal del menor de la atracción",
-                    operario.getId(),
-                    "Terminal Operario"
-            );
-        }
+        consumirTicketDeSesion(sesion, operario, now, "Salida formal del menor de la atracción");
 
         sesionJuegoRepository.save(sesion);
 
@@ -580,22 +542,7 @@ public class OperacionServiceImpl implements OperacionService {
         if (nuevosRestantes == 0) {
             sesion.setEstadoSesion(EstadoSesionJuego.FINALIZADA);
             sesion.setFechaSalidaReal(now);
-
-            Ticket ticket = sesion.getTicket();
-            if (ticket != null) {
-                String estadoAnterior = ticket.getEstadoTicket() != null ? ticket.getEstadoTicket().name() : "EN_USO";
-                ticket.setEstadoTicket(EstadoTicket.CONSUMIDO);
-                ticket.setFechaConsumo(now);
-                ticketRepository.save(ticket);
-                auditoriaOperacionService.registrarTransicionTicket(
-                        ticket.getUuidCodigo(),
-                        estadoAnterior,
-                        EstadoTicket.CONSUMIDO.name(),
-                        "Sesión finalizada por agotamiento de intentos",
-                        operario.getId(),
-                        "Terminal Operario"
-                );
-            }
+            consumirTicketDeSesion(sesion, operario, now, "Sesión finalizada por agotamiento de intentos");
             log.info("Sesión ID #{} finalizada automáticamente por agotamiento de intentos (Toro Mecánico)", sesionId);
         }
 
@@ -655,6 +602,75 @@ public class OperacionServiceImpl implements OperacionService {
     }
 
     // --- Métodos Auxiliares y Mapeos ---
+
+    private void aplicarPausaASesion(
+            SesionJuego sesion,
+            Usuario operario,
+            String motivoTrimmed,
+            String motivoAuditoria,
+            boolean esPausaGeneral,
+            LocalDateTime now
+    ) {
+        long diff = sesion.getHoraFin() != null ? Duration.between(now, sesion.getHoraFin()).toSeconds() : 0;
+        int segundosRestantes = (int) Math.max(0, diff);
+
+        sesion.setEstadoSesion(EstadoSesionJuego.PAUSADA);
+        sesion.setTiempoRestantePausa(segundosRestantes);
+        sesion.setFechaPausa(now);
+        sesionJuegoRepository.save(sesion);
+
+        if (sesion.getTicket() != null) {
+            sesion.getTicket().setEstadoTicket(EstadoTicket.PAUSADO);
+            ticketRepository.save(sesion.getTicket());
+            auditoriaOperacionService.registrarTransicionTicket(
+                    sesion.getTicket().getUuidCodigo(),
+                    EstadoTicket.EN_USO.name(),
+                    EstadoTicket.PAUSADO.name(),
+                    motivoAuditoria,
+                    operario.getId(),
+                    "Terminal Operario"
+            );
+        }
+
+        String motivoLower = motivoTrimmed.toLowerCase();
+        String tipoPausa = (motivoLower.contains("tecnic") ||
+                            motivoLower.contains("mantenimiento") ||
+                            motivoLower.contains("falla")) ? "TECNICA" : "OPERATIVA";
+
+        LogIncidentePausa logPausa = LogIncidentePausa.builder()
+                .sesionJuego(sesion)
+                .atraccion(sesion.getAtraccion())
+                .operario(operario)
+                .motivo(motivoTrimmed)
+                .tipoPausa(tipoPausa)
+                .esPausaGeneral(esPausaGeneral)
+                .fechaInicioPausa(now)
+                .build();
+        logIncidentePausaRepository.save(logPausa);
+    }
+
+    private void consumirTicketDeSesion(
+            SesionJuego sesion,
+            Usuario operario,
+            LocalDateTime now,
+            String motivoAuditoria
+    ) {
+        Ticket ticket = sesion.getTicket();
+        if (ticket != null) {
+            String estadoAnterior = ticket.getEstadoTicket() != null ? ticket.getEstadoTicket().name() : "EN_USO";
+            ticket.setEstadoTicket(EstadoTicket.CONSUMIDO);
+            ticket.setFechaConsumo(now);
+            ticketRepository.save(ticket);
+            auditoriaOperacionService.registrarTransicionTicket(
+                    ticket.getUuidCodigo(),
+                    estadoAnterior,
+                    EstadoTicket.CONSUMIDO.name(),
+                    motivoAuditoria,
+                    operario.getId(),
+                    "Terminal Operario"
+            );
+        }
+    }
 
     private ColaAtraccionResponseDTO construirColaAtraccion(Atraccion atraccion) {
         int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
