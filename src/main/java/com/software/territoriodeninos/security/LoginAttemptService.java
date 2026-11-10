@@ -20,9 +20,9 @@ public class LoginAttemptService {
     public static final int MAX_CACHE_ENTRIES = 10_000;
 
     private static class AttemptRecord {
-        int attempts;
-        Instant lockedUntil;
-        Instant lastAttempt;
+        volatile int attempts;
+        volatile Instant lockedUntil;
+        volatile Instant lastAttempt;
 
         AttemptRecord(int attempts) {
             this.attempts = attempts;
@@ -39,6 +39,9 @@ public class LoginAttemptService {
     public void loginFailed(String key) {
         if (attemptsCache.size() >= MAX_CACHE_ENTRIES) {
             limpiarRegistrosExpirados();
+            if (attemptsCache.size() >= MAX_CACHE_ENTRIES) {
+                evictOldestUnlockedEntry();
+            }
         }
 
         String normalized = key.toLowerCase().trim();
@@ -106,5 +109,17 @@ public class LoginAttemptService {
             }
             return record.lastAttempt != null && record.lastAttempt.isBefore(limiteInactividad);
         });
+    }
+
+    private void evictOldestUnlockedEntry() {
+        attemptsCache.entrySet().stream()
+                .filter(e -> e.getValue().lockedUntil == null)
+                .min((a, b) -> {
+                    Instant t1 = a.getValue().lastAttempt != null ? a.getValue().lastAttempt : Instant.MIN;
+                    Instant t2 = b.getValue().lastAttempt != null ? b.getValue().lastAttempt : Instant.MIN;
+                    return t1.compareTo(t2);
+                })
+                .map(Map.Entry::getKey)
+                .ifPresent(attemptsCache::remove);
     }
 }

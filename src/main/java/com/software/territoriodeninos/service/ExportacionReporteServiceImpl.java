@@ -31,7 +31,7 @@ import java.util.Locale;
 public class ExportacionReporteServiceImpl implements ExportacionReporteService {
 
     private static final DateTimeFormatter FECHA_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final DecimalFormat MONEDA_FMT = new DecimalFormat("$ #,##0.00", new DecimalFormatSymbols(new Locale("es", "CO")));
+    private static final Locale LOCALE_CO = Locale.of("es", "CO");
 
     private final ConciliacionTurnoService conciliacionTurnoService;
     private final AuditoriaOperacionService auditoriaOperacionService;
@@ -43,7 +43,7 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4.rotate(), 25, 25, 25, 25);
-            PdfWriter writer = PdfWriter.getInstance(document, baos);
+            PdfWriter.getInstance(document, baos);
 
             document.open();
 
@@ -137,10 +137,10 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
             table.addCell(crearCelda(t.nombreCajero(), fontBody, Element.ALIGN_LEFT));
             table.addCell(crearCelda(t.fechaApertura() != null ? t.fechaApertura().format(FECHA_FMT) : "-", fontBody, Element.ALIGN_CENTER));
             table.addCell(crearCelda(t.fechaCierre() != null ? t.fechaCierre().format(FECHA_FMT) : "-", fontBody, Element.ALIGN_CENTER));
-            table.addCell(crearCelda(MONEDA_FMT.format(t.baseInicial()), fontBody, Element.ALIGN_RIGHT));
-            table.addCell(crearCelda(MONEDA_FMT.format(t.ventasEfectivoSistema()), fontBody, Element.ALIGN_RIGHT));
-            table.addCell(crearCelda(MONEDA_FMT.format(t.totalEsperadoEfectivo()), fontBody, Element.ALIGN_RIGHT));
-            table.addCell(crearCelda(MONEDA_FMT.format(t.montoFisicoDeclarado()), fontBody, Element.ALIGN_RIGHT));
+            table.addCell(crearCelda(formatearMoneda(t.baseInicial()), fontBody, Element.ALIGN_RIGHT));
+            table.addCell(crearCelda(formatearMoneda(t.ventasEfectivoSistema()), fontBody, Element.ALIGN_RIGHT));
+            table.addCell(crearCelda(formatearMoneda(t.totalEsperadoEfectivo()), fontBody, Element.ALIGN_RIGHT));
+            table.addCell(crearCelda(formatearMoneda(t.montoFisicoDeclarado()), fontBody, Element.ALIGN_RIGHT));
             table.addCell(crearCelda(t.estadoConciliacion() != null ? t.estadoConciliacion().name() : "-", fontBody, Element.ALIGN_CENTER));
 
             if (t.totalEsperadoEfectivo() != null) totalEsperadoSum = totalEsperadoSum.add(t.totalEsperadoEfectivo());
@@ -155,12 +155,12 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         celdaTotales.setBackgroundColor(new Color(235, 240, 250));
         table.addCell(celdaTotales);
 
-        PdfPCell cEsp = new PdfPCell(new Phrase(MONEDA_FMT.format(totalEsperadoSum), fontBold));
+        PdfPCell cEsp = new PdfPCell(new Phrase(formatearMoneda(totalEsperadoSum), fontBold));
         cEsp.setHorizontalAlignment(Element.ALIGN_RIGHT);
         cEsp.setBackgroundColor(new Color(235, 240, 250));
         table.addCell(cEsp);
 
-        PdfPCell cRep = new PdfPCell(new Phrase(MONEDA_FMT.format(totalReportadoSum), fontBold));
+        PdfPCell cRep = new PdfPCell(new Phrase(formatearMoneda(totalReportadoSum), fontBold));
         cRep.setHorizontalAlignment(Element.ALIGN_RIGHT);
         cRep.setBackgroundColor(new Color(235, 240, 250));
         table.addCell(cRep);
@@ -192,7 +192,7 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
             table.addCell(crearCelda(r.tipoAtraccion() != null ? r.tipoAtraccion().name() : "-", fontBody, Element.ALIGN_CENTER));
             table.addCell(crearCelda(String.valueOf(r.capacidadMaxima()), fontBody, Element.ALIGN_CENTER));
             table.addCell(crearCelda(String.valueOf(r.cantidadTotalUsos()), fontBody, Element.ALIGN_CENTER));
-            table.addCell(crearCelda(MONEDA_FMT.format(r.ingresosBrutos()), fontBody, Element.ALIGN_RIGHT));
+            table.addCell(crearCelda(formatearMoneda(r.ingresosBrutos()), fontBody, Element.ALIGN_RIGHT));
             table.addCell(crearCelda(r.porcentajeOcupacion() + " %", fontBody, Element.ALIGN_CENTER));
             table.addCell(crearCelda(r.horaMayorAfluencia(), fontBody, Element.ALIGN_CENTER));
 
@@ -212,7 +212,7 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         cUsos.setBackgroundColor(new Color(235, 240, 250));
         table.addCell(cUsos);
 
-        PdfPCell cIng = new PdfPCell(new Phrase(MONEDA_FMT.format(totalIngresosSum), fontBold));
+        PdfPCell cIng = new PdfPCell(new Phrase(formatearMoneda(totalIngresosSum), fontBold));
         cIng.setHorizontalAlignment(Element.ALIGN_RIGHT);
         cIng.setBackgroundColor(new Color(235, 240, 250));
         table.addCell(cIng);
@@ -282,6 +282,25 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         return cell;
     }
 
+    private String formatearMoneda(BigDecimal valor) {
+        DecimalFormat fmt = new DecimalFormat("$ #,##0.00", new DecimalFormatSymbols(LOCALE_CO));
+        return fmt.format(valor != null ? valor : BigDecimal.ZERO);
+    }
+
+    private String sanitizarCeldaCsv(String valor) {
+        if (valor == null) {
+            return "";
+        }
+        String limpio = valor.replace("\r", " ").replace("\n", " ").replace("\"", "\"\"");
+        if (!limpio.isEmpty()) {
+            char c = limpio.charAt(0);
+            if (c == '=' || c == '+' || c == '-' || c == '@') {
+                limpio = "'" + limpio;
+            }
+        }
+        return limpio;
+    }
+
     // ==========================================
     // METODOS DE EXPORTACION CSV
     // ==========================================
@@ -294,7 +313,7 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         for (ReporteTurnoDTO t : turnos) {
             pw.printf(Locale.US, "%d;\"%s\";\"%s\";\"%s\";%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;\"%s\"%n",
                     t.turnoId(),
-                    t.nombreCajero(),
+                    sanitizarCeldaCsv(t.nombreCajero()),
                     t.fechaApertura() != null ? t.fechaApertura().format(FECHA_FMT) : "",
                     t.fechaCierre() != null ? t.fechaCierre().format(FECHA_FMT) : "",
                     t.baseInicial(),
@@ -316,14 +335,14 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         for (RotacionAtraccionDTO r : rotacion) {
             pw.printf(Locale.US, "%d;\"%s\";\"%s\";%d;%d;%.2f;%.2f;%.2f;\"%s\"%n",
                     r.atraccionId(),
-                    r.nombreAtraccion(),
+                    sanitizarCeldaCsv(r.nombreAtraccion()),
                     r.tipoAtraccion() != null ? r.tipoAtraccion().name() : "",
                     r.capacidadMaxima(),
                     r.cantidadTotalUsos(),
                     r.ingresosBrutos(),
                     r.tiempoPromedioMinutos(),
                     r.porcentajeOcupacion(),
-                    r.horaMayorAfluencia()
+                    sanitizarCeldaCsv(r.horaMayorAfluencia())
             );
         }
     }
@@ -336,10 +355,10 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         for (IncidenteDetalleDTO inc : resumen.incidentes()) {
             pw.printf(Locale.US, "%d;\"%s\";\"%s\";\"%s\";\"%s\";\"%s\";\"%s\";%d;%.2f%n",
                     inc.incidenteId(),
-                    inc.atraccionNombre(),
-                    inc.tipoPausa(),
-                    inc.motivo(),
-                    inc.operarioNombre(),
+                    sanitizarCeldaCsv(inc.atraccionNombre()),
+                    sanitizarCeldaCsv(inc.tipoPausa()),
+                    sanitizarCeldaCsv(inc.motivo()),
+                    sanitizarCeldaCsv(inc.operarioNombre()),
                     inc.fechaInicioPausa() != null ? inc.fechaInicioPausa().format(FECHA_FMT) : "",
                     inc.fechaFinPausa() != null ? inc.fechaFinPausa().format(FECHA_FMT) : "",
                     inc.duracionSegundos(),

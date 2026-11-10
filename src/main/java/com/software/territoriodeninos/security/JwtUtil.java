@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.security;
 
+import com.software.territoriodeninos.entity.Usuario;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -22,16 +23,30 @@ public class JwtUtil {
     
     @Value("${jwt.expiration.hours}")
     private long expirationHours;
+
+    private volatile SecretKey cachedSigningKey;
+    private volatile String cachedSecret;
     
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+        SecretKey key = this.cachedSigningKey;
+        if (key == null || !secretKey.equals(this.cachedSecret)) {
+            synchronized (this) {
+                key = this.cachedSigningKey;
+                if (key == null || !secretKey.equals(this.cachedSecret)) {
+                    key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+                    this.cachedSigningKey = key;
+                    this.cachedSecret = secretKey;
+                }
+            }
+        }
+        return key;
     }
     
     private long getExpirationTime() {
         return expirationHours * 60 * 60 * 1000L;
     }
     
-    public String generarToken(com.software.territoriodeninos.entity.Usuario usuario) {
+    public String generarToken(Usuario usuario) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("rol", usuario.getRol().getNombre().name());
         claims.put("userId", usuario.getId());
