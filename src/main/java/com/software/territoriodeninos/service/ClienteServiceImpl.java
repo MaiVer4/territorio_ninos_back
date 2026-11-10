@@ -8,7 +8,6 @@ import com.software.territoriodeninos.entity.Menor;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.repository.ClienteRepository;
-import com.software.territoriodeninos.repository.MenorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +23,6 @@ import java.util.Optional;
 public class ClienteServiceImpl implements ClienteService {
 
     private final ClienteRepository clienteRepository;
-    private final MenorRepository menorRepository;
 
     @Override
     @Transactional(readOnly = true)

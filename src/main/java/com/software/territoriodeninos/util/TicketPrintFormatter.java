@@ -223,13 +223,7 @@ public class TicketPrintFormatter {
                     if (palabra.length() <= maxCols) {
                         lineaActual.append(palabra);
                     } else {
-                        // Si la palabra es más larga que toda la línea, dividirla
-                        int idx = 0;
-                        while (idx < palabra.length()) {
-                            int end = Math.min(idx + maxCols, palabra.length());
-                            resultado.add(palabra.substring(idx, end));
-                            idx = end;
-                        }
+                        dividirPalabraLarga(palabra, maxCols, resultado);
                     }
                 } else if (lineaActual.length() + 1 + palabra.length() <= maxCols) {
                     lineaActual.append(" ").append(palabra);
@@ -239,12 +233,7 @@ public class TicketPrintFormatter {
                     if (palabra.length() <= maxCols) {
                         lineaActual.append(palabra);
                     } else {
-                        int idx = 0;
-                        while (idx < palabra.length()) {
-                            int end = Math.min(idx + maxCols, palabra.length());
-                            resultado.add(palabra.substring(idx, end));
-                            idx = end;
-                        }
+                        dividirPalabraLarga(palabra, maxCols, resultado);
                     }
                 }
             }
@@ -255,5 +244,14 @@ public class TicketPrintFormatter {
         }
 
         return resultado;
+    }
+
+    private void dividirPalabraLarga(String palabra, int maxCols, List<String> resultado) {
+        int idx = 0;
+        while (idx < palabra.length()) {
+            int end = Math.min(idx + maxCols, palabra.length());
+            resultado.add(palabra.substring(idx, end));
+            idx = end;
+        }
     }
 }

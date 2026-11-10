@@ -1,10 +1,16 @@
 package com.software.territoriodeninos.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Schema(description = "DTO para registrar un nuevo usuario")
 @Getter
@@ -25,8 +31,8 @@ public class UsuarioRegistroDTO {
     private String correo;
     
     @NotBlank(message = "La contraseña no puede estar vacía")
-    @com.fasterxml.jackson.annotation.JsonAlias({"contrasena", "contraseña", "clave"})
-    @jakarta.validation.constraints.Pattern(
+    @JsonAlias({"contrasena", "contraseña", "clave"})
+    @Pattern(
         regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$", 
         message = "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número"
     )
@@ -34,7 +40,7 @@ public class UsuarioRegistroDTO {
     private String password;
     
     @NotBlank(message = "El rol no puede estar vacío")
-    @com.fasterxml.jackson.annotation.JsonAlias({"rol", "role"})
+    @JsonAlias({"rol", "role"})
     @Schema(description = "Nombre del rol (ADMINISTRADOR, TAQUILLERO, OPERARIO)", example = "TAQUILLERO")
     private String nombreRol;
 }

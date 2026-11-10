@@ -10,9 +10,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/turnos")
@@ -64,11 +72,11 @@ public class TurnoCajaController implements TurnoCajaApi {
 
     @PostMapping("/{id}/arqueo")
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
-    public ResponseEntity<java.util.Map<String, Object>> registrarArqueo(
+    public ResponseEntity<Map<String, Object>> registrarArqueo(
             @PathVariable Long id,
-            @RequestBody java.util.Map<String, Object> arqueoData
+            @RequestBody Map<String, Object> arqueoData
     ) {
-        return ResponseEntity.ok(java.util.Map.of("mensaje", "Arqueo registrado exitosamente", "idTurno", id));
+        return ResponseEntity.ok(Map.of("mensaje", "Arqueo registrado exitosamente", "idTurno", id));
     }
 
     @Override

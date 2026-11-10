@@ -1,9 +1,14 @@
 package com.software.territoriodeninos.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Schema(description = "DTO para actualizar información de un usuario")
 @Getter
@@ -24,7 +29,7 @@ public class UsuarioUpdateDTO {
     @Schema(description = "Nuevo estado del usuario (ACTIVO, INACTIVO, SUSPENDIDO)", example = "ACTIVO")
     private String estado;
 
-    @com.fasterxml.jackson.annotation.JsonAlias({"nombreRol", "role"})
+    @JsonAlias({"nombreRol", "role"})
     @Schema(description = "Nuevo rol del usuario (ADMINISTRADOR, TAQUILLERO, OPERARIO)", example = "TAQUILLERO")
     private String rol;
 }
