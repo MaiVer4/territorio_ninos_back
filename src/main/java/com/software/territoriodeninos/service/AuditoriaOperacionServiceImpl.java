@@ -165,12 +165,13 @@ public class AuditoriaOperacionServiceImpl implements AuditoriaOperacionService 
     ) {
         LocalDateTime fechaFin = fin != null ? fin : LocalDateTime.now();
         LocalDateTime fechaInicio = inicio != null ? inicio : fechaFin.minusDays(30);
+        String tipoPausaNormalizado = (tipoPausa != null && !tipoPausa.isBlank()) ? tipoPausa.trim().toUpperCase() : null;
 
         List<LogIncidentePausa> logs = logIncidentePausaRepository.findIncidentesConFiltros(
                 fechaInicio,
                 fechaFin,
                 atraccionId,
-                tipoPausa
+                tipoPausaNormalizado
         );
 
         long inactividadOperativaSeg = 0L;

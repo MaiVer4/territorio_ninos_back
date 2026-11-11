@@ -45,6 +45,9 @@ class ConciliacionTurnoServiceTest {
     @Mock
     private SesionJuegoRepository sesionJuegoRepository;
 
+    @Mock
+    private TicketRepository ticketRepository;
+
     @InjectMocks
     private ConciliacionTurnoServiceImpl conciliacionTurnoService;
 

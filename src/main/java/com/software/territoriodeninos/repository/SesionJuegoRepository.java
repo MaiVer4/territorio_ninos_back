@@ -40,7 +40,15 @@ public interface SesionJuegoRepository extends JpaRepository<SesionJuego, Long> 
     @EntityGraph(attributePaths = {"ticket", "atraccion", "menor", "operario"})
     Optional<SesionJuego> findByTicketUuidCodigo(UUID uuidCodigo);
 
-    @EntityGraph(attributePaths = {"ticket", "atraccion", "menor", "operario"})
+    @EntityGraph(attributePaths = {
+        "ticket",
+        "ticket.detalleVenta",
+        "ticket.detalleVenta.venta",
+        "ticket.detalleVenta.venta.cliente",
+        "atraccion",
+        "menor",
+        "operario"
+    })
     List<SesionJuego> findByEstadoSesion(EstadoSesionJuego estadoSesion);
 
     /**

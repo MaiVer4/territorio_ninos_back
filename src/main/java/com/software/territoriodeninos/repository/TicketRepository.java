@@ -1,8 +1,10 @@
 package com.software.territoriodeninos.repository;
 
 import com.software.territoriodeninos.entity.Ticket;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,6 +27,18 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
         "menor"
     })
     Optional<Ticket> findByUuidCodigo(UUID uuidCodigo);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+        "detalleVenta",
+        "detalleVenta.atraccion",
+        "detalleVenta.venta",
+        "detalleVenta.venta.cliente",
+        "detalleVenta.venta.turnoCaja",
+        "menor"
+    })
+    @Query("SELECT t FROM Ticket t WHERE t.uuidCodigo = :uuidCodigo")
+    Optional<Ticket> findByUuidCodigoForUpdate(@Param("uuidCodigo") UUID uuidCodigo);
 
     boolean existsByUuidCodigo(UUID uuidCodigo);
 

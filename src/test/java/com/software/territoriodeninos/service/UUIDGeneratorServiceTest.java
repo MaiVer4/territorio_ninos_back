@@ -81,7 +81,7 @@ class UUIDGeneratorServiceTest {
     @Test
     @DisplayName("generarUuidsUnicos - Genera la cantidad exacta solicitada garantizando unicidad en memoria y BD")
     void generarUuidsUnicos_cantidadPositiva_retornaListaSinDuplicados() {
-        when(ticketRepository.existsByUuidCodigo(any(UUID.class))).thenReturn(false);
+        when(ticketRepository.findExistingUuids(any())).thenReturn(Set.of());
 
         int cantidad = 5;
         List<UUID> uuids = uuidGeneratorService.generarUuidsUnicos(cantidad);
@@ -90,6 +90,26 @@ class UUIDGeneratorServiceTest {
         assertEquals(cantidad, uuids.size());
         Set<UUID> conjuntoUnicos = new HashSet<>(uuids);
         assertEquals(cantidad, conjuntoUnicos.size(), "No deben existir UUIDs duplicados en el lote generado");
+    }
+
+    @Test
+    @DisplayName("generarUuidsUnicos - Detecta colisión en lote contra findExistingUuids y reintenta")
+    void generarUuidsUnicos_conColisionLote_descartaColisionYRetornaLoteCompleto() {
+        UUID colisionado = UUID.randomUUID();
+        when(ticketRepository.findExistingUuids(any())).thenAnswer(invocation -> {
+            Set<UUID> solicitados = invocation.getArgument(0);
+            if (solicitados.contains(colisionado)) {
+                return Set.of(colisionado);
+            }
+            return Set.of();
+        });
+
+        int cantidad = 3;
+        List<UUID> uuids = uuidGeneratorService.generarUuidsUnicos(cantidad);
+
+        assertNotNull(uuids);
+        assertEquals(cantidad, uuids.size());
+        assertFalse(uuids.contains(colisionado), "El UUID colisionado no debe formar parte del resultado");
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.software.territoriodeninos.dto.DetalleTurnoAuditadoDTO;
 import com.software.territoriodeninos.dto.ReporteTurnoDTO;
 import com.software.territoriodeninos.dto.RotacionAtraccionDTO;
 import com.software.territoriodeninos.entity.Atraccion;
+import com.software.territoriodeninos.entity.Ticket;
 import com.software.territoriodeninos.entity.TurnoCaja;
 import com.software.territoriodeninos.entity.Usuario;
 import com.software.territoriodeninos.entity.Venta;
@@ -11,6 +12,7 @@ import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.repository.AtraccionRepository;
 import com.software.territoriodeninos.repository.DetalleVentaRepository;
 import com.software.territoriodeninos.repository.SesionJuegoRepository;
+import com.software.territoriodeninos.repository.TicketRepository;
 import com.software.territoriodeninos.repository.TurnoCajaRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.repository.VentaRepository;
@@ -46,6 +48,7 @@ public class ConciliacionTurnoServiceImpl implements ConciliacionTurnoService {
     private final AtraccionRepository atraccionRepository;
     private final DetalleVentaRepository detalleVentaRepository;
     private final SesionJuegoRepository sesionJuegoRepository;
+    private final TicketRepository ticketRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -94,9 +97,28 @@ public class ConciliacionTurnoServiceImpl implements ConciliacionTurnoService {
         List<Venta> ventas = ventaRepository.findByTurnoCajaIdOrderByFechaVentaDesc(turnoId);
         ReporteTurnoDTO reporteTurno = construirReporteTurno(turno, null, ventas);
 
+        List<Long> ventaIds = ventas.stream().map(Venta::getId).filter(Objects::nonNull).toList();
+        Map<Long, List<Ticket>> ticketsPorDetalleId = Collections.emptyMap();
+        if (!ventaIds.isEmpty() && ticketRepository != null) {
+            List<Ticket> ticketsLote = ticketRepository.findByDetalleVentaVentaIdInOrderByFechaEmisionAsc(ventaIds);
+            if (ticketsLote != null && !ticketsLote.isEmpty()) {
+                ticketsPorDetalleId = ticketsLote.stream()
+                        .filter(t -> t.getDetalleVenta() != null && t.getDetalleVenta().getId() != null)
+                        .collect(Collectors.groupingBy(t -> t.getDetalleVenta().getId()));
+            }
+        }
+        final Map<Long, List<Ticket>> mapaTickets = ticketsPorDetalleId;
+
         List<DetalleTurnoAuditadoDTO.VentaAuditadaDTO> ventasAuditadas = ventas.stream().map(venta -> {
             List<DetalleTurnoAuditadoDTO.DetalleLineaAuditadaDTO> lineas = venta.getDetalles().stream().map(detalle -> {
-                List<DetalleTurnoAuditadoDTO.TicketAuditadoDTO> boletas = detalle.getTickets().stream().map(ticket ->
+                List<Ticket> ticketsDeLinea = mapaTickets.get(detalle.getId());
+                if (ticketsDeLinea == null && detalle.getTickets() != null) {
+                    ticketsDeLinea = detalle.getTickets();
+                } else if (ticketsDeLinea == null) {
+                    ticketsDeLinea = Collections.emptyList();
+                }
+
+                List<DetalleTurnoAuditadoDTO.TicketAuditadoDTO> boletas = ticketsDeLinea.stream().map(ticket ->
                         DetalleTurnoAuditadoDTO.TicketAuditadoDTO.builder()
                                 .uuidCodigo(ticket.getUuidCodigo())
                                 .estadoTicket(ticket.getEstadoTicket() != null ? ticket.getEstadoTicket().name() : null)

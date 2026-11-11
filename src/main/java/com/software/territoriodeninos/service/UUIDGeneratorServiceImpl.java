@@ -31,10 +31,46 @@ public class UUIDGeneratorServiceImpl implements UUIDGeneratorService {
         List<UUID> resultado = new ArrayList<>(cantidad);
         Set<UUID> generadosEnLote = new HashSet<>(cantidad);
 
-        for (int i = 0; i < cantidad; i++) {
-            UUID nuevoUuid = generarUuidUnicoExcluyendo(generadosEnLote);
-            generadosEnLote.add(nuevoUuid);
-            resultado.add(nuevoUuid);
+        if (cantidad == 1) {
+            UUID unico = generarUuidUnicoExcluyendo(generadosEnLote);
+            resultado.add(unico);
+            return Collections.unmodifiableList(resultado);
+        }
+
+        int intentos = 0;
+        while (generadosEnLote.size() < cantidad && intentos < MAX_REINTENTOS_COLISION * cantidad) {
+            intentos++;
+            int faltantes = cantidad - generadosEnLote.size();
+            Set<UUID> candidatosLote = new HashSet<>(faltantes);
+            for (int i = 0; i < faltantes; i++) {
+                UUID cand = generarUuidCandidato();
+                if (!generadosEnLote.contains(cand)) {
+                    candidatosLote.add(cand);
+                }
+            }
+
+            Set<UUID> colisionesBd = ticketRepository.findExistingUuids(candidatosLote);
+            if (colisionesBd != null && !colisionesBd.isEmpty()) {
+                candidatosLote.removeAll(colisionesBd);
+                log.warn("Detectadas {} colisiones de UUID en BD durante generación en lote. Reintentando...", colisionesBd.size());
+            }
+
+            for (UUID valido : candidatosLote) {
+                if (generadosEnLote.add(valido)) {
+                    resultado.add(valido);
+                    if (resultado.size() == cantidad) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (resultado.size() < cantidad) {
+            while (resultado.size() < cantidad) {
+                UUID nuevo = generarUuidUnicoExcluyendo(generadosEnLote);
+                generadosEnLote.add(nuevo);
+                resultado.add(nuevo);
+            }
         }
 
         return Collections.unmodifiableList(resultado);

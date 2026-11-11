@@ -25,7 +25,7 @@ public interface LogIncidentePausaRepository extends JpaRepository<LogIncidenteP
         WHERE l.fechaInicioPausa >= :inicio
           AND l.fechaInicioPausa <= :fin
           AND (:atraccionId IS NULL OR l.atraccion.id = :atraccionId OR l.sesionJuego.atraccion.id = :atraccionId)
-          AND (:tipoPausa IS NULL OR UPPER(l.tipoPausa) = UPPER(:tipoPausa))
+          AND (:tipoPausa IS NULL OR UPPER(l.tipoPausa) = :tipoPausa)
         ORDER BY l.fechaInicioPausa DESC
     """)
     List<LogIncidentePausa> findIncidentesConFiltros(
