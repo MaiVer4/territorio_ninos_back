@@ -132,10 +132,9 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
     @Transactional(readOnly = true)
     public List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha, Authentication auth) {
         Usuario usuario = null;
-        try {
-            usuario = obtenerUsuarioYValidarRol(auth);
-        } catch (Exception e) {
-            // Fallback si no hay contexto de autenticación en tests legados
+        Authentication effectiveAuth = auth != null ? auth : SecurityContextHolder.getContext().getAuthentication();
+        if (effectiveAuth != null && effectiveAuth.isAuthenticated() && !"anonymousUser".equals(effectiveAuth.getPrincipal())) {
+            usuario = obtenerUsuarioYValidarRol(effectiveAuth);
         }
 
         boolean soloPropios = usuario != null &&

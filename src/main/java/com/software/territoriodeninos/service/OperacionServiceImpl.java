@@ -38,6 +38,7 @@ import com.software.territoriodeninos.repository.TarifaEventoRepository;
 import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.repository.TicketRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
+import com.software.territoriodeninos.security.AuthenticatedUserProvider;
 import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoSesionJuego;
 import com.software.territoriodeninos.util.EstadoTicket;
@@ -61,7 +62,6 @@ import java.util.UUID;
 @Slf4j
 @Service
 @Transactional
-@RequiredArgsConstructor
 public class OperacionServiceImpl implements OperacionService {
 
     private final AsignacionOperarioRepository asignacionRepository;
@@ -75,6 +75,37 @@ public class OperacionServiceImpl implements OperacionService {
     private final TarifaEventoRepository tarifaEventoRepository;
     private final OperacionWebSocketPublisher webSocketPublisher;
     private final AuditoriaOperacionService auditoriaOperacionService;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
+
+    public OperacionServiceImpl(
+            AsignacionOperarioRepository asignacionRepository,
+            UsuarioRepository usuarioRepository,
+            AtraccionRepository atraccionRepository,
+            TicketRepository ticketRepository,
+            SesionJuegoRepository sesionJuegoRepository,
+            LogEscaneoQrRepository logEscaneoQrRepository,
+            LogIncidentePausaRepository logIncidentePausaRepository,
+            TarifaTiempoRepository tarifaTiempoRepository,
+            TarifaEventoRepository tarifaEventoRepository,
+            OperacionWebSocketPublisher webSocketPublisher,
+            AuditoriaOperacionService auditoriaOperacionService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
+    ) {
+        this.asignacionRepository = asignacionRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.atraccionRepository = atraccionRepository;
+        this.ticketRepository = ticketRepository;
+        this.sesionJuegoRepository = sesionJuegoRepository;
+        this.logEscaneoQrRepository = logEscaneoQrRepository;
+        this.logIncidentePausaRepository = logIncidentePausaRepository;
+        this.tarifaTiempoRepository = tarifaTiempoRepository;
+        this.tarifaEventoRepository = tarifaEventoRepository;
+        this.webSocketPublisher = webSocketPublisher;
+        this.auditoriaOperacionService = auditoriaOperacionService;
+        this.authenticatedUserProvider = authenticatedUserProvider != null
+                ? authenticatedUserProvider
+                : new AuthenticatedUserProvider(usuarioRepository);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -241,7 +272,8 @@ public class OperacionServiceImpl implements OperacionService {
             throw new ReglaNegocioException("Usuario no autenticado para registrar el inicio de sesión.");
         }
 
-        Atraccion atraccion = atraccionRepository.findById(request.atraccionId())
+        Atraccion atraccion = atraccionRepository.findByIdForUpdate(request.atraccionId())
+                .or(() -> atraccionRepository.findById(request.atraccionId()))
                 .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + request.atraccionId()));
 
         validarEstacionAsignadaAlOperario(operario, atraccion);
@@ -255,7 +287,8 @@ public class OperacionServiceImpl implements OperacionService {
             );
         }
 
-        Ticket ticket = ticketRepository.findByUuidCodigo(request.uuidTicket())
+        Ticket ticket = ticketRepository.findByUuidCodigoForUpdate(request.uuidTicket())
+                .or(() -> ticketRepository.findByUuidCodigo(request.uuidTicket()))
                 .orElseThrow(() -> new RecursoNoEncontradoException("Ticket no encontrado con UUID: " + request.uuidTicket()));
 
         if (!EstadoTicket.PAGADO.equals(ticket.getEstadoTicket())) {
@@ -860,12 +893,16 @@ public class OperacionServiceImpl implements OperacionService {
             String detalle
     ) {
         try {
+            String ipSanitizada = ip;
+            if (ipSanitizada != null && ipSanitizada.length() > 64) {
+                ipSanitizada = ipSanitizada.substring(0, 64);
+            }
             LogEscaneoQr logEntity = LogEscaneoQr.builder()
                     .uuidLeido(uuid)
                     .ticketEncontrado(encontrado)
                     .atraccion(atraccion)
                     .operario(operario)
-                    .direccionIp(ip)
+                    .direccionIp(ipSanitizada)
                     .timestampCliente(timestampCliente)
                     .fechaEscaneo(LocalDateTime.now())
                     .resultado(resultado)
@@ -878,6 +915,9 @@ public class OperacionServiceImpl implements OperacionService {
     }
 
     private Usuario resolverUsuarioAutenticado(Authentication auth) {
+        if (authenticatedUserProvider != null) {
+            return authenticatedUserProvider.resolverUsuario(auth).orElse(null);
+        }
         if (auth == null) {
             auth = SecurityContextHolder.getContext().getAuthentication();
         }

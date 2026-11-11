@@ -25,6 +25,7 @@ import com.software.territoriodeninos.repository.TicketRepository;
 import com.software.territoriodeninos.repository.TurnoCajaRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.repository.VentaRepository;
+import com.software.territoriodeninos.security.AuthenticatedUserProvider;
 import com.software.territoriodeninos.util.EstadoAtraccion;
 import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.EstadoTurnoCaja;
@@ -52,7 +53,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class VentaServiceImpl implements VentaService {
 
     private final VentaRepository ventaRepository;
@@ -67,6 +67,39 @@ public class VentaServiceImpl implements VentaService {
     private final VentaCalculoService ventaCalculoService;
     private final UUIDGeneratorService uuidGeneratorService;
     private final AtraccionService atraccionService;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
+
+    public VentaServiceImpl(
+            VentaRepository ventaRepository,
+            TicketRepository ticketRepository,
+            ClienteRepository clienteRepository,
+            MenorRepository menorRepository,
+            TurnoCajaRepository turnoCajaRepository,
+            UsuarioRepository usuarioRepository,
+            AtraccionRepository atraccionRepository,
+            AuditoriaOperacionService auditoriaOperacionService,
+            AforoValidatorService aforoValidatorService,
+            VentaCalculoService ventaCalculoService,
+            UUIDGeneratorService uuidGeneratorService,
+            AtraccionService atraccionService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
+    ) {
+        this.ventaRepository = ventaRepository;
+        this.ticketRepository = ticketRepository;
+        this.clienteRepository = clienteRepository;
+        this.menorRepository = menorRepository;
+        this.turnoCajaRepository = turnoCajaRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.atraccionRepository = atraccionRepository;
+        this.auditoriaOperacionService = auditoriaOperacionService;
+        this.aforoValidatorService = aforoValidatorService;
+        this.ventaCalculoService = ventaCalculoService;
+        this.uuidGeneratorService = uuidGeneratorService;
+        this.atraccionService = atraccionService;
+        this.authenticatedUserProvider = authenticatedUserProvider != null
+                ? authenticatedUserProvider
+                : new AuthenticatedUserProvider(usuarioRepository);
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -347,13 +380,14 @@ public class VentaServiceImpl implements VentaService {
     }
 
     private TurnoCaja resolverTurnoCajaActivo(Long turnoCajaId, Authentication auth) {
-        if (auth == null) {
-            auth = SecurityContextHolder.getContext().getAuthentication();
-        }
-
-        Usuario usuarioAutenticado = null;
-        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
-            usuarioAutenticado = usuarioRepository.findByCorreo(auth.getName()).orElse(null);
+        Usuario usuarioAutenticado = authenticatedUserProvider != null
+                ? authenticatedUserProvider.resolverUsuario(auth).orElse(null)
+                : null;
+        if (usuarioAutenticado == null) {
+            Authentication effectiveAuth = auth != null ? auth : SecurityContextHolder.getContext().getAuthentication();
+            if (effectiveAuth != null && effectiveAuth.isAuthenticated() && !"anonymousUser".equals(effectiveAuth.getPrincipal())) {
+                usuarioAutenticado = usuarioRepository.findByCorreo(effectiveAuth.getName()).orElse(null);
+            }
         }
 
         if (turnoCajaId != null) {

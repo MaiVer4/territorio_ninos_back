@@ -8,6 +8,7 @@ import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.repository.*;
+import com.software.territoriodeninos.security.AuthenticatedUserProvider;
 import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import com.software.territoriodeninos.util.NombreRol;
@@ -26,7 +27,6 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class TicketPrintServiceImpl implements TicketPrintService {
 
     private final TicketRepository ticketRepository;
@@ -38,6 +38,33 @@ public class TicketPrintServiceImpl implements TicketPrintService {
     private final UsuarioRepository usuarioRepository;
     private final TurnoCajaRepository turnoCajaRepository;
     private final AuditoriaOperacionService auditoriaOperacionService;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
+
+    public TicketPrintServiceImpl(
+            TicketRepository ticketRepository,
+            ConfiguracionParqueService configuracionParqueService,
+            TicketPrintFormatter ticketPrintFormatter,
+            TarifaTiempoRepository tarifaTiempoRepository,
+            TarifaEventoRepository tarifaEventoRepository,
+            LogReimpresionRepository logReimpresionRepository,
+            UsuarioRepository usuarioRepository,
+            TurnoCajaRepository turnoCajaRepository,
+            AuditoriaOperacionService auditoriaOperacionService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
+    ) {
+        this.ticketRepository = ticketRepository;
+        this.configuracionParqueService = configuracionParqueService;
+        this.ticketPrintFormatter = ticketPrintFormatter;
+        this.tarifaTiempoRepository = tarifaTiempoRepository;
+        this.tarifaEventoRepository = tarifaEventoRepository;
+        this.logReimpresionRepository = logReimpresionRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.turnoCajaRepository = turnoCajaRepository;
+        this.auditoriaOperacionService = auditoriaOperacionService;
+        this.authenticatedUserProvider = authenticatedUserProvider != null
+                ? authenticatedUserProvider
+                : new AuthenticatedUserProvider(usuarioRepository);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -161,6 +188,9 @@ public class TicketPrintServiceImpl implements TicketPrintService {
     }
 
     private Usuario resolverUsuarioAutenticado(Authentication auth) {
+        if (authenticatedUserProvider != null) {
+            return authenticatedUserProvider.resolverUsuario(auth).orElse(null);
+        }
         if (auth == null) {
             auth = SecurityContextHolder.getContext().getAuthentication();
         }
