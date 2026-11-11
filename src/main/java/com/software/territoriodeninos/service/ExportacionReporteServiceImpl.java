@@ -60,7 +60,7 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
             return baos.toByteArray();
         } catch (Exception ex) {
             log.error("Error al exportar reporte PDF [{}]: {}", tipo, ex.getMessage(), ex);
-            throw new ReglaNegocioException("Error en la maquetación y generación del reporte PDF: " + ex.getMessage());
+            throw new ReglaNegocioException("Error en la maquetación y generación del reporte PDF.");
         }
     }
 
@@ -86,7 +86,7 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
             return baos.toByteArray();
         } catch (Exception ex) {
             log.error("Error al exportar reporte CSV [{}]: {}", tipo, ex.getMessage(), ex);
-            throw new ReglaNegocioException("Error al generar el archivo CSV: " + ex.getMessage());
+            throw new ReglaNegocioException("Error al generar el archivo CSV.");
         }
     }
 
@@ -98,7 +98,8 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
         ConfiguracionParqueDTO config = null;
         try {
             config = configuracionParqueService.obtenerConfiguracion();
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.debug("Usando encabezado institucional por defecto debido a error al obtener configuración: {}", ex.getMessage());
         }
 
         String nombre = config != null && config.getNombreParque() != null ? config.getNombreParque() : "Territorio de Niños";

@@ -590,4 +590,25 @@ class OperacionControllerTest {
 
         verify(operacionService).sincronizarReloj(1L);
     }
+
+    @Test
+    @DisplayName("POST /api/operacion/escanear - Trunca IP de cliente cuando X-Forwarded-For excede 64 caracteres (P1-5)")
+    void escanearTicket_ipLarga_truncaAMaximo64Caracteres() throws Exception {
+        EscaneoQrRequestDTO request = new EscaneoQrRequestDTO(sampleUuid, 1L, LocalDateTime.now());
+        String ipExtremadamenteLarga = "2001:0db8:85a3:0000:0000:8a2e:0370:7334:extra:padding:to:exceed:sixty:four:characters:in:length";
+        when(operacionService.escanearTicket(any(EscaneoQrRequestDTO.class), any(), any()))
+                .thenReturn(sampleResponse);
+
+        mockMvc.perform(post("/api/operacion/escanear")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Forwarded-For", ipExtremadamenteLarga)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(operacionService).escanearTicket(
+                any(EscaneoQrRequestDTO.class),
+                eq(null),
+                eq(ipExtremadamenteLarga.substring(0, 64))
+        );
+    }
 }

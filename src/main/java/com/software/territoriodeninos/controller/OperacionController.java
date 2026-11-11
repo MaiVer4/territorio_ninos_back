@@ -117,10 +117,17 @@ public class OperacionController implements OperacionApi {
         if (request == null) {
             return "127.0.0.1";
         }
+        String ip = null;
         String xf = request.getHeader("X-Forwarded-For");
         if (xf != null && !xf.isBlank()) {
-            return xf.split(",")[0].trim();
+            ip = xf.split(",")[0].trim();
         }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
+        if (ip == null || ip.isBlank()) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip == null || ip.isBlank()) {
+            return "127.0.0.1";
+        }
+        return ip.length() > 64 ? ip.substring(0, 64) : ip;
     }
 }

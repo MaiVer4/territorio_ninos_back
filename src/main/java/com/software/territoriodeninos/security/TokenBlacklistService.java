@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
@@ -72,7 +73,10 @@ public class TokenBlacklistService {
 
     public void revocarTokensEmitidosAntesDeAhora(String correo) {
         if (correo != null && !correo.isBlank()) {
-            revocadoAntesDePorUsuario.put(correo.trim().toLowerCase(), Instant.now());
+            revocadoAntesDePorUsuario.put(
+                    correo.trim().toLowerCase(),
+                    Instant.now().truncatedTo(ChronoUnit.SECONDS)
+            );
         }
     }
 
@@ -89,7 +93,7 @@ public class TokenBlacklistService {
             if (issuedAt == null) {
                 return true;
             }
-            return !issuedAt.toInstant().isAfter(corte);
+            return issuedAt.toInstant().isBefore(corte);
         }
         return false;
     }

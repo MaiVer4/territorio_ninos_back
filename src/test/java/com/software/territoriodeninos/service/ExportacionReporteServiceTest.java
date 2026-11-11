@@ -143,4 +143,30 @@ class ExportacionReporteServiceTest {
         assertThat(contenido).contains("Pedro Cajero");
         assertThat(contenido).contains("CUADRADO");
     }
+
+    @Test
+    @DisplayName("Debe lanzar ReglaNegocioException con mensaje seguro sin filtrar detalles internos en error PDF (P2-4)")
+    void testExportarPdf_conErrorInterno_lanzaMensajeSanitizado() {
+        when(conciliacionTurnoService.obtenerReporteTurnos(any(), any(), any()))
+                .thenThrow(new RuntimeException("Detalle sensible interno de base de datos"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.software.territoriodeninos.exception.ReglaNegocioException.class,
+                () -> exportacionReporteService.exportarPdf("TURNOS", null, null, null, null),
+                "Error en la maquetación y generación del reporte PDF."
+        );
+    }
+
+    @Test
+    @DisplayName("Debe lanzar ReglaNegocioException con mensaje seguro sin filtrar detalles internos en error CSV (P2-4)")
+    void testExportarCsv_conErrorInterno_lanzaMensajeSanitizado() {
+        when(conciliacionTurnoService.obtenerReporteTurnos(any(), any(), any()))
+                .thenThrow(new RuntimeException("Detalle sensible interno"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.software.territoriodeninos.exception.ReglaNegocioException.class,
+                () -> exportacionReporteService.exportarCsv("TURNOS", null, null, null, null),
+                "Error al generar el archivo CSV."
+        );
+    }
 }
