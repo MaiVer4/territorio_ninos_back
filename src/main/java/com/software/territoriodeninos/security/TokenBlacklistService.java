@@ -13,8 +13,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Lista negra en memoria de JWT revocados (logout) y gestión de revocación de sesiones por usuario.
- * Almacena el hash SHA-256 del token hasta su expiración natural.
+ * Servicio de gestión de lista negra de tokens revocados (logout) e invalidación de sesiones de usuario.
+ * <p>
+ * <b>Nota de Arquitectura y Escalabilidad (Clustering):</b>
+ * En entornos mononodo, almacena de forma eficiente el hash SHA-256 del token en estructuras concurrentes
+ * en memoria (JVM). En caso de despliegue multi-instancia en clúster balanceado horizontalmente (ej. Kubernetes,
+ * AWS ECS o múltiples contenedores Docker), esta capa debe respaldarse con un store distribuido (ej. Redis
+ * o Hazelcast mediante {@code RedisTemplate<String, String>} con TTL acotado a la fecha de expiración natural del JWT)
+ * para garantizar la sincronización atómica e inmediata de revocaciones entre todas las réplicas del clúster.
  */
 @Service
 public class TokenBlacklistService {

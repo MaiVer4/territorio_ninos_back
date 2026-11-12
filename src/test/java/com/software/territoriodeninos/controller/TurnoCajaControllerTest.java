@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.is;
@@ -262,14 +263,14 @@ class TurnoCajaControllerTest {
         void testCerrarTurno_DescuadreSinObservaciones_BadRequest() throws Exception {
             CierreCajaDTO request = new CierreCajaDTO(new BigDecimal("140000.00"), null);
             when(turnoCajaService.cerrarTurno(any(CierreCajaDTO.class), any()))
-                    .thenThrow(new ReglaNegocioException("Existe una diferencia de caja (faltante de 10000.00). Es obligatorio ingresar una justificación en las observaciones."));
+                    .thenThrow(new ReglaNegocioException("Existe una diferencia entre el efectivo reportado y el sistema. Ingrese una justificación obligatoria en las observaciones."));
 
             mockMvc.perform(put("/api/turnos/cerrar")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.codigo", is(400)))
-                    .andExpect(jsonPath("$.detalles", is("Existe una diferencia de caja (faltante de 10000.00). Es obligatorio ingresar una justificación en las observaciones.")));
+                    .andExpect(jsonPath("$.detalles", is("Existe una diferencia entre el efectivo reportado y el sistema. Ingrese una justificación obligatoria en las observaciones.")));
         }
 
         @Test
@@ -370,6 +371,41 @@ class TurnoCajaControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.codigo", is(400)))
                     .andExpect(jsonPath("$.detalles", is("Formato de fecha inválido: 'invalida'. Use el formato YYYY-MM-DD.")));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/turnos/{id}/arqueo")
+    class RegistrarArqueoTests {
+
+        @Test
+        @DisplayName("200 OK - Registrar arqueo intermedio exitoso")
+        void testRegistrarArqueo_Exitoso() throws Exception {
+            com.software.territoriodeninos.dto.ArqueoCajaDTO request =
+                    new com.software.territoriodeninos.dto.ArqueoCajaDTO(new BigDecimal("80000.00"), "Arqueo parcial");
+
+            when(turnoCajaService.registrarArqueo(eq(1L), any(), any()))
+                    .thenReturn(Map.of("mensaje", "Arqueo registrado exitosamente", "idTurno", 1L, "montoRecontado", new BigDecimal("80000.00")));
+
+            mockMvc.perform(post("/api/turnos/1/arqueo")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.mensaje", is("Arqueo registrado exitosamente")))
+                    .andExpect(jsonPath("$.idTurno", is(1)));
+        }
+
+        @Test
+        @DisplayName("404 Not Found - Turno inexistente para arqueo")
+        void testRegistrarArqueo_TurnoNoExiste_NotFound() throws Exception {
+            when(turnoCajaService.registrarArqueo(eq(999L), any(), any()))
+                    .thenThrow(new RecursoNoEncontradoException("Turno de caja con ID 999 no encontrado"));
+
+            mockMvc.perform(post("/api/turnos/999/arqueo")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.codigo", is(404)));
         }
     }
 }

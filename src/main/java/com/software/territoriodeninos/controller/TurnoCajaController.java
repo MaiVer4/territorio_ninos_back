@@ -74,9 +74,11 @@ public class TurnoCajaController implements TurnoCajaApi {
     @PreAuthorize("hasAnyRole('TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<Map<String, Object>> registrarArqueo(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> arqueoData
+            @RequestBody(required = false) com.software.territoriodeninos.dto.ArqueoCajaDTO arqueoData,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(Map.of("mensaje", "Arqueo registrado exitosamente", "idTurno", id));
+        Map<String, Object> respuesta = turnoCajaService.registrarArqueo(id, arqueoData, authentication);
+        return ResponseEntity.ok(respuesta);
     }
 
     @Override

@@ -68,10 +68,13 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
     @Transactional(readOnly = true)
     public Optional<TurnoCajaResponseDTO> obtenerTurnoActivo(Authentication auth) {
         Usuario usuario = obtenerUsuarioYValidarRol(auth);
+        boolean esTaquillero = usuario.getRol() != null && NombreRol.TAQUILLERO.equals(usuario.getRol().getNombre());
 
         return turnoCajaRepository
                 .findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(usuario.getId(), EstadoTurnoCaja.ABIERTO)
-                .map(turno -> TurnoCajaResponseDTO.fromEntity(turno, usuario.getNombre()));
+                .map(turno -> esTaquillero
+                        ? TurnoCajaResponseDTO.fromEntityCiego(turno, usuario.getNombre())
+                        : TurnoCajaResponseDTO.fromEntity(turno, usuario.getNombre()));
     }
 
     @Override
@@ -93,14 +96,12 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
         BigDecimal montoReportado = dto.montoEfectivoReportado();
         BigDecimal diferencia = montoReportado.subtract(totalEsperado);
 
-        // Notion CA-04: Exigir justificación obligatoria en observaciones si diferencia != 0
+        // Notion CA-04: Exigir justificación obligatoria en observaciones si diferencia != 0 (sin filtrar cifras numéricas V-05)
         if (diferencia.compareTo(BigDecimal.ZERO) != 0) {
             if (!StringUtils.hasText(dto.observaciones())) {
-                String tipoDiferencia = diferencia.compareTo(BigDecimal.ZERO) > 0 ? "sobrante" : "faltante";
-                throw new ReglaNegocioException(String.format(
-                        "Existe una diferencia de caja (%s de %s). Es obligatorio ingresar una justificación en las observaciones.",
-                        tipoDiferencia, diferencia.abs()
-                ));
+                throw new ReglaNegocioException(
+                        "Existe una diferencia entre el efectivo reportado y el sistema. Ingrese una justificación obligatoria en las observaciones."
+                );
             }
         }
 
@@ -183,6 +184,46 @@ public class TurnoCajaServiceImpl implements TurnoCajaService {
                     return TurnoCajaResponseDTO.fromEntity(t, nombreCajero);
                 })
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> registrarArqueo(Long idTurno, com.software.territoriodeninos.dto.ArqueoCajaDTO dto, Authentication auth) {
+        if (idTurno == null) {
+            throw new ReglaNegocioException("El ID del turno es obligatorio");
+        }
+        Usuario usuario = obtenerUsuarioYValidarRol(auth);
+
+        TurnoCaja turno = turnoCajaRepository.findById(idTurno)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Turno de caja con ID " + idTurno + " no encontrado"));
+
+        if (!EstadoTurnoCaja.ABIERTO.equals(turno.getEstado())) {
+            throw new ReglaNegocioException("No se pueden registrar arqueos en un turno que no se encuentra ABIERTO (estado actual: " + turno.getEstado() + ")");
+        }
+
+        boolean esTaquillero = usuario.getRol() != null && NombreRol.TAQUILLERO.equals(usuario.getRol().getNombre());
+        if (esTaquillero && !usuario.getId().equals(turno.getUsuarioId())) {
+            throw new AccessDeniedException("No tiene permisos para registrar arqueos en el turno de otro cajero.");
+        }
+
+        BigDecimal montoRecontado = dto != null && dto.montoEfectivoRecontado() != null
+                ? dto.montoEfectivoRecontado()
+                : BigDecimal.ZERO;
+
+        String nota = String.format("Arqueo intermedio: monto recontado $%s", montoRecontado);
+        if (dto != null && StringUtils.hasText(dto.observaciones())) {
+            nota += " | " + dto.observaciones().trim();
+        }
+
+        String obsActuales = turno.getObservaciones();
+        turno.setObservaciones(StringUtils.hasText(obsActuales) ? obsActuales + " | " + nota : nota);
+        turnoCajaRepository.save(turno);
+
+        return Map.of(
+                "mensaje", "Arqueo registrado exitosamente",
+                "idTurno", turno.getId(),
+                "montoRecontado", montoRecontado
+        );
     }
 
     private Usuario obtenerUsuarioYValidarRol(Authentication auth) {

@@ -188,6 +188,8 @@ class TurnoCajaServiceTest {
         assertEquals(100L, resultado.get().id());
         assertEquals(EstadoTurnoCaja.ABIERTO, resultado.get().estado());
         assertEquals("Cajero Pedro", resultado.get().cajeroNombre());
+        assertNull(resultado.get().ventasEfectivoSistema(), "Auditoría ciega: las ventas no deben revelarse al cajero activo");
+        assertNull(resultado.get().totalEsperado(), "Auditoría ciega: el total esperado no debe revelarse al cajero activo");
     }
 
     // --- PRUEBAS DE CIERRE DE CAJA (CA-02 y CA-04) ---
@@ -325,8 +327,8 @@ class TurnoCajaServiceTest {
         ReglaNegocioException ex = assertThrows(ReglaNegocioException.class,
                 () -> turnoCajaService.cerrarTurno(dtoSinObs, authentication));
 
-        assertTrue(ex.getMessage().contains("faltante"));
-        assertTrue(ex.getMessage().contains("obligatorio"));
+        assertTrue(ex.getMessage().contains("diferencia entre el efectivo reportado y el sistema"));
+        assertTrue(ex.getMessage().contains("obligatoria"));
         verify(turnoCajaRepository, never()).save(any(TurnoCaja.class));
     }
 
@@ -426,5 +428,84 @@ class TurnoCajaServiceTest {
     void testObtenerHistorialTurnos_FechaInvalida_LanzaReglaNegocioException() {
         assertThrows(ReglaNegocioException.class, () -> turnoCajaService.obtenerHistorialTurnos("22-10-2026"));
         verifyNoInteractions(turnoCajaRepository);
+    }
+
+    // --- PRUEBAS DE REGISTRO DE ARQUEO INTERMEDIO (V-08) ---
+
+    @Test
+    @DisplayName("V-08: registrarArqueo() - Éxito para cajero titular de turno abierto")
+    void testRegistrarArqueo_Exito() {
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("pedro@test.com");
+        when(authentication.getName()).thenReturn("pedro@test.com");
+        when(usuarioRepository.findByCorreo("pedro@test.com")).thenReturn(Optional.of(taquillero));
+
+        TurnoCaja turnoActivo = TurnoCaja.builder()
+                .id(100L)
+                .usuarioId(10L)
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .observaciones("Apertura normal")
+                .build();
+        when(turnoCajaRepository.findById(100L)).thenReturn(Optional.of(turnoActivo));
+
+        com.software.territoriodeninos.dto.ArqueoCajaDTO dto =
+                new com.software.territoriodeninos.dto.ArqueoCajaDTO(new BigDecimal("75000.00"), "Arqueo de mediodía");
+
+        java.util.Map<String, Object> resp = turnoCajaService.registrarArqueo(100L, dto, authentication);
+
+        assertNotNull(resp);
+        assertEquals(100L, resp.get("idTurno"));
+        assertEquals("Arqueo registrado exitosamente", resp.get("mensaje"));
+        verify(turnoCajaRepository).save(turnoActivo);
+        assertTrue(turnoActivo.getObservaciones().contains("Arqueo de mediodía"));
+    }
+
+    @Test
+    @DisplayName("V-08: registrarArqueo() - Lanza AccessDeniedException si cajero intenta registrar arqueo en turno ajeno")
+    void testRegistrarArqueo_TurnoAjeno_LanzaAccessDeniedException() {
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("pedro@test.com");
+        when(authentication.getName()).thenReturn("pedro@test.com");
+        when(usuarioRepository.findByCorreo("pedro@test.com")).thenReturn(Optional.of(taquillero)); // id: 10L
+
+        TurnoCaja turnoDeOtro = TurnoCaja.builder()
+                .id(200L)
+                .usuarioId(99L) // Otro cajero
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .build();
+        when(turnoCajaRepository.findById(200L)).thenReturn(Optional.of(turnoDeOtro));
+
+        com.software.territoriodeninos.dto.ArqueoCajaDTO dto =
+                new com.software.territoriodeninos.dto.ArqueoCajaDTO(new BigDecimal("75000.00"), null);
+
+        assertThrows(AccessDeniedException.class, () ->
+                turnoCajaService.registrarArqueo(200L, dto, authentication)
+        );
+        verify(turnoCajaRepository, never()).save(any(TurnoCaja.class));
+    }
+
+    @Test
+    @DisplayName("V-08: registrarArqueo() - Lanza ReglaNegocioException si el turno está CERRADO")
+    void testRegistrarArqueo_TurnoCerrado_LanzaReglaNegocioException() {
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("pedro@test.com");
+        when(authentication.getName()).thenReturn("pedro@test.com");
+        when(usuarioRepository.findByCorreo("pedro@test.com")).thenReturn(Optional.of(taquillero));
+
+        TurnoCaja turnoCerrado = TurnoCaja.builder()
+                .id(300L)
+                .usuarioId(10L)
+                .estado(EstadoTurnoCaja.CERRADO)
+                .build();
+        when(turnoCajaRepository.findById(300L)).thenReturn(Optional.of(turnoCerrado));
+
+        com.software.territoriodeninos.dto.ArqueoCajaDTO dto =
+                new com.software.territoriodeninos.dto.ArqueoCajaDTO(new BigDecimal("75000.00"), null);
+
+        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () ->
+                turnoCajaService.registrarArqueo(300L, dto, authentication)
+        );
+        assertTrue(ex.getMessage().contains("No se pueden registrar arqueos en un turno que no se encuentra ABIERTO"));
+        verify(turnoCajaRepository, never()).save(any(TurnoCaja.class));
     }
 }

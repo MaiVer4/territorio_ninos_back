@@ -54,14 +54,16 @@ public record TurnoCajaResponseDTO(
 
     @JsonProperty("totalEsperado")
     public BigDecimal totalEsperado() {
+        if (ventasEfectivoSistema == null) {
+            return null;
+        }
         BigDecimal base = montoBase != null ? montoBase : BigDecimal.ZERO;
-        BigDecimal ventas = ventasEfectivoSistema != null ? ventasEfectivoSistema : BigDecimal.ZERO;
-        return base.add(ventas);
+        return base.add(ventasEfectivoSistema);
     }
 
     @JsonProperty("totalRecaudado")
     public BigDecimal totalRecaudado() {
-        return ventasEfectivoSistema != null ? ventasEfectivoSistema : BigDecimal.ZERO;
+        return ventasEfectivoSistema;
     }
 
     @JsonProperty("idUsuario")
@@ -76,7 +78,26 @@ public record TurnoCajaResponseDTO(
 
     @JsonProperty("totalVentas")
     public BigDecimal totalVentas() {
-        return ventasEfectivoSistema != null ? ventasEfectivoSistema : BigDecimal.ZERO;
+        return ventasEfectivoSistema;
+    }
+
+    public static TurnoCajaResponseDTO fromEntityCiego(TurnoCaja turno, String cajeroNombre) {
+        if (turno == null) {
+            return null;
+        }
+        return new TurnoCajaResponseDTO(
+            turno.getId(),
+            turno.getUsuarioId(),
+            turno.getMontoBase(),
+            turno.getFechaApertura(),
+            turno.getFechaCierre(),
+            null,
+            null,
+            null,
+            turno.getEstado(),
+            turno.getObservaciones(),
+            cajeroNombre
+        );
     }
 
     public static TurnoCajaResponseDTO fromEntity(TurnoCaja turno) {

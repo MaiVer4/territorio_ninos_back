@@ -19,4 +19,6 @@ public interface TurnoCajaService {
     List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha);
 
     List<TurnoCajaResponseDTO> obtenerHistorialTurnos(String fecha, Authentication auth);
+
+    java.util.Map<String, Object> registrarArqueo(Long idTurno, com.software.territoriodeninos.dto.ArqueoCajaDTO dto, Authentication auth);
 }
