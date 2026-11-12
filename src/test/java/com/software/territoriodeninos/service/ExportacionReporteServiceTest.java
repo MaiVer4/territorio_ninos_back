@@ -169,4 +169,29 @@ class ExportacionReporteServiceTest {
                 "Error al generar el archivo CSV."
         );
     }
+
+    @Test
+    @DisplayName("V-03: Debe escapar fórmulas CSV maliciosas con espacios iniciales, tabs o caracteres DDE (=, +, -, @, |, %)")
+    void testExportarCsv_escapaFormulasConEspaciosYCaracteresDde() {
+        ReporteTurnoDTO turnoMalicioso = ReporteTurnoDTO.builder()
+                .turnoId(2L)
+                .nombreCajero("  =cmd|' /C calc'!A0")
+                .estadoConciliacion(EstadoConciliacionTurno.CUADRADO)
+                .baseInicial(BigDecimal.ZERO)
+                .ventasEfectivoSistema(BigDecimal.ZERO)
+                .ventasElectronicoSistema(BigDecimal.ZERO)
+                .totalEsperadoEfectivo(BigDecimal.ZERO)
+                .montoFisicoDeclarado(BigDecimal.ZERO)
+                .diferencia(BigDecimal.ZERO)
+                .build();
+
+        when(conciliacionTurnoService.obtenerReporteTurnos(any(), any(), any()))
+                .thenReturn(List.of(turnoMalicioso));
+
+        byte[] csv = exportacionReporteService.exportarCsv("TURNOS", null, null, null, null);
+        String contenido = new String(csv, 3, csv.length - 3, StandardCharsets.UTF_8);
+
+        // Debe contener el apostrofe de escape antes del string con espacios y fórmula
+        assertThat(contenido).contains(";\"'  =cmd|' /C calc'!A0\";");
+    }
 }

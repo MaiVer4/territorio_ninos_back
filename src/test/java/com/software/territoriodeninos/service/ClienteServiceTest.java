@@ -281,4 +281,45 @@ class ClienteServiceTest {
         assertEquals("Valeria Gómez", result.menores().get(0).nombreCompleto());
         verify(clienteRepository).save(clienteExistente);
     }
+
+    @Test
+    @DisplayName("V-02: actualizarCliente rechaza vincular un menor perteneciente a otro acudiente")
+    void testActualizarCliente_MenorDeOtroCliente_LanzaReglaNegocioException() {
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(clienteExistente));
+
+        Cliente otroCliente = Cliente.builder().id(999L).numeroDocumento("9999999999").build();
+        Menor menorAjeno = Menor.builder().id(88L).cliente(otroCliente).nombreCompleto("Menor Ajeno").edad(6).build();
+        when(menorRepository.findById(88L)).thenReturn(Optional.of(menorAjeno));
+
+        MenorDTO menorSecuestrado = new MenorDTO(88L, "TI888", "Menor Ajeno", null, 6);
+        ClienteRequestDTO request = new ClienteRequestDTO(
+                "1098765432", "Carlos", "Gómez", "3115559999", "carlos@example.com",
+                List.of(menorSecuestrado)
+        );
+
+        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () ->
+                clienteService.actualizarCliente(1L, request)
+        );
+        assertTrue(ex.getMessage().contains("no pertenece a este cliente"));
+        verify(clienteRepository, never()).save(any(Cliente.class));
+    }
+
+    @Test
+    @DisplayName("V-02: registrarCliente nuevo cliente rechaza envío de ID preexistente de menor")
+    void testRegistrarCliente_NuevoClienteConIdMenorExistente_LanzaReglaNegocioException() {
+        when(clienteRepository.findByNumeroDocumentoWithMenores("8888888888"))
+                .thenReturn(Optional.empty());
+
+        MenorDTO menorConId = new MenorDTO(55L, "TI555", "Menor Nuevo Con ID", null, 7);
+        ClienteRequestDTO request = new ClienteRequestDTO(
+                "8888888888", "Nuevo", "Cliente", "3001234567", "nuevo@example.com",
+                List.of(menorConId)
+        );
+
+        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () ->
+                clienteService.registrarCliente(request)
+        );
+        assertTrue(ex.getMessage().contains("No se permite asociar un ID de menor existente al registrar un nuevo acudiente."));
+        verify(clienteRepository, never()).save(any(Cliente.class));
+    }
 }

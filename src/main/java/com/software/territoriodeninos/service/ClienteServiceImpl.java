@@ -8,6 +8,7 @@ import com.software.territoriodeninos.entity.Menor;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.repository.ClienteRepository;
+import com.software.territoriodeninos.repository.MenorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.Optional;
 public class ClienteServiceImpl implements ClienteService {
 
     private final ClienteRepository clienteRepository;
+    private final MenorRepository menorRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -118,6 +120,23 @@ public class ClienteServiceImpl implements ClienteService {
 
         for (MenorDTO menorDTO : menoresDTO) {
             Integer edad = validarEdadMenor(menorDTO);
+
+            // Validación estricta contra secuestro / reparentalización foránea (V-02)
+            if (menorDTO.id() != null) {
+                boolean yaEsDelCliente = cliente.getMenores() != null &&
+                        cliente.getMenores().stream().anyMatch(m -> menorDTO.id().equals(m.getId()));
+                if (!yaEsDelCliente) {
+                    if (cliente.getId() == null) {
+                        throw new ReglaNegocioException("No se permite asociar un ID de menor existente al registrar un nuevo acudiente.");
+                    }
+                    Menor menorEnBd = menorRepository.findById(menorDTO.id())
+                            .orElseThrow(() -> new RecursoNoEncontradoException("Menor no encontrado con ID: " + menorDTO.id()));
+                    if (menorEnBd.getCliente() == null || !cliente.getId().equals(menorEnBd.getCliente().getId())) {
+                        throw new ReglaNegocioException("El menor con ID " + menorDTO.id() + " no pertenece a este cliente.");
+                    }
+                }
+            }
+
             Optional<Menor> menorExistenteOpt = buscarMenorCoincidente(cliente, menorDTO);
 
             if (menorExistenteOpt.isPresent()) {
@@ -134,6 +153,7 @@ public class ClienteServiceImpl implements ClienteService {
                 existente.setEdad(edad);
             } else {
                 Menor nuevoMenor = menorDTO.toEntity();
+                nuevoMenor.setId(null); // Garantiza que no se reutilice ningún ID ajeno en cascada JPA
                 nuevoMenor.setEdad(edad);
                 cliente.addMenor(nuevoMenor);
             }

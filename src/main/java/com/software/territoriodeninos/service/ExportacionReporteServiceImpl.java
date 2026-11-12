@@ -293,9 +293,10 @@ public class ExportacionReporteServiceImpl implements ExportacionReporteService 
             return "";
         }
         String limpio = valor.replace("\r", " ").replace("\n", " ").replace("\"", "\"\"");
-        if (!limpio.isEmpty()) {
-            char c = limpio.charAt(0);
-            if (c == '=' || c == '+' || c == '-' || c == '@') {
+        String stripped = limpio.stripLeading();
+        if (!stripped.isEmpty()) {
+            char c = stripped.charAt(0);
+            if (c == '=' || c == '+' || c == '-' || c == '@' || c == '|' || c == '%' || c == '\t') {
                 limpio = "'" + limpio;
             }
         }
