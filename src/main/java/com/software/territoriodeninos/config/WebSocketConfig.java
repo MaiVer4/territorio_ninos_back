@@ -57,26 +57,77 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             @Override
             public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-                if (accessor != null && (StompCommand.CONNECT.equals(accessor.getCommand()) || StompCommand.SUBSCRIBE.equals(accessor.getCommand()))) {
+                if (accessor == null) {
+                    return message;
+                }
+
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    autenticarConexion(accessor);
+                } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    validarSuscripcion(accessor);
+                }
+
+                return message;
+            }
+
+            private void autenticarConexion(StompHeaderAccessor accessor) {
+                String authHeader = accessor.getFirstNativeHeader("Authorization");
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    throw new TokenInvalidoException("Encabezado de autorización ausente o inválido para conexión WebSocket.");
+                }
+                UsernamePasswordAuthenticationToken authentication = autenticarToken(authHeader);
+                accessor.setUser(authentication);
+            }
+
+            private void validarSuscripcion(StompHeaderAccessor accessor) {
+                if (accessor.getUser() == null) {
                     String authHeader = accessor.getFirstNativeHeader("Authorization");
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                        String token = jwtUtil.extraerTokenDelHeader(authHeader);
-                        if (tokenBlacklistService.estaRevocado(token)) {
-                            throw new TokenInvalidoException("Sesión WebSocket revocada.");
-                        }
-                        Claims claims = jwtUtil.extraerClaims(token);
-                        String correo = claims.getSubject();
-                        if (tokenBlacklistService.esSesionUsuarioRevocada(correo, claims.getIssuedAt())) {
-                            throw new TokenInvalidoException("Sesión de usuario invalidada.");
-                        }
-                        String rol = (String) claims.get("rol");
-                        List<SimpleGrantedAuthority> authorities = (rol != null && !rol.isBlank())
-                                ? List.of(new SimpleGrantedAuthority("ROLE_" + rol))
-                                : List.of();
-                        accessor.setUser(new UsernamePasswordAuthenticationToken(correo, null, authorities));
+                        accessor.setUser(autenticarToken(authHeader));
+                    } else {
+                        throw new TokenInvalidoException("Suscripción rechazada: Sesión WebSocket no autenticada.");
                     }
                 }
-                return message;
+
+                String destination = accessor.getDestination();
+                if (destination != null) {
+                    if (destination.startsWith("/topic/admin")) {
+                        boolean esAdmin = tieneRol(accessor.getUser(), "ROLE_ADMINISTRADOR");
+                        if (!esAdmin) {
+                            throw new TokenInvalidoException("Acceso denegado: suscripción a canal administrativo requiere rol ADMINISTRADOR.");
+                        }
+                    } else if (destination.startsWith("/topic/atraccion/")) {
+                        boolean autorizado = tieneRol(accessor.getUser(), "ROLE_ADMINISTRADOR")
+                                || tieneRol(accessor.getUser(), "ROLE_OPERARIO");
+                        if (!autorizado) {
+                            throw new TokenInvalidoException("Acceso denegado: suscripción a canal de atracción requiere rol OPERARIO o ADMINISTRADOR.");
+                        }
+                    }
+                }
+            }
+
+            private UsernamePasswordAuthenticationToken autenticarToken(String authHeader) {
+                String token = jwtUtil.extraerTokenDelHeader(authHeader);
+                if (tokenBlacklistService.estaRevocado(token)) {
+                    throw new TokenInvalidoException("Sesión WebSocket revocada.");
+                }
+                Claims claims = jwtUtil.extraerClaims(token);
+                String correo = claims.getSubject();
+                if (tokenBlacklistService.esSesionUsuarioRevocada(correo, claims.getIssuedAt())) {
+                    throw new TokenInvalidoException("Sesión de usuario invalidada.");
+                }
+                String rol = (String) claims.get("rol");
+                List<SimpleGrantedAuthority> authorities = (rol != null && !rol.isBlank())
+                        ? List.of(new SimpleGrantedAuthority("ROLE_" + rol))
+                        : List.of();
+                return new UsernamePasswordAuthenticationToken(correo, null, authorities);
+            }
+
+            private boolean tieneRol(java.security.Principal principal, String roleName) {
+                if (principal instanceof UsernamePasswordAuthenticationToken auth) {
+                    return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals(roleName));
+                }
+                return false;
             }
         });
     }
