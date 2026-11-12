@@ -124,6 +124,14 @@ public class VentaServiceImpl implements VentaService {
         if (request.descuento() != null && request.descuento().compareTo(BigDecimal.ZERO) < 0) {
             throw new ReglaNegocioException("El descuento no puede ser negativo");
         }
+        // V-07: Restricción de descuentos manuales exclusivamente al rol ADMINISTRADOR
+        if (request.descuento() != null && request.descuento().compareTo(BigDecimal.ZERO) > 0) {
+            boolean esAdmin = auth != null && auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMINISTRADOR"));
+            if (!esAdmin) {
+                throw new ReglaNegocioException("Los cajeros no tienen autorización para aplicar descuentos manuales.");
+            }
+        }
 
         // 1. Validar Cliente
         Cliente cliente = clienteRepository.findById(request.clienteId())
@@ -132,18 +140,18 @@ public class VentaServiceImpl implements VentaService {
         // 2. Resolver y Validar TurnoCaja Activo (Notion: CA-02)
         TurnoCaja turnoCaja = resolverTurnoCajaActivo(request.turnoCajaId(), auth);
 
-        // 2.1 Validar aforo acumulado para ítems con TipoTarifa.MINUTO_BASE
-        Map<Long, Integer> cantidadesMinutoBasePorAtraccion = new HashMap<>();
+        // 2.1 Validar aforo acumulado para todos los ítems por atracción sin importar la tarifa (V-06)
+        Map<Long, Integer> cantidadesPorAtraccion = new HashMap<>();
         for (DetalleVentaRequestDTO itemDto : request.items()) {
-            if (itemDto != null && TipoTarifa.MINUTO_BASE.equals(itemDto.tipoTarifa())) {
+            if (itemDto != null) {
                 if (itemDto.atraccionId() == null) {
                     throw new ReglaNegocioException("El ID de la atracción es obligatorio para cada ítem");
                 }
                 int cant = (itemDto.cantidad() != null && itemDto.cantidad() > 0) ? itemDto.cantidad() : 1;
-                cantidadesMinutoBasePorAtraccion.merge(itemDto.atraccionId(), cant, Integer::sum);
+                cantidadesPorAtraccion.merge(itemDto.atraccionId(), cant, Integer::sum);
             }
         }
-        for (Map.Entry<Long, Integer> entry : cantidadesMinutoBasePorAtraccion.entrySet()) {
+        for (Map.Entry<Long, Integer> entry : cantidadesPorAtraccion.entrySet()) {
             aforoValidatorService.validarCapacidadAtraccion(entry.getKey(), entry.getValue());
         }
 

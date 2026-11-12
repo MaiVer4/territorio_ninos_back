@@ -457,4 +457,66 @@ class VentaServiceTest {
         verify(aforoValidatorService).validarCapacidadAtraccion(20L, 5);
         verify(atraccionService).invalidarCacheCatalogo();
     }
+
+    @Test
+    @DisplayName("V-06: Aforo multitarifa: Ítems mixtos (MINUTO_BASE + TIEMPO) acumulan aforo en la misma atracción")
+    void testProcesarVenta_TarifasMixtas_ValidaCapacidadAcumulada() {
+        DetalleVentaRequestDTO itemMinuto = new DetalleVentaRequestDTO(
+                20L, null, TipoTarifa.MINUTO_BASE, null, null, 2, new BigDecimal("1000.00"), new BigDecimal("2000.00")
+        );
+        DetalleVentaRequestDTO itemTiempo = new DetalleVentaRequestDTO(
+                20L, null, TipoTarifa.TIEMPO, 101L, null, 3, new BigDecimal("5000.00"), new BigDecimal("15000.00")
+        );
+        VentaProcesarRequestDTO request = new VentaProcesarRequestDTO(
+                1L, 5L, MetodoPago.EFECTIVO, new BigDecimal("20000.00"), BigDecimal.ZERO, null, List.of(itemMinuto, itemTiempo)
+        );
+
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(clienteMock));
+        when(turnoCajaRepository.findById(5L)).thenReturn(Optional.of(turnoCajaMock));
+        when(atraccionRepository.findById(20L)).thenReturn(Optional.of(atraccionMock));
+
+        CotizacionResponseDTO cotizacionMock = new CotizacionResponseDTO(
+                List.of(new BigDecimal("2000.00"), new BigDecimal("15000.00")),
+                List.of(),
+                new BigDecimal("17000.00"),
+                BigDecimal.ZERO,
+                new BigDecimal("17000.00"),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                new BigDecimal("17000.00")
+        );
+        when(ventaCalculoService.cotizarVenta(any(CotizacionRequestDTO.class))).thenReturn(cotizacionMock);
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(i -> {
+            Venta v = i.getArgument(0);
+            v.setId(888L);
+            return v;
+        });
+        when(uuidGeneratorService.generarUuidsUnicos(anyInt())).thenReturn(List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
+
+        ventaService.procesarVenta(request, authentication);
+
+        // Se verifica que la capacidad se validó para la suma total de boletas sin importar tarifa (2 + 3 = 5 tickets)
+        verify(aforoValidatorService).validarCapacidadAtraccion(20L, 5);
+    }
+
+    @Test
+    @DisplayName("V-07: Descuento manual por cajero no administrador es rechazado")
+    void testProcesarVenta_DescuentoManualSinRolAdmin_LanzaReglaNegocioException() {
+        DetalleVentaRequestDTO item = new DetalleVentaRequestDTO(
+                20L, null, TipoTarifa.MINUTO_BASE, null, null, 1, new BigDecimal("1000.00"), new BigDecimal("1000.00")
+        );
+        VentaProcesarRequestDTO request = new VentaProcesarRequestDTO(
+                1L, 5L, MetodoPago.EFECTIVO, new BigDecimal("1000.00"), new BigDecimal("500.00"), null, List.of(item)
+        );
+
+        // authentication con rol TAQUILLERO
+        org.springframework.security.core.Authentication authTaquillero = mock(org.springframework.security.core.Authentication.class);
+        doReturn(List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_TAQUILLERO")))
+                .when(authTaquillero).getAuthorities();
+
+        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () ->
+                ventaService.procesarVenta(request, authTaquillero)
+        );
+        assertTrue(ex.getMessage().contains("Los cajeros no tienen autorización para aplicar descuentos manuales"));
+    }
 }

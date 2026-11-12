@@ -94,8 +94,19 @@ class TicketPrintServiceImplTest {
                 .nombreCompleto("Sofia Restrepo")
                 .build();
 
+        TurnoCaja turnoActivo = TurnoCaja.builder()
+                .id(1L)
+                .estado(EstadoTurnoCaja.ABIERTO)
+                .build();
+
+        Venta venta = Venta.builder()
+                .id(100L)
+                .turnoCaja(turnoActivo)
+                .build();
+
         detalleVenta = DetalleVenta.builder()
                 .id(10L)
+                .venta(venta)
                 .atraccion(atraccion)
                 .menor(menor)
                 .tipoTarifa(TipoTarifa.TIEMPO)
@@ -166,6 +177,42 @@ class TicketPrintServiceImplTest {
         assertThatThrownBy(() -> ticketPrintService.generarPayloadImpresion(null))
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("UUID del ticket es obligatorio");
+    }
+
+    @Test
+    @DisplayName("V-04: generarPayloadImpresion - Rechaza tickets en estado CONSUMIDO con ConflictoException")
+    void generarPayloadImpresion_ticketConsumido_lanzaConflictoException() {
+        ticket.setEstadoTicket(EstadoTicket.CONSUMIDO);
+        when(ticketRepository.findByUuidCodigo(ticketUuid)).thenReturn(Optional.of(ticket));
+
+        assertThatThrownBy(() -> ticketPrintService.generarPayloadImpresion(ticketUuid))
+                .isInstanceOf(ConflictoException.class)
+                .hasMessageContaining("no admite impresión directa");
+    }
+
+    @Test
+    @DisplayName("V-04: generarPayloadImpresion - Rechaza tickets en estado ANULADO con ConflictoException")
+    void generarPayloadImpresion_ticketAnulado_lanzaConflictoException() {
+        ticket.setEstadoTicket(EstadoTicket.ANULADO);
+        when(ticketRepository.findByUuidCodigo(ticketUuid)).thenReturn(Optional.of(ticket));
+
+        assertThatThrownBy(() -> ticketPrintService.generarPayloadImpresion(ticketUuid))
+                .isInstanceOf(ConflictoException.class)
+                .hasMessageContaining("no admite impresión directa");
+    }
+
+    @Test
+    @DisplayName("V-04: generarPayloadImpresion - Rechaza tickets cuyo turno no está ABIERTO")
+    void generarPayloadImpresion_turnoNoAbierto_lanzaConflictoException() {
+        TurnoCaja turnoCerrado = TurnoCaja.builder().id(1L).estado(EstadoTurnoCaja.CERRADO).build();
+        Venta ventaTurnoCerrado = Venta.builder().turnoCaja(turnoCerrado).build();
+        detalleVenta.setVenta(ventaTurnoCerrado);
+
+        when(ticketRepository.findByUuidCodigo(ticketUuid)).thenReturn(Optional.of(ticket));
+
+        assertThatThrownBy(() -> ticketPrintService.generarPayloadImpresion(ticketUuid))
+                .isInstanceOf(ConflictoException.class)
+                .hasMessageContaining("no pertenece a un turno de caja actualmente activo");
     }
 
     @Test

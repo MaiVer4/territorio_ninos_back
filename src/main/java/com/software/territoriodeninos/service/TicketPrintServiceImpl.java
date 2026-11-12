@@ -76,7 +76,34 @@ public class TicketPrintServiceImpl implements TicketPrintService {
         Ticket ticket = ticketRepository.findByUuidCodigo(uuid)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Ticket no encontrado con UUID: " + uuid));
 
+        // 1. Validar que la boleta esté en estado PAGADO (V-04: no consumida ni anulada)
+        if (!EstadoTicket.PAGADO.equals(ticket.getEstadoTicket())) {
+            throw new ConflictoException("El ticket no admite impresión directa por encontrarse en estado " +
+                    ticket.getEstadoTicket() + ". Para boletas consumidas o anuladas utilice la opción de reimpresión formal.");
+        }
+
+        // 2. Validar que la boleta pertenezca a un turno de caja actualmente abierto (V-04)
         DetalleVenta detalle = ticket.getDetalleVenta();
+        Venta venta = detalle != null ? detalle.getVenta() : null;
+        TurnoCaja turnoVenta = venta != null ? venta.getTurnoCaja() : null;
+
+        if (turnoVenta == null || !EstadoTurnoCaja.ABIERTO.equals(turnoVenta.getEstado())) {
+            throw new ConflictoException("La boleta no pertenece a un turno de caja actualmente activo (ABIERTO).");
+        }
+
+        // 3. Si el usuario en sesión es cajero (TAQUILLERO), verificar pertenencia a su propio turno activo
+        Usuario usuarioAutenticado = resolverUsuarioAutenticado(SecurityContextHolder.getContext().getAuthentication());
+        if (usuarioAutenticado != null && usuarioAutenticado.getRol() != null &&
+                NombreRol.TAQUILLERO.equals(usuarioAutenticado.getRol().getNombre())) {
+            TurnoCaja turnoCajero = turnoCajaRepository
+                    .findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(usuarioAutenticado.getId(), EstadoTurnoCaja.ABIERTO)
+                    .orElse(null);
+            if (turnoCajero == null || !turnoCajero.getId().equals(turnoVenta.getId())) {
+                throw new ConflictoException("La boleta pertenece al turno #" + turnoVenta.getId() +
+                        ", el cual no coincide con el turno activo del cajero en sesión.");
+            }
+        }
+
         Atraccion atraccion = detalle != null ? detalle.getAtraccion() : null;
 
         String nombreAtraccion = atraccion != null ? atraccion.getNombre() : "Atracción TDN";
