@@ -33,8 +33,8 @@ import com.software.territoriodeninos.util.EstadoVenta;
 import com.software.territoriodeninos.util.MetodoPago;
 import com.software.territoriodeninos.util.NombreRol;
 import com.software.territoriodeninos.util.TipoTarifa;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +51,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Implementación de la lógica de negocio para la gestión y procesamiento de ventas.
+ * Aplica principios SOLID: alta cohesión, métodos especializados y bajo acoplamiento.
+ */
 @Slf4j
 @Service
 public class VentaServiceImpl implements VentaService {
@@ -69,6 +73,7 @@ public class VentaServiceImpl implements VentaService {
     private final AtraccionService atraccionService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
 
+    @Autowired
     public VentaServiceImpl(
             VentaRepository ventaRepository,
             TicketRepository ticketRepository,
@@ -82,7 +87,7 @@ public class VentaServiceImpl implements VentaService {
             VentaCalculoService ventaCalculoService,
             UUIDGeneratorService uuidGeneratorService,
             AtraccionService atraccionService,
-            @org.springframework.beans.factory.annotation.Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
+            @Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
     ) {
         this.ventaRepository = ventaRepository;
         this.ticketRepository = ticketRepository;
@@ -106,6 +111,90 @@ public class VentaServiceImpl implements VentaService {
     public VentaResponseDTO procesarVenta(VentaProcesarRequestDTO request, Authentication auth) {
         log.info("Iniciando procesamiento transaccional de venta para cliente ID: {}", request != null ? request.clienteId() : null);
 
+        // 1. Validaciones estructurales y de autorización de la solicitud
+        validarSolicitudVenta(request, auth);
+
+        // 2. Validación de cliente y turno de caja
+        Cliente cliente = obtenerCliente(request.clienteId());
+        TurnoCaja turnoCaja = resolverTurnoCajaActivo(request.turnoCajaId(), auth);
+
+        // 3. Validación de aforo acumulado por atracción
+        validarAforoAcumulado(request.items());
+
+        // 4. Validación individual de ítems y preparación para cotización
+        ResultadoValidacionItems resultadoItems = procesarYValidarItems(request.items(), cliente);
+
+        // 5. Liquidación financiera y cálculo de cambio
+        CotizacionResponseDTO cotizacion = liquidarCotizacion(resultadoItems.itemsParaCotizar(), request.descuento());
+        BigDecimal montoTotal = cotizacion.totalNeto();
+        BigDecimal cambio = validarYCalcularCambio(request.montoRecibido(), montoTotal);
+
+        // 6. Construcción y persistencia de la Venta congelada
+        Venta ventaGuardada = persistirVenta(request, cliente, turnoCaja, cotizacion, cambio, resultadoItems);
+
+        // 7. Generación y auditoría inmutable de tickets criptoseguros
+        List<Ticket> ticketsGuardados = generarYAuditarTickets(ventaGuardada, turnoCaja);
+
+        // 8. Actualizaciones colaterales (balance de caja y caché de aforo)
+        actualizarBalanceCajaSiAplica(turnoCaja, request.metodoPago(), montoTotal);
+        invalidarCacheAforo();
+
+        log.info("Venta ID #{} procesada y congelada exitosamente con estado PAGADO por total ${}", ventaGuardada.getId(), montoTotal);
+        return mapToResponseDTO(ventaGuardada, ticketsGuardados);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VentaResponseDTO obtenerVentaPorId(Long id) {
+        Venta venta = ventaRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Venta no encontrada con ID: " + id));
+        List<Ticket> tickets = ticketRepository.findByDetalleVentaVentaIdOrderByFechaEmisionAsc(id);
+        return mapToResponseDTO(venta, tickets);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VentaResponseDTO> obtenerVentasPorTurno(Long turnoCajaId) {
+        List<Venta> ventas = ventaRepository.findByTurnoCajaIdOrderByFechaVentaDesc(turnoCajaId);
+        if (ventas.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> ventaIds = ventas.stream().map(Venta::getId).toList();
+        List<Ticket> todosLosTickets = ticketRepository.findByDetalleVentaVentaIdInOrderByFechaEmisionAsc(ventaIds);
+        Map<Long, List<Ticket>> ticketsPorVentaId = todosLosTickets.stream()
+                .collect(Collectors.groupingBy(t -> t.getDetalleVenta().getVenta().getId()));
+
+        return ventas.stream()
+                .map(v -> mapToResponseDTO(v, ticketsPorVentaId.getOrDefault(v.getId(), List.of())))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth) {
+        if (turnoId == null) {
+            throw new ReglaNegocioException("El ID del turno de caja es obligatorio");
+        }
+
+        TurnoCaja turno = turnoCajaRepository.findById(turnoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Turno de caja no encontrado con ID: " + turnoId));
+
+        Usuario usuarioAutenticado = resolverUsuarioEnSesion(auth);
+        if (usuarioAutenticado != null && usuarioAutenticado.getRol() != null
+                && NombreRol.TAQUILLERO.equals(usuarioAutenticado.getRol().getNombre())
+                && !turno.getUsuarioId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No tiene permisos para ver las ventas de otro cajero.");
+        }
+
+        return obtenerVentasPorTurno(turnoId);
+    }
+
+    // =========================================================================
+    // Métodos auxiliares de descomposición (SRP - Responsabilidad Única)
+    // =========================================================================
+
+    private void validarSolicitudVenta(VentaProcesarRequestDTO request, Authentication auth) {
         if (request == null) {
             throw new ReglaNegocioException("La solicitud de venta no puede ser nula");
         }
@@ -132,17 +221,16 @@ public class VentaServiceImpl implements VentaService {
                 throw new ReglaNegocioException("Los cajeros no tienen autorización para aplicar descuentos manuales.");
             }
         }
+    }
 
-        // 1. Validar Cliente
-        Cliente cliente = clienteRepository.findById(request.clienteId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Cliente no encontrado con ID: " + request.clienteId()));
+    private Cliente obtenerCliente(Long clienteId) {
+        return clienteRepository.findById(clienteId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Cliente no encontrado con ID: " + clienteId));
+    }
 
-        // 2. Resolver y Validar TurnoCaja Activo (Notion: CA-02)
-        TurnoCaja turnoCaja = resolverTurnoCajaActivo(request.turnoCajaId(), auth);
-
-        // 2.1 Validar aforo acumulado para todos los ítems por atracción sin importar la tarifa (V-06)
+    private void validarAforoAcumulado(List<DetalleVentaRequestDTO> items) {
         Map<Long, Integer> cantidadesPorAtraccion = new HashMap<>();
-        for (DetalleVentaRequestDTO itemDto : request.items()) {
+        for (DetalleVentaRequestDTO itemDto : items) {
             if (itemDto != null) {
                 if (itemDto.atraccionId() == null) {
                     throw new ReglaNegocioException("El ID de la atracción es obligatorio para cada ítem");
@@ -154,16 +242,16 @@ public class VentaServiceImpl implements VentaService {
         for (Map.Entry<Long, Integer> entry : cantidadesPorAtraccion.entrySet()) {
             aforoValidatorService.validarCapacidadAtraccion(entry.getKey(), entry.getValue());
         }
+    }
 
-        // 3. Validar Ítems Individuales y Preparar Liquidación
+    private ResultadoValidacionItems procesarYValidarItems(List<DetalleVentaRequestDTO> items, Cliente cliente) {
         List<ItemCotizacionDTO> itemsParaCotizar = new ArrayList<>();
         List<Atraccion> atraccionesPorItem = new ArrayList<>();
         List<Menor> menoresPorItem = new ArrayList<>();
         Map<Long, Atraccion> atraccionesCache = new HashMap<>();
         Map<Long, Menor> menoresCache = new HashMap<>();
 
-        for (int i = 0; i < request.items().size(); i++) {
-            DetalleVentaRequestDTO itemDto = request.items().get(i);
+        for (DetalleVentaRequestDTO itemDto : items) {
             if (itemDto == null) {
                 throw new ReglaNegocioException("Los ítems de la venta no pueden ser nulos");
             }
@@ -228,21 +316,34 @@ public class VentaServiceImpl implements VentaService {
             menoresPorItem.add(menor);
         }
 
-        // 4. Liquidar Financieramente la Venta con VentaCalculoService (Notion: CA-04)
-        CotizacionRequestDTO cotizacionRequest = new CotizacionRequestDTO(itemsParaCotizar, null, request.descuento());
-        CotizacionResponseDTO cotizacion = ventaCalculoService.cotizarVenta(cotizacionRequest);
+        return new ResultadoValidacionItems(itemsParaCotizar, atraccionesPorItem, menoresPorItem);
+    }
 
-        BigDecimal montoTotal = cotizacion.totalNeto();
-        BigDecimal montoRecibido = request.montoRecibido().setScale(2, RoundingMode.HALF_UP);
+    private CotizacionResponseDTO liquidarCotizacion(List<ItemCotizacionDTO> itemsParaCotizar, BigDecimal descuento) {
+        CotizacionRequestDTO cotizacionRequest = new CotizacionRequestDTO(itemsParaCotizar, null, descuento);
+        return ventaCalculoService.cotizarVenta(cotizacionRequest);
+    }
 
+    private BigDecimal validarYCalcularCambio(BigDecimal montoRecibidoParam, BigDecimal montoTotal) {
+        BigDecimal montoRecibido = montoRecibidoParam.setScale(2, RoundingMode.HALF_UP);
         if (montoRecibido.compareTo(montoTotal) < 0) {
             throw new ReglaNegocioException("El monto recibido ($" + montoRecibido +
                     ") es inferior al total neto a pagar ($" + montoTotal + ")");
         }
+        return montoRecibido.subtract(montoTotal).setScale(2, RoundingMode.HALF_UP);
+    }
 
-        BigDecimal cambio = montoRecibido.subtract(montoTotal).setScale(2, RoundingMode.HALF_UP);
+    private Venta persistirVenta(
+            VentaProcesarRequestDTO request,
+            Cliente cliente,
+            TurnoCaja turnoCaja,
+            CotizacionResponseDTO cotizacion,
+            BigDecimal cambio,
+            ResultadoValidacionItems resultadoItems
+    ) {
+        BigDecimal montoTotal = cotizacion.totalNeto();
+        BigDecimal montoRecibido = request.montoRecibido().setScale(2, RoundingMode.HALF_UP);
 
-        // 5. Construir y Congelar la Venta (Notion: CA-02 y CA-03)
         Venta venta = Venta.builder()
                 .cliente(cliente)
                 .turnoCaja(turnoCaja)
@@ -261,8 +362,8 @@ public class VentaServiceImpl implements VentaService {
 
         for (int i = 0; i < request.items().size(); i++) {
             DetalleVentaRequestDTO itemDto = request.items().get(i);
-            Atraccion atr = atraccionesPorItem.get(i);
-            Menor menor = menoresPorItem.get(i);
+            Atraccion atr = resultadoItems.atraccionesPorItem().get(i);
+            Menor menor = resultadoItems.menoresPorItem().get(i);
             int cant = (itemDto.cantidad() != null && itemDto.cantidad() > 0) ? itemDto.cantidad() : 1;
             BigDecimal subtotalLinea = cotizacion.subtotales().get(i);
             BigDecimal precioUnitario = itemDto.precioUnitario().setScale(2, RoundingMode.HALF_UP);
@@ -281,9 +382,10 @@ public class VentaServiceImpl implements VentaService {
             venta.addDetalle(detalle);
         }
 
-        Venta ventaGuardada = ventaRepository.save(venta);
+        return ventaRepository.save(venta);
+    }
 
-        // 6. Generar Tickets Individuales Criptoseguros por cada unidad vendida (Notion: CA-01, CA-04)
+    private List<Ticket> generarYAuditarTickets(Venta ventaGuardada, TurnoCaja turnoCaja) {
         List<Ticket> ticketsGenerados = new ArrayList<>();
         for (DetalleVenta detalle : ventaGuardada.getDetalles()) {
             int cant = (detalle.getCantidad() != null && detalle.getCantidad() > 0) ? detalle.getCantidad() : 1;
@@ -300,10 +402,10 @@ public class VentaServiceImpl implements VentaService {
                 ticketsGenerados.add(ticket);
             }
         }
+
         List<Ticket> ticketsGuardados = ticketRepository.saveAll(ticketsGenerados);
         log.info("Se generaron y persistieron {} tickets para la venta ID #{}", ticketsGuardados.size(), ventaGuardada.getId());
 
-        // Registro inmutable de emisión en auditoría (HU-38.04)
         for (Ticket t : ticketsGuardados) {
             auditoriaOperacionService.registrarTransicionTicket(
                     t.getUuidCodigo(),
@@ -315,8 +417,11 @@ public class VentaServiceImpl implements VentaService {
             );
         }
 
-        // 7. Actualizar Balance del Turno de Caja (Notion: CA-02)
-        if (MetodoPago.EFECTIVO.equals(request.metodoPago())) {
+        return ticketsGuardados;
+    }
+
+    private void actualizarBalanceCajaSiAplica(TurnoCaja turnoCaja, MetodoPago metodoPago, BigDecimal montoTotal) {
+        if (MetodoPago.EFECTIVO.equals(metodoPago)) {
             BigDecimal ventasActuales = turnoCaja.getVentasEfectivoSistema() != null
                     ? turnoCaja.getVentasEfectivoSistema()
                     : BigDecimal.ZERO;
@@ -324,79 +429,29 @@ public class VentaServiceImpl implements VentaService {
             turnoCajaRepository.save(turnoCaja);
             log.info("Balance de ventas en efectivo del turno #{} actualizado a ${}", turnoCaja.getId(), turnoCaja.getVentasEfectivoSistema());
         }
+    }
 
-        // 8. Invalidar caché del catálogo de atracciones para reflejar aforo en tiempo real
+    private void invalidarCacheAforo() {
         if (atraccionService != null) {
             atraccionService.invalidarCacheCatalogo();
         }
-
-        log.info("Venta ID #{} procesada y congelada exitosamente con estado PAGADO por total ${}", ventaGuardada.getId(), montoTotal);
-        return mapToResponseDTO(ventaGuardada, ticketsGuardados);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public VentaResponseDTO obtenerVentaPorId(Long id) {
-        Venta venta = ventaRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Venta no encontrada con ID: " + id));
-        List<Ticket> tickets = ticketRepository.findByDetalleVentaVentaIdOrderByFechaEmisionAsc(id);
-        return mapToResponseDTO(venta, tickets);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<VentaResponseDTO> obtenerVentasPorTurno(Long turnoCajaId) {
-        List<Venta> ventas = ventaRepository.findByTurnoCajaIdOrderByFechaVentaDesc(turnoCajaId);
-        if (ventas.isEmpty()) {
-            return List.of();
-        }
-
-        List<Long> ventaIds = ventas.stream().map(Venta::getId).toList();
-        List<Ticket> todosLosTickets = ticketRepository.findByDetalleVentaVentaIdInOrderByFechaEmisionAsc(ventaIds);
-        Map<Long, List<Ticket>> ticketsPorVentaId = todosLosTickets.stream()
-                .collect(Collectors.groupingBy(t -> t.getDetalleVenta().getVenta().getId()));
-
-        return ventas.stream()
-                .map(v -> mapToResponseDTO(v, ticketsPorVentaId.getOrDefault(v.getId(), List.of())))
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<VentaResponseDTO> listarVentasPorTurno(Long turnoId, Authentication auth) {
-        if (turnoId == null) {
-            throw new ReglaNegocioException("El ID del turno de caja es obligatorio");
-        }
-
-        TurnoCaja turno = turnoCajaRepository.findById(turnoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Turno de caja no encontrado con ID: " + turnoId));
-
-        if (auth == null) {
-            auth = SecurityContextHolder.getContext().getAuthentication();
-        }
-
-        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
-            Usuario usuario = usuarioRepository.findByCorreo(auth.getName()).orElse(null);
-            if (usuario != null && usuario.getRol() != null
-                    && NombreRol.TAQUILLERO.equals(usuario.getRol().getNombre())
-                    && !turno.getUsuarioId().equals(usuario.getId())) {
-                throw new AccessDeniedException("No tiene permisos para ver las ventas de otro cajero.");
+    private Usuario resolverUsuarioEnSesion(Authentication auth) {
+        Usuario usuario = authenticatedUserProvider != null
+                ? authenticatedUserProvider.resolverUsuario(auth).orElse(null)
+                : null;
+        if (usuario == null) {
+            Authentication effectiveAuth = auth != null ? auth : SecurityContextHolder.getContext().getAuthentication();
+            if (effectiveAuth != null && effectiveAuth.isAuthenticated() && !"anonymousUser".equals(effectiveAuth.getPrincipal())) {
+                usuario = usuarioRepository.findByCorreo(effectiveAuth.getName()).orElse(null);
             }
         }
-
-        return obtenerVentasPorTurno(turnoId);
+        return usuario;
     }
 
     private TurnoCaja resolverTurnoCajaActivo(Long turnoCajaId, Authentication auth) {
-        Usuario usuarioAutenticado = authenticatedUserProvider != null
-                ? authenticatedUserProvider.resolverUsuario(auth).orElse(null)
-                : null;
-        if (usuarioAutenticado == null) {
-            Authentication effectiveAuth = auth != null ? auth : SecurityContextHolder.getContext().getAuthentication();
-            if (effectiveAuth != null && effectiveAuth.isAuthenticated() && !"anonymousUser".equals(effectiveAuth.getPrincipal())) {
-                usuarioAutenticado = usuarioRepository.findByCorreo(effectiveAuth.getName()).orElse(null);
-            }
-        }
+        Usuario usuarioAutenticado = resolverUsuarioEnSesion(auth);
 
         if (turnoCajaId != null) {
             TurnoCaja turno = turnoCajaRepository.findById(turnoCajaId)
@@ -447,24 +502,24 @@ public class VentaServiceImpl implements VentaService {
         String nombreCompletoCliente = v.getCliente() != null ? v.getCliente().getNombreCompleto() : "";
 
         return new VentaResponseDTO(
-                v.getId(),
-                v.getCliente().getId(),
-                v.getCliente().getNumeroDocumento(),
-                nombreCompletoCliente.trim(),
-                v.getTurnoCaja().getId(),
-                v.getSubtotal(),
-                v.getDescuento(),
-                v.getImpuestos(),
-                v.getMontoTotal(),
-                v.getMontoRecibido(),
-                v.getCambio(),
-                v.getMetodoPago(),
-                v.getEstadoVenta(),
-                v.getFechaVenta(),
-                v.getCongelada(),
-                v.getObservaciones(),
-                detallesDTO,
-                ticketsDTO
+            v.getId(),
+            v.getCliente().getId(),
+            v.getCliente().getNumeroDocumento(),
+            nombreCompletoCliente.trim(),
+            v.getTurnoCaja().getId(),
+            v.getSubtotal(),
+            v.getDescuento(),
+            v.getImpuestos(),
+            v.getMontoTotal(),
+            v.getMontoRecibido(),
+            v.getCambio(),
+            v.getMetodoPago(),
+            v.getEstadoVenta(),
+            v.getFechaVenta(),
+            v.getCongelada(),
+            v.getObservaciones(),
+            detallesDTO,
+            ticketsDTO
         );
     }
 
@@ -482,4 +537,13 @@ public class VentaServiceImpl implements VentaService {
                 t.getFechaEmision()
         );
     }
+
+    /**
+     * Objeto de transferencia interno inmutable para agrupar las listas resultantes de la validación de ítems.
+     */
+    private record ResultadoValidacionItems(
+            List<ItemCotizacionDTO> itemsParaCotizar,
+            List<Atraccion> atraccionesPorItem,
+            List<Menor> menoresPorItem
+    ) {}
 }

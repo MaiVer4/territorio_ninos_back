@@ -14,7 +14,6 @@ import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import com.software.territoriodeninos.util.NombreRol;
 import com.software.territoriodeninos.util.TicketPrintFormatter;
 import com.software.territoriodeninos.util.TipoTarifa;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;

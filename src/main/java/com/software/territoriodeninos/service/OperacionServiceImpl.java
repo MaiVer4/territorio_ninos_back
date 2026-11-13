@@ -43,7 +43,6 @@ import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoSesionJuego;
 import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.NombreRol;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
