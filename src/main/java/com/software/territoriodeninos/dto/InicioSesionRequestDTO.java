@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 
@@ -8,6 +9,7 @@ import java.util.UUID;
 
 @Schema(description = "DTO de solicitud para iniciar formalmente la sesión de juego de un menor tras lectura QR (HU-27.03)")
 public record InicioSesionRequestDTO(
+    @JsonAlias({"ticketUuid", "ticket_uuid"})
     @NotNull(message = "El UUID del ticket es obligatorio")
     @Schema(description = "Código UUID del ticket", example = "93957dbe-823c-4b57-b5e5-629857541d06")
     UUID uuidTicket,

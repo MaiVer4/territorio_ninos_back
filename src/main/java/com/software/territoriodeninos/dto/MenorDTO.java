@@ -17,6 +17,7 @@ import java.time.Period;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Schema(description = "DTO para datos de un menor a cargo")
 public record MenorDTO(
+    @JsonAlias({"idMenor", "id_menor"})
     @Schema(description = "ID del menor en base de datos", example = "1")
     Long id,
 

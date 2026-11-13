@@ -11,8 +11,9 @@ import java.math.BigDecimal;
 @Schema(description = "DTO para registro de arqueo parcial o intermedio de caja")
 public record ArqueoCajaDTO(
     @DecimalMin(value = "0.0", message = "El monto recontado no puede ser negativo")
-    @JsonAlias({"monto", "montoRecontado", "monto_recontado", "montoFisico"})
+    @JsonAlias({"monto", "montoRecontado", "monto_recontado", "montoFisico", "totalFisico"})
     BigDecimal montoEfectivoRecontado,
 
+    @JsonAlias({"justificacion", "notas"})
     String observaciones
 ) {}
