@@ -1,0 +1,919 @@
+-- =========================================================================================
+-- SCRIPT DE SIMULACIÓN INTEGRAL DE OPERACIÓN DEL PARQUE "TERRITORIO DE NIÑOS"
+-- Escenario A: Día de Apogeo Medio-Bajo (CURRENT_DATE - 2 días: jornada entre semana)
+-- Escenario B: Día de Mucho Apogeo / Hora Pico (CURRENT_DATE - 1 día: jornada fin de semana)
+-- Escenario C: Operación en Vivo Hoy (CURRENT_DATE: estación activa y sesiones en curso)
+-- =========================================================================================
+
+BEGIN;
+
+-- -----------------------------------------------------------------------------------------
+-- 1. ASEGURAR ESQUEMA COMPLETO (Tablas y columnas de V1..V9 + Entidades JPA)
+-- -----------------------------------------------------------------------------------------
+ALTER TABLE configuracion_parque ADD COLUMN IF NOT EXISTS aplica_impuesto BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE configuracion_parque ADD COLUMN IF NOT EXISTS porcentaje_impuesto NUMERIC(5,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE configuracion_parque ALTER COLUMN pie_ticket_legal TYPE VARCHAR(2000);
+
+ALTER TABLE atracciones ADD COLUMN IF NOT EXISTS edad_minima INTEGER;
+ALTER TABLE atracciones ADD COLUMN IF NOT EXISTS edad_maxima INTEGER;
+
+CREATE TABLE IF NOT EXISTS clientes (
+    id BIGSERIAL PRIMARY KEY,
+    numero_documento VARCHAR(20) NOT NULL UNIQUE,
+    nombres VARCHAR(100) NOT NULL,
+    apellidos VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20),
+    correo VARCHAR(100),
+    fecha_registro TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cliente_documento ON clientes (numero_documento);
+
+CREATE TABLE IF NOT EXISTS menores (
+    id BIGSERIAL PRIMARY KEY,
+    cliente_id BIGINT NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    numero_documento VARCHAR(20),
+    nombre_completo VARCHAR(150) NOT NULL,
+    fecha_nacimiento DATE,
+    edad INTEGER,
+    fecha_registro TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_menor_documento ON menores (numero_documento);
+CREATE INDEX IF NOT EXISTS idx_menor_cliente ON menores (cliente_id);
+
+CREATE TABLE IF NOT EXISTS ventas (
+    id BIGSERIAL PRIMARY KEY,
+    cliente_id BIGINT NOT NULL REFERENCES clientes(id),
+    turno_caja_id BIGINT NOT NULL REFERENCES turnos_caja(id),
+    monto_total NUMERIC(12,2) NOT NULL,
+    subtotal NUMERIC(12,2),
+    descuento NUMERIC(12,2) DEFAULT 0.00,
+    impuestos NUMERIC(12,2) DEFAULT 0.00,
+    monto_recibido NUMERIC(12,2),
+    cambio NUMERIC(12,2) DEFAULT 0.00,
+    metodo_pago VARCHAR(30) NOT NULL,
+    estado_venta VARCHAR(20) NOT NULL DEFAULT 'PAGADO',
+    fecha_venta TIMESTAMP NOT NULL DEFAULT NOW(),
+    congelada BOOLEAN NOT NULL DEFAULT TRUE,
+    observaciones VARCHAR(500)
+);
+CREATE INDEX IF NOT EXISTS idx_venta_turno_caja ON ventas (turno_caja_id, fecha_venta DESC);
+CREATE INDEX IF NOT EXISTS idx_venta_cliente ON ventas (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_venta_fecha ON ventas (fecha_venta DESC);
+
+ALTER TABLE ventas DROP CONSTRAINT IF EXISTS ventas_estado_venta_check;
+ALTER TABLE ventas ADD CONSTRAINT ventas_estado_venta_check
+    CHECK (estado_venta IN ('PAGADO', 'COMPLETADA', 'PENDIENTE', 'ANULADA', 'CANCELADA'));
+
+ALTER TABLE ventas DROP CONSTRAINT IF EXISTS ventas_metodo_pago_check;
+ALTER TABLE ventas ADD CONSTRAINT ventas_metodo_pago_check
+    CHECK (metodo_pago IN ('EFECTIVO', 'TARJETA', 'TARJETA_DEBITO', 'TARJETA_CREDITO', 'TRANSFERENCIA', 'DATAFONO', 'NEQUI', 'DAVIPLATA', 'PSE', 'MIXTO'));
+
+CREATE TABLE IF NOT EXISTS detalles_venta (
+    id BIGSERIAL PRIMARY KEY,
+    venta_id BIGINT NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+    atraccion_id BIGINT NOT NULL REFERENCES atracciones(id),
+    menor_id BIGINT REFERENCES menores(id),
+    tipo_tarifa VARCHAR(30) NOT NULL,
+    tarifa_tiempo_id BIGINT,
+    tarifa_evento_id BIGINT,
+    cantidad INTEGER NOT NULL DEFAULT 1,
+    precio_unitario NUMERIC(12,2) NOT NULL,
+    subtotal NUMERIC(12,2) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_detalle_venta ON detalles_venta (venta_id);
+CREATE INDEX IF NOT EXISTS idx_detalle_atraccion ON detalles_venta (atraccion_id);
+CREATE INDEX IF NOT EXISTS idx_detalle_menor ON detalles_venta (menor_id);
+
+CREATE TABLE IF NOT EXISTS tickets (
+    uuid_codigo UUID PRIMARY KEY,
+    detalle_venta_id BIGINT NOT NULL REFERENCES detalles_venta(id) ON DELETE CASCADE,
+    menor_id BIGINT REFERENCES menores(id),
+    estado_ticket VARCHAR(20) NOT NULL DEFAULT 'PAGADO',
+    fecha_emision TIMESTAMP NOT NULL DEFAULT NOW(),
+    fecha_consumo TIMESTAMP,
+    CONSTRAINT uq_ticket_uuid_codigo UNIQUE (uuid_codigo)
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_uuid_codigo ON tickets (uuid_codigo);
+CREATE INDEX IF NOT EXISTS idx_ticket_detalle_venta ON tickets (detalle_venta_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_menor ON tickets (menor_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_estado ON tickets (estado_ticket);
+
+CREATE TABLE IF NOT EXISTS log_reimpresion (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    ticket_id UUID NOT NULL REFERENCES tickets(uuid_codigo),
+    usuario_id BIGINT NOT NULL REFERENCES usuarios(id),
+    motivo VARCHAR(500) NOT NULL,
+    fecha_reimpresion TIMESTAMP(6) WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS log_escaneo_qr (
+    id BIGSERIAL PRIMARY KEY,
+    uuid_leido UUID NOT NULL,
+    ticket_encontrado BOOLEAN NOT NULL DEFAULT FALSE,
+    atraccion_id BIGINT NOT NULL REFERENCES atracciones(id),
+    operario_id BIGINT NOT NULL REFERENCES usuarios(id),
+    direccion_ip VARCHAR(64),
+    timestamp_cliente TIMESTAMP,
+    fecha_escaneo TIMESTAMP NOT NULL DEFAULT NOW(),
+    resultado VARCHAR(40) NOT NULL,
+    detalle VARCHAR(500)
+);
+
+CREATE TABLE IF NOT EXISTS sesiones_juego (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_id UUID NOT NULL UNIQUE REFERENCES tickets(uuid_codigo),
+    atraccion_id BIGINT NOT NULL REFERENCES atracciones(id),
+    menor_id BIGINT REFERENCES menores(id),
+    operario_id BIGINT NOT NULL REFERENCES usuarios(id),
+    hora_inicio TIMESTAMP NOT NULL,
+    hora_fin TIMESTAMP,
+    duracion_segundos INTEGER NOT NULL DEFAULT 0,
+    estado_sesion VARCHAR(30) NOT NULL DEFAULT 'EN_CURSO',
+    tiempo_restante_pausa INTEGER,
+    fecha_pausa TIMESTAMP,
+    fecha_salida_real TIMESTAMP,
+    segundos_exceso INTEGER NOT NULL DEFAULT 0,
+    intentos_totales INTEGER,
+    intentos_restantes INTEGER,
+    alerta_pre_expiracion_enviada BOOLEAN NOT NULL DEFAULT FALSE,
+    alerta_expiracion_enviada BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS log_incidente_pausa (
+    id BIGSERIAL PRIMARY KEY,
+    sesion_juego_id BIGINT NOT NULL REFERENCES sesiones_juego(id),
+    atraccion_id BIGINT REFERENCES atracciones(id),
+    operario_id BIGINT NOT NULL REFERENCES usuarios(id),
+    motivo VARCHAR(500) NOT NULL,
+    tipo_pausa VARCHAR(50) DEFAULT 'OPERATIVA',
+    es_pausa_general BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_inicio_pausa TIMESTAMP NOT NULL,
+    fecha_fin_pausa TIMESTAMP,
+    duracion_segundos INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS auditoria_tickets (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_uuid UUID NOT NULL,
+    estado_origen VARCHAR(30),
+    estado_destino VARCHAR(30) NOT NULL,
+    motivo VARCHAR(500),
+    fecha_evento TIMESTAMP NOT NULL DEFAULT NOW(),
+    usuario_id BIGINT REFERENCES usuarios(id),
+    dispositivo_info VARCHAR(255)
+);
+
+-- -----------------------------------------------------------------------------------------
+-- 2. LIMPIEZA IDEMPOTENTE DE DATOS DE SIMULACIÓN PREVIOS (conservando usuarios base)
+-- -----------------------------------------------------------------------------------------
+TRUNCATE TABLE
+    auditoria_tickets,
+    log_incidente_pausa,
+    sesiones_juego,
+    log_escaneo_qr,
+    log_reimpresion,
+    tickets,
+    detalles_venta,
+    ventas,
+    turnos_caja,
+    asignaciones_operario,
+    menores,
+    clientes,
+    tarifas_tiempo,
+    tarifas_evento,
+    atracciones
+RESTART IDENTITY CASCADE;
+
+-- -----------------------------------------------------------------------------------------
+-- 3. CONFIGURACIÓN INSTITUCIONAL DEL PARQUE
+-- -----------------------------------------------------------------------------------------
+INSERT INTO configuracion_parque (
+    id, nombre_parque, nombre_comercial, razon_social, nit, direccion, telefono, ciudad,
+    politicas_seguridad, ancho_papel_mm, mensaje_pie, pie_ticket_legal,
+    tiempo_gracia_general_segundos, aplica_impuesto, porcentaje_impuesto
+) VALUES (
+    1,
+    'Territorio de Niños',
+    'Territorio de Niños Parque Infantil',
+    'Territorio de Niños Entretenimiento Familiar S.A.S.',
+    '901.458.789-2',
+    'Av. Bolívar # 14N-55, Centro Comercial Portal del Quindío Piso 3',
+    '+57 310 456 7890',
+    'Armenia, Quindío',
+    E'1. Uso obligatorio de medias antideslizantes en zonas blandas y trampolines.\n2. Prohibido el ingreso de alimentos, bebidas o chicles a las atracciones.\n3. Todo menor debe contar con un acudiente mayor de edad responsable en el recinto.',
+    80,
+    '¡Gracias por vivir la aventura en Territorio de Niños!',
+    'Territorio de Niños S.A.S. NIT 901.458.789-2. Boleto válido únicamente para la fecha de emisión. El cuidado y supervisión general de los menores es responsabilidad del acudiente.',
+    60,
+    TRUE,
+    0.00
+) ON CONFLICT (id) DO UPDATE SET
+    nombre_parque = EXCLUDED.nombre_parque,
+    nombre_comercial = EXCLUDED.nombre_comercial,
+    razon_social = EXCLUDED.razon_social,
+    nit = EXCLUDED.nit;
+
+-- -----------------------------------------------------------------------------------------
+-- 4. ROLES Y PERSONAL OPERATIVO (Taquilleros y Operarios)
+-- -----------------------------------------------------------------------------------------
+INSERT INTO roles (id, nombre, descripcion, fecha_creacion) VALUES
+    (1, 'ADMINISTRADOR', 'Acceso total al sistema y reportes gerenciales', NOW()),
+    (2, 'TAQUILLERO', 'Operación de caja, ventas y registro de acudientes', NOW()),
+    (3, 'OPERARIO', 'Control de ingreso QR, aforo y sesiones en atracciones', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Contraseña BCrypt estándar del proyecto para cuentas de prueba
+INSERT INTO usuarios (nombre, correo, password, estado, rol_id, fecha_creacion, fecha_actualizacion)
+VALUES
+    ('Laura Gómez (Taquilla 1)', 'laura.taquilla@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 2, NOW() - INTERVAL '30 days', NOW()),
+    ('Andrés Morales (Taquilla 2)', 'andres.taquilla@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 2, NOW() - INTERVAL '30 days', NOW()),
+    ('Camila Ríos (Op. Trampolines)', 'camila.operario@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 3, NOW() - INTERVAL '30 days', NOW()),
+    ('Sebastián Castro (Op. Piscina)', 'sebastian.operario@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 3, NOW() - INTERVAL '30 days', NOW()),
+    ('Diego Vargas (Op. Toro Mecánico)', 'diego.operario@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 3, NOW() - INTERVAL '30 days', NOW()),
+    ('Valentina Ortiz (Op. Escalada)', 'valentina.operario@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 3, NOW() - INTERVAL '30 days', NOW()),
+    ('Mateo Mendoza (Op. Karts)', 'mateo.operario@territoriodeninos.com', '$2a$10$kAeZ22qyV4L8zvU6R5/Zhe37fVytHmLNDppYlAZj6kGVA9loA/QEm', 'ACTIVO', 3, NOW() - INTERVAL '30 days', NOW())
+ON CONFLICT (correo) DO NOTHING;
+
+-- -----------------------------------------------------------------------------------------
+-- 5. CATÁLOGO DE ATRACCIONES Y TARIFAS (5 Estaciones)
+-- -----------------------------------------------------------------------------------------
+INSERT INTO atracciones (
+    id, nombre, descripcion, tarifa_minuto, estado, tipo,
+    capacidad_maxima, duracion_minutos_base, tolerancia_minutos, caidas_limite,
+    edad_minima, edad_maxima, fecha_creacion
+) VALUES
+    (1, 'Zona de Trampolines Extreme', 'Arena de camas elásticas interconectadas y foso de espuma', 800.00, 'ACTIVO', 'TEMPORIZADA', 20, 30, 5, 3, 4, 16, NOW() - INTERVAL '60 days'),
+    (2, 'Piscina de Pelotas y Laberinto', 'Mega estructura multinivel con toboganes y 50,000 pelotas', 650.00, 'ACTIVO', 'TEMPORIZADA', 25, 30, 5, 3, 1, 9, NOW() - INTERVAL '60 days'),
+    (3, 'Toro Mecánico Salvaje', 'Simulador de rodeo acolchado con sensores de velocidad', 1200.00, 'ACTIVO', 'EVENTOS_CAIDAS', 1, 10, 2, 3, 7, 17, NOW() - INTERVAL '60 days'),
+    (4, 'Muro de Escalada Olímpico', 'Pared de ascenso deportivo con arnés automático', 900.00, 'ACTIVO', 'TEMPORIZADA', 8, 15, 3, 3, 6, 17, NOW() - INTERVAL '60 days'),
+    (5, 'Pista de Karts Eléctricos', 'Circuito indoor con karts eléctricos de velocidad regulada', 1100.00, 'ACTIVO', 'TEMPORIZADA', 10, 15, 2, 3, 5, 16, NOW() - INTERVAL '60 days');
+
+SELECT setval('atracciones_id_seq', 5, true);
+
+-- Tarifas por Tiempo (Atracciones 1, 2, 4, 5)
+INSERT INTO tarifas_tiempo (id, atraccion_id, duracion_minutos, precio, activo, fecha_creacion) VALUES
+    (1, 1, 15, 12000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (2, 1, 30, 20000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (3, 1, 60, 34000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (4, 2, 15, 10000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (5, 2, 30, 18000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (6, 2, 60, 30000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (7, 4, 15, 14000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (8, 4, 30, 24000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (9, 5, 15, 16000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (10, 5, 30, 28000.00, TRUE, NOW() - INTERVAL '60 days');
+
+SELECT setval('tarifas_tiempo_id_seq', 10, true);
+
+-- Tarifas por Evento/Caídas (Atracción 3: Toro Mecánico)
+INSERT INTO tarifas_evento (id, atraccion_id, intentos, precio, activo, fecha_creacion) VALUES
+    (1, 3, 3, 15000.00, TRUE, NOW() - INTERVAL '60 days'),
+    (2, 3, 5, 22000.00, TRUE, NOW() - INTERVAL '60 days');
+
+SELECT setval('tarifas_evento_id_seq', 2, true);
+
+-- -----------------------------------------------------------------------------------------
+-- 6. SIMULACIÓN PROCEDIMENTAL DE CLIENTES, MENORES Y LOS 2 DÍAS DE OPERACIÓN
+-- -----------------------------------------------------------------------------------------
+DO $$
+DECLARE
+    v_taquillero1_id BIGINT;
+    v_taquillero2_id BIGINT;
+    v_op_trampolines BIGINT;
+    v_op_piscina BIGINT;
+    v_op_toro BIGINT;
+    v_op_escalada BIGINT;
+    v_op_karts BIGINT;
+
+    v_dia_bajo DATE := (NOW() AT TIME ZONE 'America/Bogota')::DATE - 2;
+    v_dia_alto DATE := (NOW() AT TIME ZONE 'America/Bogota')::DATE - 1;
+    v_dia_hoy  DATE := (NOW() AT TIME ZONE 'America/Bogota')::DATE;
+
+    v_cliente_id BIGINT;
+    v_menor_id BIGINT;
+    v_edad INT;
+    v_fnac DATE;
+
+    v_turno_bajo_am BIGINT;
+    v_turno_bajo_pm BIGINT;
+    v_turno_alto_c1_am BIGINT;
+    v_turno_alto_c1_pm BIGINT;
+    v_turno_alto_c2_pico BIGINT;
+    v_turno_hoy_abierto BIGINT;
+
+    v_venta_id BIGINT;
+    v_detalle_id BIGINT;
+    v_uuid UUID;
+    v_sesion_id BIGINT;
+
+    v_turno_actual BIGINT;
+    v_atraccion_id BIGINT;
+    v_tipo_tarifa VARCHAR(30);
+    v_tarifa_tiempo_id BIGINT;
+    v_tarifa_evento_id BIGINT;
+    v_precio_unit NUMERIC(12,2);
+    v_duracion_min INT;
+    v_intentos INT;
+    v_cantidad INT;
+    v_subtotal NUMERIC(12,2);
+    v_total_venta NUMERIC(12,2);
+    v_metodo_pago VARCHAR(30);
+    v_ts_venta TIMESTAMP;
+    v_ts_ingreso TIMESTAMP;
+    v_ts_salida TIMESTAMP;
+    v_exceso_seg INT;
+    v_operario_estacion BIGINT;
+
+    v_nombres TEXT[] := ARRAY[
+        'Carlos', 'María', 'Jorge', 'Diana', 'Andrés', 'Carolina', 'Luis', 'Paola',
+        'Fernando', 'Natalia', 'Ricardo', 'Claudia', 'Alejandro', 'Marcela', 'Camilo',
+        'Juliana', 'Mauricio', 'Tatiana', 'Héctor', 'Liliana', 'Óscar', 'Viviana',
+        'Germán', 'Adriana', 'Fabián', 'Mónica', 'Gustavo', 'Sandra', 'Iván', 'Patricia',
+        'Sergio', 'Lorena', 'Daniel', 'Ángela', 'Rodrigo', 'Beatriz', 'Esteban', 'Rosa',
+        'Felipe', 'Elena'
+    ];
+    v_apellidos TEXT[] := ARRAY[
+        'Restrepo', 'Giraldo', 'Osorio', 'Cardona', 'Londoño', 'Castaño', 'Montoya', 'Vélez',
+        'Salazar', 'Arango', 'Mejía', 'Bedoya', 'Quintero', 'Arias', 'Patiño',
+        'Henao', 'Zapata', 'Ramírez', 'Gómez', 'Herrera', 'Duque', 'Valencia',
+        'Marín', 'Agudelo', 'Correa', 'Ríos', 'Muñoz', 'Trujillo', 'Flórez', 'Parra',
+        'Buitrago', 'echeverri', 'Yepes', 'Ocampo', 'Soto', 'Villa', 'Tamayo', 'Cortés',
+        'Escobar', 'Navarro'
+    ];
+    v_nombres_ninos TEXT[] := ARRAY[
+        'Matías', 'Sofía', 'Samuel', 'Isabella', 'Emiliano', 'Luciana', 'Santiago', 'Mariana',
+        'Martín', 'Valeria', 'Nicolás', 'Gabriela', 'Jerónimo', 'Sara', 'Emmanuel', 'Antonella',
+        'Tomás', 'Salomé', 'Maximiliano', 'Victoria', 'Alejandro', 'Julieta', 'Simón', 'abril',
+        'Miguel', 'Camila', 'Jacobo', 'Elena', 'Juan José', 'Celeste', 'Gael', 'Guadalupe',
+        'Lucas', 'Miranda', 'Thiago', 'Samantha', 'Joaquín', 'Paulina', 'Isaac', 'Violeta'
+    ];
+    v_metodos TEXT[] := ARRAY['EFECTIVO', 'EFECTIVO', 'NEQUI', 'TARJETA_DEBITO', 'TARJETA_CREDITO', 'DAVIPLATA', 'TRANSFERENCIA'];
+
+    i INT;
+    j INT;
+    v_num_items INT;
+BEGIN
+    -- Resolver IDs de usuarios operativos (priorizando cuentas existentes del usuario en localhost)
+    SELECT COALESCE(
+        (SELECT id FROM usuarios WHERE correo = 'll3925430@gmail.com' LIMIT 1),
+        (SELECT id FROM usuarios WHERE correo = 'laura.taquilla@territoriodeninos.com' LIMIT 1)
+    ) INTO v_taquillero1_id;
+
+    SELECT id INTO v_taquillero2_id FROM usuarios WHERE correo = 'andres.taquilla@territoriodeninos.com';
+
+    SELECT COALESCE(
+        (SELECT id FROM usuarios WHERE correo = 'operario@operario.com' LIMIT 1),
+        (SELECT id FROM usuarios WHERE correo = 'camila.operario@territoriodeninos.com' LIMIT 1)
+    ) INTO v_op_trampolines;
+
+    SELECT COALESCE(
+        (SELECT id FROM usuarios WHERE correo = 'luis@luis.com' LIMIT 1),
+        (SELECT id FROM usuarios WHERE correo = 'sebastian.operario@territoriodeninos.com' LIMIT 1)
+    ) INTO v_op_piscina;
+
+    SELECT id INTO v_op_toro     FROM usuarios WHERE correo = 'diego.operario@territoriodeninos.com';
+    SELECT id INTO v_op_escalada FROM usuarios WHERE correo = 'valentina.operario@territoriodeninos.com';
+    SELECT id INTO v_op_karts    FROM usuarios WHERE correo = 'mateo.operario@territoriodeninos.com';
+
+    -- -------------------------------------------------------------------------------------
+    -- 6.1 CREAR 40 ACUDIENTES (CLIENTES) Y 72 MENORES (Edades variadas entre 2 y 16 años)
+    -- -------------------------------------------------------------------------------------
+    FOR i IN 1..40 LOOP
+        INSERT INTO clientes (numero_documento, nombres, apellidos, telefono, correo, fecha_registro)
+        VALUES (
+            (1094800000 + i * 137)::TEXT,
+            v_nombres[i],
+            v_apellidos[i] || ' ' || v_apellidos[((i + 7) % 40) + 1],
+            '31' || ((i % 8) + 1)::TEXT || LPAD((4500000 + i * 913)::TEXT, 7, '0'),
+            LOWER(v_nombres[i] || '.' || v_apellidos[i] || i::TEXT || '@correo.co'),
+            v_dia_bajo - INTERVAL '10 days'
+        ) RETURNING id INTO v_cliente_id;
+
+        -- Primer menor del acudiente
+        v_edad := 2 + (i % 14); -- entre 2 y 15 años
+        v_fnac := (CURRENT_DATE - (v_edad * INTERVAL '1 year') - ((i * 5) * INTERVAL '1 day'))::DATE;
+        INSERT INTO menores (cliente_id, numero_documento, nombre_completo, fecha_nacimiento, edad, fecha_registro)
+        VALUES (
+            v_cliente_id,
+            (1190000000 + i * 211)::TEXT,
+            INITCAP(v_nombres_ninos[i]) || ' ' || v_apellidos[i],
+            v_fnac,
+            v_edad,
+            v_dia_bajo - INTERVAL '10 days'
+        );
+
+        -- Segundo menor para el 80% de los acudientes
+        IF (i % 5) <> 0 THEN
+            v_edad := 4 + ((i * 3) % 12); -- entre 4 y 15 años
+            v_fnac := (CURRENT_DATE - (v_edad * INTERVAL '1 year') - ((i * 11) * INTERVAL '1 day'))::DATE;
+            INSERT INTO menores (cliente_id, numero_documento, nombre_completo, fecha_nacimiento, edad, fecha_registro)
+            VALUES (
+                v_cliente_id,
+                (1195000000 + i * 317)::TEXT,
+                INITCAP(v_nombres_ninos[((i + 15) % 40) + 1]) || ' ' || v_apellidos[i],
+                v_fnac,
+                v_edad,
+                v_dia_bajo - INTERVAL '10 days'
+            );
+        END IF;
+    END LOOP;
+
+    -- -------------------------------------------------------------------------------------
+    -- 6.2 ASIGNACIONES DE OPERARIOS (Históricas de Día Bajo y Día Alto, y Activas de Hoy)
+    -- -------------------------------------------------------------------------------------
+    -- Día Bajo (FINALIZADAS)
+    INSERT INTO asignaciones_operario (usuario_id, atraccion_id, fecha_asignacion, hora_inicio, hora_fin, estado, observaciones) VALUES
+        (v_op_trampolines, 1, v_dia_bajo, v_dia_bajo + TIME '09:00', v_dia_bajo + TIME '19:30', 'FINALIZADA', 'Jornada normal entre semana - Trampolines'),
+        (v_op_piscina,     2, v_dia_bajo, v_dia_bajo + TIME '09:00', v_dia_bajo + TIME '19:30', 'FINALIZADA', 'Jornada normal entre semana - Piscina de Pelotas'),
+        (v_op_toro,        3, v_dia_bajo, v_dia_bajo + TIME '09:00', v_dia_bajo + TIME '19:30', 'FINALIZADA', 'Jornada normal entre semana - Toro Mecánico'),
+        (v_op_escalada,    4, v_dia_bajo, v_dia_bajo + TIME '09:00', v_dia_bajo + TIME '19:30', 'FINALIZADA', 'Jornada normal entre semana - Escalada'),
+        (v_op_karts,       5, v_dia_bajo, v_dia_bajo + TIME '09:00', v_dia_bajo + TIME '19:30', 'FINALIZADA', 'Jornada normal entre semana - Karts');
+
+    -- Día Alto (FINALIZADAS)
+    INSERT INTO asignaciones_operario (usuario_id, atraccion_id, fecha_asignacion, hora_inicio, hora_fin, estado, observaciones) VALUES
+        (v_op_trampolines, 1, v_dia_alto, v_dia_alto + TIME '08:30', v_dia_alto + TIME '21:00', 'FINALIZADA', 'Jornada alta afluencia - Trampolines'),
+        (v_op_piscina,     2, v_dia_alto, v_dia_alto + TIME '08:30', v_dia_alto + TIME '21:00', 'FINALIZADA', 'Jornada alta afluencia - Piscina de Pelotas'),
+        (v_op_toro,        3, v_dia_alto, v_dia_alto + TIME '08:30', v_dia_alto + TIME '21:00', 'FINALIZADA', 'Jornada alta afluencia - Toro Mecánico'),
+        (v_op_escalada,    4, v_dia_alto, v_dia_alto + TIME '08:30', v_dia_alto + TIME '21:00', 'FINALIZADA', 'Jornada alta afluencia - Escalada'),
+        (v_op_karts,       5, v_dia_alto, v_dia_alto + TIME '08:30', v_dia_alto + TIME '21:00', 'FINALIZADA', 'Jornada alta afluencia - Karts');
+
+    -- Día Hoy (ACTIVAS para operación inmediata en estación)
+    INSERT INTO asignaciones_operario (usuario_id, atraccion_id, fecha_asignacion, hora_inicio, hora_fin, estado, observaciones) VALUES
+        (v_op_trampolines, 1, v_dia_hoy, v_dia_hoy + TIME '08:00', NULL, 'ACTIVA', 'Estación activa del día - Trampolines'),
+        (v_op_piscina,     2, v_dia_hoy, v_dia_hoy + TIME '08:00', NULL, 'ACTIVA', 'Estación activa del día - Piscina de Pelotas'),
+        (v_op_toro,        3, v_dia_hoy, v_dia_hoy + TIME '08:00', NULL, 'ACTIVA', 'Estación activa del día - Toro Mecánico'),
+        (v_op_escalada,    4, v_dia_hoy, v_dia_hoy + TIME '08:00', NULL, 'ACTIVA', 'Estación activa del día - Escalada'),
+        (v_op_karts,       5, v_dia_hoy, v_dia_hoy + TIME '08:00', NULL, 'ACTIVA', 'Estación activa del día - Karts');
+
+    -- =====================================================================================
+    -- ESCENARIO 1: DÍA DE APOGEO MEDIO-BAJO (hace 2 días: 18 ventas, ~31 tickets)
+    -- =====================================================================================
+    INSERT INTO turnos_caja (usuario_id, monto_base, fecha_apertura, fecha_cierre, ventas_efectivo_sistema, monto_efectivo_reportado, diferencia, estado, observaciones)
+    VALUES
+        (v_taquillero1_id, 100000.00, v_dia_bajo + TIME '09:00', v_dia_bajo + TIME '14:30', 0.00, 0.00, 0.00, 'CERRADO', 'Apertura turno mañana día medio-bajo | Cierre: Arqueo cuadrado sin novedades'),
+        (v_taquillero2_id, 100000.00, v_dia_bajo + TIME '14:30', v_dia_bajo + TIME '19:30', 0.00, 0.00, 0.00, 'CERRADO', 'Apertura turno tarde día medio-bajo | Cierre: Sobrante de $2,000 por monedas de cambio no reclamadas por cliente');
+
+    SELECT id INTO v_turno_bajo_am FROM turnos_caja WHERE fecha_apertura = v_dia_bajo + TIME '09:00' LIMIT 1;
+    SELECT id INTO v_turno_bajo_pm FROM turnos_caja WHERE fecha_apertura = v_dia_bajo + TIME '14:30' LIMIT 1;
+
+    FOR i IN 1..18 LOOP
+        -- Hora distribuida entre 09:30 y 18:15
+        v_ts_venta := v_dia_bajo + TIME '09:20' + (i * INTERVAL '28 minutes');
+        v_turno_actual := CASE WHEN i <= 9 THEN v_turno_bajo_am ELSE v_turno_bajo_pm END;
+        v_cliente_id := ((i - 1) % 25) + 1;
+        v_metodo_pago := v_metodos[((i - 1) % 7) + 1];
+        v_num_items := CASE WHEN (i % 3) = 0 THEN 2 ELSE 1 END;
+
+        INSERT INTO ventas (
+            cliente_id, turno_caja_id, monto_total, subtotal, descuento, impuestos,
+            monto_recibido, cambio, metodo_pago, estado_venta, fecha_venta, congelada, observaciones
+        ) VALUES (
+            v_cliente_id, v_turno_actual, 0.00, 0.00, 0.00, 0.00,
+            0.00, 0.00, v_metodo_pago, 'PAGADO', v_ts_venta, TRUE,
+            'Venta taquilla jornada media-baja #' || i
+        ) RETURNING id INTO v_venta_id;
+
+        v_total_venta := 0.00;
+
+        FOR j IN 1..v_num_items LOOP
+            v_atraccion_id := ((i + j - 1) % 5) + 1;
+            SELECT id INTO v_menor_id FROM menores WHERE cliente_id = v_cliente_id ORDER BY id OFFSET (j - 1) LIMIT 1;
+            IF v_menor_id IS NULL THEN
+                SELECT id INTO v_menor_id FROM menores WHERE cliente_id = v_cliente_id LIMIT 1;
+            END IF;
+
+            IF v_atraccion_id = 3 THEN
+                v_tipo_tarifa := 'EVENTO';
+                v_tarifa_tiempo_id := NULL;
+                v_tarifa_evento_id := 1;
+                v_precio_unit := 15000.00;
+                v_duracion_min := 10;
+                v_intentos := 3;
+            ELSIF v_atraccion_id = 1 THEN
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := 2;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := 20000.00;
+                v_duracion_min := 30;
+                v_intentos := NULL;
+            ELSIF v_atraccion_id = 2 THEN
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := 5;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := 18000.00;
+                v_duracion_min := 30;
+                v_intentos := NULL;
+            ELSIF v_atraccion_id = 4 THEN
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := 7;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := 14000.00;
+                v_duracion_min := 15;
+                v_intentos := NULL;
+            ELSE
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := 9;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := 16000.00;
+                v_duracion_min := 15;
+                v_intentos := NULL;
+            END IF;
+
+            v_subtotal := v_precio_unit;
+            v_total_venta := v_total_venta + v_subtotal;
+
+            INSERT INTO detalles_venta (
+                venta_id, atraccion_id, menor_id, tipo_tarifa,
+                tarifa_tiempo_id, tarifa_evento_id, cantidad, precio_unitario, subtotal
+            ) VALUES (
+                v_venta_id, v_atraccion_id, v_menor_id, v_tipo_tarifa,
+                v_tarifa_tiempo_id, v_tarifa_evento_id, 1, v_precio_unit, v_subtotal
+            ) RETURNING id INTO v_detalle_id;
+
+            v_uuid := gen_random_uuid();
+            v_ts_ingreso := v_ts_venta + INTERVAL '4 minutes';
+            v_ts_salida  := v_ts_ingreso + (v_duracion_min * INTERVAL '1 minute');
+
+            v_operario_estacion := CASE v_atraccion_id
+                WHEN 1 THEN v_op_trampolines
+                WHEN 2 THEN v_op_piscina
+                WHEN 3 THEN v_op_toro
+                WHEN 4 THEN v_op_escalada
+                ELSE v_op_karts
+            END;
+
+            INSERT INTO tickets (uuid_codigo, detalle_venta_id, menor_id, estado_ticket, fecha_emision, fecha_consumo)
+            VALUES (v_uuid, v_detalle_id, v_menor_id, 'CONSUMIDO', v_ts_venta, v_ts_salida);
+
+            -- Escaneo QR válido
+            INSERT INTO log_escaneo_qr (uuid_leido, ticket_encontrado, atraccion_id, operario_id, direccion_ip, timestamp_cliente, fecha_escaneo, resultado, detalle)
+            VALUES (v_uuid, TRUE, v_atraccion_id, v_operario_estacion, '192.168.10.' || (10 + v_atraccion_id), v_ts_ingreso, v_ts_ingreso, 'VALIDADO_EXITOSO', 'Validación completada satisfactoriamente');
+
+            -- Sesión de juego finalizada
+            INSERT INTO sesiones_juego (
+                ticket_id, atraccion_id, menor_id, operario_id,
+                hora_inicio, hora_fin, duracion_segundos, estado_sesion,
+                fecha_salida_real, segundos_exceso, intentos_totales, intentos_restantes,
+                alerta_pre_expiracion_enviada, alerta_expiracion_enviada
+            ) VALUES (
+                v_uuid, v_atraccion_id, v_menor_id, v_operario_estacion,
+                v_ts_ingreso, v_ts_salida, v_duracion_min * 60, 'FINALIZADA',
+                v_ts_salida, 0, v_intentos, CASE WHEN v_intentos IS NOT NULL THEN 0 ELSE NULL END,
+                TRUE, TRUE
+            ) RETURNING id INTO v_sesion_id;
+
+            -- Auditoría de transiciones del ticket
+            INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info) VALUES
+                (v_uuid, NULL, 'PAGADO', 'Emisión de ticket tras venta exitosa #' || v_venta_id, v_ts_venta, CASE WHEN i <= 9 THEN v_taquillero1_id ELSE v_taquillero2_id END, 'Terminal Taquilla'),
+                (v_uuid, 'PAGADO', 'EN_USO', 'Inicio de sesión en atracción #' || v_atraccion_id, v_ts_ingreso, v_operario_estacion, 'Terminal Operario'),
+                (v_uuid, 'EN_USO', 'CONSUMIDO', 'Salida formal del menor de la atracción', v_ts_salida, v_operario_estacion, 'Terminal Operario');
+
+            -- Simular 1 pausa operativa leve en el Día Bajo (venta #7)
+            IF i = 7 AND j = 1 THEN
+                INSERT INTO log_incidente_pausa (
+                    sesion_juego_id, atraccion_id, operario_id, motivo, tipo_pausa,
+                    es_pausa_general, fecha_inicio_pausa, fecha_fin_pausa, duracion_segundos
+                ) VALUES (
+                    v_sesion_id, v_atraccion_id, v_operario_estacion,
+                    'Pausa breve para ajuste de medias antideslizantes e hidratación del menor',
+                    'OPERATIVA', FALSE, v_ts_ingreso + INTERVAL '8 minutes', v_ts_ingreso + INTERVAL '11 minutes', 180
+                );
+            END IF;
+        END LOOP;
+
+        UPDATE ventas
+        SET monto_total = v_total_venta,
+            subtotal = v_total_venta,
+            monto_recibido = CASE WHEN v_metodo_pago = 'EFECTIVO' THEN CEIL(v_total_venta / 10000.0) * 10000.0 ELSE v_total_venta END,
+            cambio = CASE WHEN v_metodo_pago = 'EFECTIVO' THEN (CEIL(v_total_venta / 10000.0) * 10000.0) - v_total_venta ELSE 0.00 END
+        WHERE id = v_venta_id;
+    END LOOP;
+
+    -- 2 rechazos antifraude en el Día Bajo
+    INSERT INTO log_escaneo_qr (uuid_leido, ticket_encontrado, atraccion_id, operario_id, direccion_ip, timestamp_cliente, fecha_escaneo, resultado, detalle) VALUES
+        (gen_random_uuid(), TRUE, 3, v_op_toro, '192.168.10.13', v_dia_bajo + TIME '11:45', v_dia_bajo + TIME '11:45', 'RECHAZADO_EDAD_MINIMA', 'El menor (4 años) no cumple con la edad mínima requerida (7 años) para Toro Mecánico Salvaje.'),
+        (gen_random_uuid(), TRUE, 5, v_op_karts, '192.168.10.15', v_dia_bajo + TIME '16:20', v_dia_bajo + TIME '16:20', 'RECHAZADO_ATRACCION_DISTINTA', 'El ticket fue adquirido para Piscina de Pelotas y no puede ser redimido en Pista de Karts Eléctricos.');
+
+    -- Actualizar balances reales de los 2 turnos del Día Bajo
+    UPDATE turnos_caja t
+    SET ventas_efectivo_sistema = COALESCE((SELECT SUM(monto_total) FROM ventas v WHERE v.turno_caja_id = t.id AND v.metodo_pago = 'EFECTIVO'), 0.00)
+    WHERE t.id IN (v_turno_bajo_am, v_turno_bajo_pm);
+
+    UPDATE turnos_caja
+    SET monto_efectivo_reportado = monto_base + ventas_efectivo_sistema,
+        diferencia = 0.00
+    WHERE id = v_turno_bajo_am;
+
+    UPDATE turnos_caja
+    SET monto_efectivo_reportado = monto_base + ventas_efectivo_sistema + 2000.00,
+        diferencia = 2000.00
+    WHERE id = v_turno_bajo_pm;
+
+
+    -- =====================================================================================
+    -- ESCENARIO 2: DÍA DE MUCHO APOGEO / HORA PICO (ayer: 65 ventas, ~122 tickets)
+    -- =====================================================================================
+    INSERT INTO turnos_caja (usuario_id, monto_base, fecha_apertura, fecha_cierre, ventas_efectivo_sistema, monto_efectivo_reportado, diferencia, estado, observaciones)
+    VALUES
+        (v_taquillero1_id, 150000.00, v_dia_alto + TIME '08:30', v_dia_alto + TIME '14:30', 0.00, 0.00, 0.00, 'CERRADO', 'Apertura Caja 1 jornada mañana alta afluencia | Cierre: Cuadre exacto verificado con supervisor'),
+        (v_taquillero1_id, 150000.00, v_dia_alto + TIME '14:30', v_dia_alto + TIME '20:30', 0.00, 0.00, 0.00, 'CERRADO', 'Apertura Caja 1 jornada tarde hora pico | Cierre: Faltante de $5,000 en cambio rápido durante fila de las 16:00, asumido en acta'),
+        (v_taquillero2_id, 120000.00, v_dia_alto + TIME '11:00', v_dia_alto + TIME '19:30', 0.00, 0.00, 0.00, 'CERRADO', 'Apertura Caja 2 refuerzo hora pico domingo | Cierre: Sobrante de $4,000 por propina/ajuste de vueltos dejado en gaveta');
+
+    SELECT id INTO v_turno_alto_c1_am   FROM turnos_caja WHERE fecha_apertura = v_dia_alto + TIME '08:30' LIMIT 1;
+    SELECT id INTO v_turno_alto_c1_pm   FROM turnos_caja WHERE fecha_apertura = v_dia_alto + TIME '14:30' LIMIT 1;
+    SELECT id INTO v_turno_alto_c2_pico FROM turnos_caja WHERE fecha_apertura = v_dia_alto + TIME '11:00' LIMIT 1;
+
+    FOR i IN 1..65 LOOP
+        -- Concentrar el gran pico entre las 14:00 y las 17:00
+        IF i <= 18 THEN
+            -- Mañana (09:00 a 13:30)
+            v_ts_venta := v_dia_alto + TIME '09:00' + (i * INTERVAL '14 minutes');
+            v_turno_actual := CASE WHEN (i % 3) = 0 AND i >= 9 THEN v_turno_alto_c2_pico ELSE v_turno_alto_c1_am END;
+        ELSIF i <= 48 THEN
+            -- Hora Pico (14:00 a 17:00): 30 ventas en 3 horas
+            v_ts_venta := v_dia_alto + TIME '14:00' + ((i - 18) * INTERVAL '6 minutes');
+            v_turno_actual := CASE WHEN (i % 2) = 0 THEN v_turno_alto_c2_pico ELSE v_turno_alto_c1_pm END;
+        ELSE
+            -- Tarde/Noche (17:10 a 19:50)
+            v_ts_venta := v_dia_alto + TIME '17:05' + ((i - 48) * INTERVAL '9 minutes');
+            v_turno_actual := v_turno_alto_c1_pm;
+        END IF;
+
+        v_cliente_id := ((i - 1) % 40) + 1;
+        v_metodo_pago := v_metodos[((i * 3) % 7) + 1];
+        -- En día de mucho apogeo los grupos familiares compran entre 1 y 3 paquetes
+        v_num_items := CASE
+            WHEN (i % 5) = 0 THEN 3
+            WHEN (i % 2) = 0 THEN 2
+            ELSE 1
+        END;
+
+        INSERT INTO ventas (
+            cliente_id, turno_caja_id, monto_total, subtotal, descuento, impuestos,
+            monto_recibido, cambio, metodo_pago, estado_venta, fecha_venta, congelada, observaciones
+        ) VALUES (
+            v_cliente_id, v_turno_actual, 0.00, 0.00,
+            CASE WHEN v_num_items = 3 THEN 5000.00 ELSE 0.00 END,
+            0.00, 0.00, 0.00, v_metodo_pago, 'PAGADO', v_ts_venta, TRUE,
+            CASE WHEN v_num_items = 3 THEN 'Combo familiar fin de semana con descuento promocional' ELSE 'Venta taquilla jornada alta #' || i END
+        ) RETURNING id INTO v_venta_id;
+
+        v_total_venta := 0.00;
+
+        FOR j IN 1..v_num_items LOOP
+            -- Mayor demanda en Trampolines (1) y Piscina (2) y Karts (5)
+            v_atraccion_id := CASE ((i + j) % 7)
+                WHEN 0 THEN 1
+                WHEN 1 THEN 1
+                WHEN 2 THEN 2
+                WHEN 3 THEN 2
+                WHEN 4 THEN 5
+                WHEN 5 THEN 4
+                ELSE 3
+            END;
+
+            SELECT id INTO v_menor_id FROM menores WHERE cliente_id = v_cliente_id ORDER BY id OFFSET ((j - 1) % 2) LIMIT 1;
+            IF v_menor_id IS NULL THEN
+                SELECT id INTO v_menor_id FROM menores WHERE cliente_id = v_cliente_id LIMIT 1;
+            END IF;
+
+            IF v_atraccion_id = 3 THEN
+                v_tipo_tarifa := 'EVENTO';
+                v_tarifa_tiempo_id := NULL;
+                v_tarifa_evento_id := CASE WHEN (i % 4) = 0 THEN 2 ELSE 1 END;
+                v_precio_unit := CASE WHEN v_tarifa_evento_id = 2 THEN 22000.00 ELSE 15000.00 END;
+                v_duracion_min := 10;
+                v_intentos := CASE WHEN v_tarifa_evento_id = 2 THEN 5 ELSE 3 END;
+            ELSIF v_atraccion_id = 1 THEN
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := CASE WHEN (i % 3) = 0 THEN 3 ELSE 2 END;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := CASE WHEN v_tarifa_tiempo_id = 3 THEN 34000.00 ELSE 20000.00 END;
+                v_duracion_min := CASE WHEN v_tarifa_tiempo_id = 3 THEN 60 ELSE 30 END;
+                v_intentos := NULL;
+            ELSIF v_atraccion_id = 2 THEN
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := CASE WHEN (i % 4) = 0 THEN 6 ELSE 5 END;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := CASE WHEN v_tarifa_tiempo_id = 6 THEN 30000.00 ELSE 18000.00 END;
+                v_duracion_min := CASE WHEN v_tarifa_tiempo_id = 6 THEN 60 ELSE 30 END;
+                v_intentos := NULL;
+            ELSIF v_atraccion_id = 4 THEN
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := 8;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := 24000.00;
+                v_duracion_min := 30;
+                v_intentos := NULL;
+            ELSE
+                v_tipo_tarifa := 'TIEMPO';
+                v_tarifa_tiempo_id := 10;
+                v_tarifa_evento_id := NULL;
+                v_precio_unit := 28000.00;
+                v_duracion_min := 30;
+                v_intentos := NULL;
+            END IF;
+
+            v_subtotal := v_precio_unit;
+            v_total_venta := v_total_venta + v_subtotal;
+
+            INSERT INTO detalles_venta (
+                venta_id, atraccion_id, menor_id, tipo_tarifa,
+                tarifa_tiempo_id, tarifa_evento_id, cantidad, precio_unitario, subtotal
+            ) VALUES (
+                v_venta_id, v_atraccion_id, v_menor_id, v_tipo_tarifa,
+                v_tarifa_tiempo_id, v_tarifa_evento_id, 1, v_precio_unit, v_subtotal
+            ) RETURNING id INTO v_detalle_id;
+
+            v_uuid := gen_random_uuid();
+            v_ts_ingreso := v_ts_venta + INTERVAL '3 minutes';
+            -- En hora pico algunos niños demoran unos minutos adicionales en salir (segundos_exceso)
+            v_exceso_seg := CASE WHEN (i % 9) = 0 THEN 420 WHEN (i % 13) = 0 THEN 240 ELSE 0 END;
+            v_ts_salida  := v_ts_ingreso + (v_duracion_min * INTERVAL '1 minute') + (v_exceso_seg * INTERVAL '1 second');
+
+            v_operario_estacion := CASE v_atraccion_id
+                WHEN 1 THEN v_op_trampolines
+                WHEN 2 THEN v_op_piscina
+                WHEN 3 THEN v_op_toro
+                WHEN 4 THEN v_op_escalada
+                ELSE v_op_karts
+            END;
+
+            INSERT INTO tickets (uuid_codigo, detalle_venta_id, menor_id, estado_ticket, fecha_emision, fecha_consumo)
+            VALUES (v_uuid, v_detalle_id, v_menor_id, 'CONSUMIDO', v_ts_venta, v_ts_salida);
+
+            INSERT INTO log_escaneo_qr (uuid_leido, ticket_encontrado, atraccion_id, operario_id, direccion_ip, timestamp_cliente, fecha_escaneo, resultado, detalle)
+            VALUES (v_uuid, TRUE, v_atraccion_id, v_operario_estacion, '192.168.10.' || (10 + v_atraccion_id), v_ts_ingreso, v_ts_ingreso, 'VALIDADO_EXITOSO', 'Validación completada satisfactoriamente en jornada de alta demanda');
+
+            INSERT INTO sesiones_juego (
+                ticket_id, atraccion_id, menor_id, operario_id,
+                hora_inicio, hora_fin, duracion_segundos, estado_sesion,
+                fecha_salida_real, segundos_exceso, intentos_totales, intentos_restantes,
+                alerta_pre_expiracion_enviada, alerta_expiracion_enviada
+            ) VALUES (
+                v_uuid, v_atraccion_id, v_menor_id, v_operario_estacion,
+                v_ts_ingreso, v_ts_ingreso + (v_duracion_min * INTERVAL '1 minute'), v_duracion_min * 60, 'FINALIZADA',
+                v_ts_salida, v_exceso_seg, v_intentos, CASE WHEN v_intentos IS NOT NULL THEN 0 ELSE NULL END,
+                TRUE, TRUE
+            ) RETURNING id INTO v_sesion_id;
+
+            -- Auditoría de ticket
+            INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info) VALUES
+                (v_uuid, NULL, 'PAGADO', 'Emisión de ticket tras venta exitosa #' || v_venta_id, v_ts_venta, CASE WHEN v_turno_actual = v_turno_alto_c2_pico THEN v_taquillero2_id ELSE v_taquillero1_id END, 'Terminal Taquilla'),
+                (v_uuid, 'PAGADO', 'EN_USO', 'Ingreso validado en hora de alta afluencia', v_ts_ingreso, v_operario_estacion, 'Terminal Operario');
+
+            -- Incidentes y pausas durante el Día de Mucho Apogeo
+            IF i IN (22, 31, 38, 44, 52) AND j = 1 THEN
+                INSERT INTO log_incidente_pausa (
+                    sesion_juego_id, atraccion_id, operario_id, motivo, tipo_pausa,
+                    es_pausa_general, fecha_inicio_pausa, fecha_fin_pausa, duracion_segundos
+                ) VALUES (
+                    v_sesion_id, v_atraccion_id, v_operario_estacion,
+                    CASE i
+                        WHEN 22 THEN 'Falla técnica temporal en sensor de giro del Toro Mecánico - reinicio de controlador'
+                        WHEN 31 THEN 'Pausa general preventiva para desinfección rápida y reacomodación de espumas en Trampolines'
+                        WHEN 38 THEN 'Mantenimiento express de batería y ajuste de freno en Kart #4'
+                        WHEN 44 THEN 'Atención operativa a menor que solicitó ir al baño acompañado del acudiente'
+                        ELSE 'Revisión técnica de tensión en línea de vida #2 del Muro de Escalada'
+                    END,
+                    CASE WHEN i IN (22, 38, 52) THEN 'TECNICA' ELSE 'OPERATIVA' END,
+                    CASE WHEN i IN (22, 31) THEN TRUE ELSE FALSE END,
+                    v_ts_ingreso + INTERVAL '6 minutes',
+                    v_ts_ingreso + INTERVAL '13 minutes',
+                    420
+                );
+
+                INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info) VALUES
+                    (v_uuid, 'EN_USO', 'PAUSADO', 'Sesión pausada por incidente operativo/técnico', v_ts_ingreso + INTERVAL '6 minutes', v_operario_estacion, 'Terminal Operario'),
+                    (v_uuid, 'PAUSADO', 'EN_USO', 'Reanudación tras superar incidente en estación', v_ts_ingreso + INTERVAL '13 minutes', v_operario_estacion, 'Terminal Operario');
+            END IF;
+
+            INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info)
+            VALUES (v_uuid, 'EN_USO', 'CONSUMIDO', 'Salida formal del menor de la atracción', v_ts_salida, v_operario_estacion, 'Terminal Operario');
+
+            -- Registrar reimpresiones en taquilla durante el Día de Mucho Apogeo
+            IF i IN (15, 29, 47) AND j = 1 THEN
+                INSERT INTO log_reimpresion (ticket_id, usuario_id, motivo, fecha_reimpresion)
+                VALUES (
+                    v_uuid,
+                    v_taquillero1_id,
+                    'Reimpresión autorizada por atasco de rollo térmico en impresora POS durante hora pico',
+                    v_ts_venta + INTERVAL '1 minute'
+                );
+            END IF;
+        END LOOP;
+
+        IF v_num_items = 3 THEN
+            v_total_venta := GREATEST(0.00, v_total_venta - 5000.00);
+        END IF;
+
+        UPDATE ventas
+        SET subtotal = v_total_venta + CASE WHEN v_num_items = 3 THEN 5000.00 ELSE 0.00 END,
+            monto_total = v_total_venta,
+            monto_recibido = CASE WHEN v_metodo_pago = 'EFECTIVO' THEN CEIL(v_total_venta / 10000.0) * 10000.0 ELSE v_total_venta END,
+            cambio = CASE WHEN v_metodo_pago = 'EFECTIVO' THEN (CEIL(v_total_venta / 10000.0) * 10000.0) - v_total_venta ELSE 0.00 END
+        WHERE id = v_venta_id;
+    END LOOP;
+
+    -- Escaneos QR rechazados en el Día de Mucho Apogeo (aforo lleno, reuso de QR, estación cruzada, edad)
+    INSERT INTO log_escaneo_qr (uuid_leido, ticket_encontrado, atraccion_id, operario_id, direccion_ip, timestamp_cliente, fecha_escaneo, resultado, detalle) VALUES
+        (gen_random_uuid(), FALSE, 1, v_op_trampolines, '192.168.10.11', v_dia_alto + TIME '14:40', v_dia_alto + TIME '14:40', 'RECHAZADO_AFORO_COMPLETO', 'Aforo completo (20/20) en Zona de Trampolines Extreme durante hora pico'),
+        (gen_random_uuid(), FALSE, 1, v_op_trampolines, '192.168.10.11', v_dia_alto + TIME '15:10', v_dia_alto + TIME '15:10', 'RECHAZADO_AFORO_COMPLETO', 'Aforo completo (20/20) en Zona de Trampolines Extreme'),
+        (gen_random_uuid(), FALSE, 5, v_op_karts,       '192.168.10.15', v_dia_alto + TIME '15:25', v_dia_alto + TIME '15:25', 'RECHAZADO_AFORO_COMPLETO', 'Aforo completo (10/10) en Pista de Karts Eléctricos'),
+        (gen_random_uuid(), TRUE,  2, v_op_piscina,     '192.168.10.12', v_dia_alto + TIME '15:50', v_dia_alto + TIME '15:50', 'RECHAZADO_EDAD_MAXIMA', 'El menor (12 años) supera la edad máxima permitida (9 años) para Piscina de Pelotas y Laberinto.'),
+        (gen_random_uuid(), TRUE,  1, v_op_trampolines, '192.168.10.11', v_dia_alto + TIME '16:15', v_dia_alto + TIME '16:15', 'RECHAZADO_ESTADO_INVALIDO', 'Intento de reingreso con ticket ya CONSUMIDO.'),
+        (gen_random_uuid(), FALSE, 4, v_op_escalada,    '192.168.10.14', v_dia_alto + TIME '16:45', v_dia_alto + TIME '16:45', 'RECHAZADO_NO_ENCONTRADO', 'Código QR ilegible o inexistente en el sistema.');
+
+    -- Actualizar balances de los 3 turnos del Día de Mucho Apogeo
+    UPDATE turnos_caja t
+    SET ventas_efectivo_sistema = COALESCE((SELECT SUM(monto_total) FROM ventas v WHERE v.turno_caja_id = t.id AND v.metodo_pago = 'EFECTIVO'), 0.00)
+    WHERE t.id IN (v_turno_alto_c1_am, v_turno_alto_c1_pm, v_turno_alto_c2_pico);
+
+    -- Turno 1 Mañana: CUADRADO (diferencia = 0)
+    UPDATE turnos_caja
+    SET monto_efectivo_reportado = monto_base + ventas_efectivo_sistema,
+        diferencia = 0.00
+    WHERE id = v_turno_alto_c1_am;
+
+    -- Turno 1 Tarde: FALTANTE (-$5,000)
+    UPDATE turnos_caja
+    SET monto_efectivo_reportado = monto_base + ventas_efectivo_sistema - 5000.00,
+        diferencia = -5000.00
+    WHERE id = v_turno_alto_c1_pm;
+
+    -- Turno 2 Refuerzo Pico: SOBRANTE (+$4,000)
+    UPDATE turnos_caja
+    SET monto_efectivo_reportado = monto_base + ventas_efectivo_sistema + 4000.00,
+        diferencia = 4000.00
+    WHERE id = v_turno_alto_c2_pico;
+
+
+    -- =====================================================================================
+    -- ESCENARIO 3: OPERACIÓN EN VIVO HOY (Turno abierto + sesiones EN_CURSO y tickets listos)
+    -- =====================================================================================
+    INSERT INTO turnos_caja (usuario_id, monto_base, fecha_apertura, ventas_efectivo_sistema, estado, observaciones)
+    VALUES (v_taquillero1_id, 150000.00, v_dia_hoy + TIME '18:00', 76000.00, 'ABIERTO', 'Turno activo del día para pruebas en vivo')
+    RETURNING id INTO v_turno_hoy_abierto;
+
+    -- Venta en vivo hoy con 4 boletas (2 EN_CURSO en Trampolines, 1 PAUSADA en Karts, 1 PAGADO lista para escanear)
+    INSERT INTO ventas (
+        cliente_id, turno_caja_id, monto_total, subtotal, descuento, impuestos,
+        monto_recibido, cambio, metodo_pago, estado_venta, fecha_venta, congelada, observaciones
+    ) VALUES (
+        1, v_turno_hoy_abierto, 76000.00, 76000.00, 0.00, 0.00,
+        80000.00, 4000.00, 'EFECTIVO', 'PAGADO', v_dia_hoy + TIME '20:30', TRUE,
+        'Venta en vivo de hoy para pruebas en pantalla de operación'
+    ) RETURNING id INTO v_venta_id;
+
+    -- Boleta 1 Hoy: EN_CURSO en Trampolines
+    INSERT INTO detalles_venta (venta_id, atraccion_id, menor_id, tipo_tarifa, tarifa_tiempo_id, cantidad, precio_unitario, subtotal)
+    VALUES (v_venta_id, 1, 1, 'TIEMPO', 2, 1, 20000.00, 20000.00) RETURNING id INTO v_detalle_id;
+    v_uuid := '11111111-2222-4333-8444-555555550001'::UUID;
+    INSERT INTO tickets (uuid_codigo, detalle_venta_id, menor_id, estado_ticket, fecha_emision)
+    VALUES (v_uuid, v_detalle_id, 1, 'EN_USO', v_dia_hoy + TIME '20:30');
+    INSERT INTO sesiones_juego (ticket_id, atraccion_id, menor_id, operario_id, hora_inicio, hora_fin, duracion_segundos, estado_sesion)
+    VALUES (v_uuid, 1, 1, v_op_trampolines, v_dia_hoy + TIME '20:35', NOW() + INTERVAL '25 minutes', 1800, 'EN_CURSO');
+    INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info) VALUES
+        (v_uuid, NULL, 'PAGADO', 'Emisión de ticket en vivo', v_dia_hoy + TIME '20:30', v_taquillero1_id, 'Terminal Taquilla'),
+        (v_uuid, 'PAGADO', 'EN_USO', 'Ingreso en curso en Zona de Trampolines Extreme', v_dia_hoy + TIME '20:35', v_op_trampolines, 'Terminal Operario');
+
+    -- Boleta 2 Hoy: EN_CURSO en Piscina de Pelotas
+    INSERT INTO detalles_venta (venta_id, atraccion_id, menor_id, tipo_tarifa, tarifa_tiempo_id, cantidad, precio_unitario, subtotal)
+    VALUES (v_venta_id, 2, 2, 'TIEMPO', 5, 1, 18000.00, 18000.00) RETURNING id INTO v_detalle_id;
+    v_uuid := '11111111-2222-4333-8444-555555550002'::UUID;
+    INSERT INTO tickets (uuid_codigo, detalle_venta_id, menor_id, estado_ticket, fecha_emision)
+    VALUES (v_uuid, v_detalle_id, 2, 'EN_USO', v_dia_hoy + TIME '20:30');
+    INSERT INTO sesiones_juego (ticket_id, atraccion_id, menor_id, operario_id, hora_inicio, hora_fin, duracion_segundos, estado_sesion)
+    VALUES (v_uuid, 2, 2, v_op_piscina, v_dia_hoy + TIME '20:36', NOW() + INTERVAL '28 minutes', 1800, 'EN_CURSO');
+    INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info) VALUES
+        (v_uuid, NULL, 'PAGADO', 'Emisión de ticket en vivo', v_dia_hoy + TIME '20:30', v_taquillero1_id, 'Terminal Taquilla'),
+        (v_uuid, 'PAGADO', 'EN_USO', 'Ingreso en curso en Piscina de Pelotas', v_dia_hoy + TIME '20:36', v_op_piscina, 'Terminal Operario');
+
+    -- Boleta 3 Hoy: PAUSADA en Pista de Karts
+    INSERT INTO detalles_venta (venta_id, atraccion_id, menor_id, tipo_tarifa, tarifa_tiempo_id, cantidad, precio_unitario, subtotal)
+    VALUES (v_venta_id, 5, 3, 'TIEMPO', 9, 1, 18000.00, 18000.00) RETURNING id INTO v_detalle_id;
+    v_uuid := '11111111-2222-4333-8444-555555550003'::UUID;
+    INSERT INTO tickets (uuid_codigo, detalle_venta_id, menor_id, estado_ticket, fecha_emision)
+    VALUES (v_uuid, v_detalle_id, 3, 'PAUSADO', v_dia_hoy + TIME '20:30');
+    INSERT INTO sesiones_juego (ticket_id, atraccion_id, menor_id, operario_id, hora_inicio, hora_fin, duracion_segundos, estado_sesion, tiempo_restante_pausa, fecha_pausa)
+    VALUES (v_uuid, 5, 3, v_op_karts, v_dia_hoy + TIME '20:38', NOW() + INTERVAL '15 minutes', 900, 'PAUSADA', 540, v_dia_hoy + TIME '20:42')
+    RETURNING id INTO v_sesion_id;
+    INSERT INTO log_incidente_pausa (sesion_juego_id, atraccion_id, operario_id, motivo, tipo_pausa, es_pausa_general, fecha_inicio_pausa)
+    VALUES (v_sesion_id, 5, v_op_karts, 'Ajuste de casco y cinturón de seguridad en pista', 'OPERATIVA', FALSE, v_dia_hoy + TIME '20:42');
+    INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info) VALUES
+        (v_uuid, NULL, 'PAGADO', 'Emisión de ticket en vivo', v_dia_hoy + TIME '20:30', v_taquillero1_id, 'Terminal Taquilla'),
+        (v_uuid, 'PAGADO', 'EN_USO', 'Ingreso en Pista de Karts', v_dia_hoy + TIME '20:38', v_op_karts, 'Terminal Operario'),
+        (v_uuid, 'EN_USO', 'PAUSADO', 'Pausa individual: Ajuste de casco y cinturón', v_dia_hoy + TIME '20:42', v_op_karts, 'Terminal Operario');
+
+    -- Boleta 4 Hoy: PAGADO lista para escanear en lectora QR (Zona de Trampolines, UUID fijo conocido)
+    INSERT INTO detalles_venta (venta_id, atraccion_id, menor_id, tipo_tarifa, tarifa_tiempo_id, cantidad, precio_unitario, subtotal)
+    VALUES (v_venta_id, 1, 4, 'TIEMPO', 2, 1, 20000.00, 20000.00) RETURNING id INTO v_detalle_id;
+    v_uuid := '11111111-2222-4333-8444-555555550004'::UUID;
+    INSERT INTO tickets (uuid_codigo, detalle_venta_id, menor_id, estado_ticket, fecha_emision)
+    VALUES (v_uuid, v_detalle_id, 4, 'PAGADO', v_dia_hoy + TIME '20:45');
+    INSERT INTO auditoria_tickets (ticket_uuid, estado_origen, estado_destino, motivo, fecha_evento, usuario_id, dispositivo_info)
+    VALUES (v_uuid, NULL, 'PAGADO', 'Ticket emitido listo para prueba de escaneo QR en Trampolines', v_dia_hoy + TIME '20:45', v_taquillero1_id, 'Terminal Taquilla');
+
+END $$;
+
+COMMIT;
