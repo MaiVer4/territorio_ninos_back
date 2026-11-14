@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -12,6 +13,7 @@ public record TarifaTiempoRequestDTO(
     @Schema(description = "ID de la atracción asociada", example = "1")
     Long atraccionId,
 
+    @JsonAlias("minutos")
     @NotNull(message = "La duración en minutos es obligatoria")
     @Min(value = 1, message = "La duración debe ser mayor a 0 minutos")
     @Schema(description = "Duración en minutos (ej: 15, 30, 60)", example = "15")
@@ -22,6 +24,7 @@ public record TarifaTiempoRequestDTO(
     @Schema(description = "Precio para el bloque de tiempo", example = "5000.00")
     BigDecimal precio,
 
+    @JsonAlias("vigente")
     @Schema(description = "Estado de la tarifa (activo/inactivo)", example = "true")
     Boolean activo
 ) {

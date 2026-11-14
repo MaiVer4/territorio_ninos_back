@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -22,6 +23,7 @@ public record TarifaEventoRequestDTO(
     @Schema(description = "Precio para los intentos", example = "3000.00")
     BigDecimal precio,
 
+    @JsonAlias("vigente")
     @Schema(description = "Estado de la tarifa (activo/inactivo)", example = "true")
     Boolean activo
 ) {
