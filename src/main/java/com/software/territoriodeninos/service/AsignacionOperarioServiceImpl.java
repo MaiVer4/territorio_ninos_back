@@ -206,18 +206,26 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
     }
 
     private AsignacionResponseDTO mapToDTO(AsignacionOperario asignacion) {
+        Atraccion atraccion = asignacion.getAtraccion();
         return new AsignacionResponseDTO(
                 asignacion.getId(),
                 asignacion.getUsuario().getId(),
                 asignacion.getUsuario().getNombre(),
                 asignacion.getUsuario().getCorreo(),
-                asignacion.getAtraccion().getId(),
-                asignacion.getAtraccion().getNombre(),
+                atraccion.getId(),
+                atraccion.getNombre(),
                 asignacion.getFechaAsignacion(),
                 asignacion.getHoraInicio(),
                 asignacion.getHoraFin(),
                 asignacion.getEstado(),
-                asignacion.getObservaciones()
+                asignacion.getObservaciones(),
+                atraccion.getTipo() != null ? atraccion.getTipo().name() : "TEMPORIZADA",
+                atraccion.getCapacidadMaxima(),
+                atraccion.getDuracionMinutosBase(),
+                atraccion.getToleranciaMinutos(),
+                atraccion.getCaidasLimite(),
+                atraccion.getEdadMinima(),
+                atraccion.getEdadMaxima()
         );
     }
 }

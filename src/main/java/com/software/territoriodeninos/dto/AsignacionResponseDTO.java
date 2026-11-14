@@ -21,8 +21,32 @@ public record AsignacionResponseDTO(
     LocalDateTime horaInicio,
     LocalDateTime horaFin,
     EstadoAsignacion estado,
-    String observaciones
+    String observaciones,
+    String tipoAtraccion,
+    Integer capacidadMaxima,
+    Integer duracionMinutosBase,
+    Integer toleranciaMinutos,
+    Integer caidasLimite,
+    Integer edadMinima,
+    Integer edadMaxima
 ) {
+    public AsignacionResponseDTO(
+            Long id,
+            Long usuarioId,
+            String nombreOperario,
+            String correoOperario,
+            Long atraccionId,
+            String nombreAtraccion,
+            LocalDate fechaAsignacion,
+            LocalDateTime horaInicio,
+            LocalDateTime horaFin,
+            EstadoAsignacion estado,
+            String observaciones
+    ) {
+        this(id, usuarioId, nombreOperario, correoOperario, atraccionId, nombreAtraccion,
+                fechaAsignacion, horaInicio, horaFin, estado, observaciones,
+                null, null, null, null, null, null, null);
+    }
     @JsonProperty("operarioId")
     @Schema(description = "Alias frontend: ID del operario", example = "5")
     public Long operarioId() {
