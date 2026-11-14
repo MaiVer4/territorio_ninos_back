@@ -42,6 +42,28 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     boolean existsByUuidCodigo(UUID uuidCodigo);
 
+    @EntityGraph(attributePaths = {
+        "detalleVenta",
+        "detalleVenta.atraccion",
+        "detalleVenta.venta",
+        "detalleVenta.venta.cliente",
+        "detalleVenta.venta.turnoCaja",
+        "menor"
+    })
+    @Query("SELECT t FROM Ticket t WHERE CAST(t.uuidCodigo AS string) LIKE LOWER(CONCAT(:prefix, '%'))")
+    List<Ticket> findByUuidCodigoStartingWith(@Param("prefix") String prefix);
+
+    @EntityGraph(attributePaths = {
+        "detalleVenta",
+        "detalleVenta.atraccion",
+        "detalleVenta.venta",
+        "detalleVenta.venta.cliente",
+        "detalleVenta.venta.turnoCaja",
+        "menor"
+    })
+    @Query("SELECT t FROM Ticket t WHERE t.detalleVenta.id = :detalleVentaId")
+    List<Ticket> findByDetalleVentaIdConRelaciones(@Param("detalleVentaId") Long detalleVentaId);
+
     List<Ticket> findByDetalleVentaId(Long detalleVentaId);
 
     @EntityGraph(attributePaths = {"detalleVenta", "detalleVenta.atraccion", "detalleVenta.venta", "detalleVenta.venta.cliente", "menor"})

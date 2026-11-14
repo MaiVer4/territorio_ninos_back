@@ -41,4 +41,9 @@ public record TicketResponseDTO(
     public UUID id() {
         return uuidCodigo;
     }
+
+    @JsonProperty("uuid")
+    public UUID uuid() {
+        return uuidCodigo;
+    }
 }

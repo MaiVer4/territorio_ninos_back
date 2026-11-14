@@ -2,6 +2,7 @@ package com.software.territoriodeninos.security;
 
 import com.software.territoriodeninos.util.HashUtil;
 import io.jsonwebtoken.Claims;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * o Hazelcast mediante {@code RedisTemplate<String, String>} con TTL acotado a la fecha de expiración natural del JWT)
  * para garantizar la sincronización atómica e inmediata de revocaciones entre todas las réplicas del clúster.
  */
+@Slf4j
 @Service
 public class TokenBlacklistService {
 
@@ -45,7 +47,7 @@ public class TokenBlacklistService {
                     : Instant.now().plusSeconds(86_400);
             revocados.put(HashUtil.sha256Hex(token), expira);
         } catch (Exception e) {
-            // Si el token ya es inválido o no parseable, no requiere revocación
+            log.debug("No se pudo extraer claims del token al revocar (token posiblemente expirado o malformado): {}", e.getMessage());
         }
     }
 

@@ -82,7 +82,8 @@ public class AuditoriaOperacionServiceImpl implements AuditoriaOperacionService 
         UUID ticketUuid = null;
         try {
             ticketUuid = UUID.fromString(criterio.trim());
-        } catch (IllegalArgumentException ignored) {
+        } catch (IllegalArgumentException e) {
+            log.trace("Criterio '{}' no es un UUID válido; continuando búsqueda por documento de cliente", criterio);
         }
 
         List<Ticket> tickets;

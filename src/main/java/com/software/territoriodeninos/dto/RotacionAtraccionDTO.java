@@ -1,5 +1,7 @@
 package com.software.territoriodeninos.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.software.territoriodeninos.util.TipoAtraccion;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -7,6 +9,7 @@ import lombok.Builder;
 import java.math.BigDecimal;
 
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record RotacionAtraccionDTO(
         @Schema(description = "ID de la atracción", example = "1")
         Long atraccionId,
@@ -34,4 +37,26 @@ public record RotacionAtraccionDTO(
 
         @Schema(description = "Franja horaria de mayor afluencia detectada", example = "16:00 - 17:00")
         String horaMayorAfluencia
-) {}
+) {
+
+    // Getters adicionales con alias para compatibilidad bidireccional con frontend (HU-37)
+    @JsonProperty("nombre")
+    public String nombre() {
+        return nombreAtraccion;
+    }
+
+    @JsonProperty("tipo")
+    public TipoAtraccion tipo() {
+        return tipoAtraccion;
+    }
+
+    @JsonProperty("volumenVisitas")
+    public Long volumenVisitas() {
+        return cantidadTotalUsos;
+    }
+
+    @JsonProperty("ocupacionPromedioPorcentaje")
+    public Double ocupacionPromedioPorcentaje() {
+        return porcentajeOcupacion;
+    }
+}

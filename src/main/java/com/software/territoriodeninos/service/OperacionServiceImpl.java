@@ -178,8 +178,37 @@ public class OperacionServiceImpl implements OperacionService {
         // 2. Control de Aforo en tiempo real (HU-34.01, HU-34.02 -> HTTP 409)
         int capacidadMaxima = atraccionEstacion.getCapacidadMaxima() != null ? atraccionEstacion.getCapacidadMaxima() : 1;
         int ocupacionActiva = calcularOcupacionActiva(atraccionEstacion.getId());
+
+        // Resolución flexible de ticket por UUID estándar o prefijo/código corto (HU-25.01)
+        UUID ticketUuid = null;
+        String codigoRaw = request.uuid() != null ? request.uuid().trim() : "";
+        try {
+            ticketUuid = UUID.fromString(codigoRaw);
+        } catch (IllegalArgumentException ignored) {
+            // Formato no estándar, se procederá a búsqueda por prefijo o código
+        }
+
+        Ticket ticket = null;
+        if (ticketUuid != null) {
+            ticket = ticketRepository.findByUuidCodigo(ticketUuid).orElse(null);
+        } else if (!codigoRaw.isBlank()) {
+            String prefijo = codigoRaw.toLowerCase();
+            if (prefijo.startsWith("bol-")) {
+                prefijo = prefijo.substring(4);
+            }
+            List<Ticket> coincidentes = ticketRepository.findByUuidCodigoStartingWith(prefijo);
+            if (!coincidentes.isEmpty()) {
+                ticket = coincidentes.get(0);
+                ticketUuid = ticket.getUuidCodigo();
+            }
+        }
+
+        if (ticket != null && ticketUuid == null) {
+            ticketUuid = ticket.getUuidCodigo();
+        }
+
         if (ocupacionActiva >= capacidadMaxima) {
-            registrarLogEscaneo(request.uuid(), false, atraccionEstacion, operario, clientIp,
+            registrarLogEscaneo(ticketUuid, false, atraccionEstacion, operario, clientIp,
                     request.timestamp(), "RECHAZADO_AFORO_COMPLETO",
                     "Aforo completo (" + ocupacionActiva + "/" + capacidadMaxima + ")");
             throw new AforoCompletoException(
@@ -189,18 +218,15 @@ public class OperacionServiceImpl implements OperacionService {
         }
 
         // 3. Validación algorítmica de existencia y estado PAGADO (HU-26.03 / CA-01 -> HTTP 409 si CONSUMIDO/ANULADO)
-        Ticket ticket = ticketRepository.findByUuidCodigo(request.uuid())
-                .orElse(null);
-
         if (ticket == null) {
-            registrarLogEscaneo(request.uuid(), false, atraccionEstacion, operario, clientIp,
+            registrarLogEscaneo(ticketUuid, false, atraccionEstacion, operario, clientIp,
                     request.timestamp(), "RECHAZADO_NO_ENCONTRADO", "Ticket inexistente");
-            throw new RecursoNoEncontradoException("Ticket no encontrado con el código UUID: " + request.uuid());
+            throw new RecursoNoEncontradoException("Ticket no encontrado con el código o UUID: " + request.uuid());
         }
 
         if (!EstadoTicket.PAGADO.equals(ticket.getEstadoTicket())) {
             String motivo = "El ticket no se encuentra en estado PAGADO (estado actual: " + ticket.getEstadoTicket() + ").";
-            registrarLogEscaneo(request.uuid(), true, atraccionEstacion, operario, clientIp,
+            registrarLogEscaneo(ticketUuid, true, atraccionEstacion, operario, clientIp,
                     request.timestamp(), "RECHAZADO_ESTADO_INVALIDO", motivo);
             throw new TicketInvalidoOperacionException(motivo, HttpStatus.CONFLICT);
         }
@@ -212,21 +238,21 @@ public class OperacionServiceImpl implements OperacionService {
             String nombreEsperada = atraccionTicket != null ? atraccionTicket.getNombre() : "desconocida";
             String motivo = "El ticket fue adquirido para la atracción '" + nombreEsperada +
                     "' y no puede ser redimido en la estación '" + atraccionEstacion.getNombre() + "'.";
-            registrarLogEscaneo(request.uuid(), true, atraccionEstacion, operario, clientIp,
+            registrarLogEscaneo(ticketUuid, true, atraccionEstacion, operario, clientIp,
                     request.timestamp(), "RECHAZADO_ATRACCION_DISTINTA", motivo);
             throw new TicketInvalidoOperacionException(motivo, HttpStatus.UNPROCESSABLE_ENTITY);
         }
 
         // 5. Validación automática del rango de edad del menor (HU-26.05 / CA-03 -> HTTP 422)
         Menor menor = ticket.getMenor() != null ? ticket.getMenor() : (detalle != null ? detalle.getMenor() : null);
-        validarRangoEdadMenor(menor, atraccionEstacion, request.uuid(), operario, clientIp, request.timestamp());
+        validarRangoEdadMenor(menor, atraccionEstacion, ticketUuid, operario, clientIp, request.timestamp());
 
         // 6. Resolver minutos o intentos contratados
         Integer minutosAutorizados = resolverMinutosAutorizados(detalle, atraccionEstacion);
         Integer intentosAutorizados = resolverIntentosAutorizados(detalle, atraccionEstacion);
 
         // 7. Registro de auditoría exitoso en base de datos (HU-25.03)
-        registrarLogEscaneo(request.uuid(), true, atraccionEstacion, operario, clientIp,
+        registrarLogEscaneo(ticketUuid, true, atraccionEstacion, operario, clientIp,
                 request.timestamp(), "VALIDADO_EXITOSO", "Validación completada satisfactoriamente");
 
         Venta venta = detalle != null ? detalle.getVenta() : null;

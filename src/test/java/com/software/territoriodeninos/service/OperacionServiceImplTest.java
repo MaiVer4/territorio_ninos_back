@@ -501,6 +501,40 @@ class OperacionServiceImplTest {
         ));
     }
 
+    @Test
+    @DisplayName("escanearTicket - Éxito resolviendo ticket por prefijo o código de boleta corto (HU-25.01)")
+    void escanearTicket_conCodigoPrefijo_exito() {
+        TarifaTiempo tarifaTiempo = TarifaTiempo.builder()
+                .id(1L)
+                .duracionMinutos(30)
+                .precio(new BigDecimal("30000.00"))
+                .build();
+
+        when(tarifaTiempoRepository.findById(1L)).thenReturn(Optional.of(tarifaTiempo));
+
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+        when(asignacionRepository.findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+                eq(5L), eq(LocalDate.now()), eq(EstadoAsignacion.ACTIVA)
+        )).thenReturn(Optional.of(asignacion));
+        when(sesionJuegoRepository.countByAtraccionIdAndEstadoSesionIn(eq(10L), any())).thenReturn(3);
+
+        when(ticketRepository.findByUuidCodigoStartingWith("a53d60")).thenReturn(List.of(ticket));
+
+        EscaneoQrRequestDTO request = new EscaneoQrRequestDTO("BOL-A53D60", 10L, LocalDateTime.now());
+
+        ValidacionTicketResponseDTO response = operacionService.escanearTicket(request, authentication, "192.168.1.100");
+
+        assertNotNull(response);
+        assertTrue(response.valido());
+        assertEquals(ticketUuid, response.uuidTicket());
+        assertEquals("Piscina de Pelotas", response.atraccionNombre());
+    }
+
     // =========================================================
     // Pruebas HU-34.03: Consulta de Aforo Actual
     // =========================================================

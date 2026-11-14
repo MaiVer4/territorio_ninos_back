@@ -60,6 +60,11 @@ public record TicketConsultaDTO(
         return uuidCodigo;
     }
 
+    @JsonProperty("uuid")
+    public UUID uuid() {
+        return uuidCodigo;
+    }
+
     @JsonProperty("estadoActual")
     public EstadoTicket estadoActual() {
         return estadoTicket;
