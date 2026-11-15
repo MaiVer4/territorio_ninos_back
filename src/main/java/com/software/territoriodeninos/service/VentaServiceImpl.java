@@ -145,7 +145,7 @@ public class VentaServiceImpl implements VentaService {
         validarSolicitudVenta(request, auth);
 
         // 2. Validación de cliente y turno de caja
-        Cliente cliente = obtenerCliente(request.clienteId());
+        Cliente cliente = obtenerCliente(request);
         TurnoCaja turnoCaja = resolverTurnoCajaActivo(request.turnoCajaId(), auth);
 
         // 3. Validación de aforo acumulado por atracción
@@ -154,8 +154,11 @@ public class VentaServiceImpl implements VentaService {
         // 4. Validación individual de ítems y preparación para cotización
         ResultadoValidacionItems resultadoItems = procesarYValidarItems(request.items(), cliente);
 
-        // 5. Liquidación financiera y cálculo de cambio
-        CotizacionResponseDTO cotizacion = liquidarCotizacion(resultadoItems.itemsParaCotizar(), request.descuento());
+        // 5. Liquidación financiera y cálculo de cambio (soportando modalidad IVA incluido del POS)
+        CotizacionResponseDTO cotizacion = ajustarCotizacionSegunModalidadPos(
+                liquidarCotizacion(resultadoItems.itemsParaCotizar(), request.descuento()),
+                request.montoRecibido()
+        );
         BigDecimal montoTotal = cotizacion.totalNeto();
         BigDecimal cambio = validarYCalcularCambio(request.montoRecibido(), montoTotal);
 
@@ -163,7 +166,7 @@ public class VentaServiceImpl implements VentaService {
         Venta ventaGuardada = persistirVenta(request, cliente, turnoCaja, cotizacion, cambio, resultadoItems);
 
         // 7. Generación y auditoría inmutable de tickets criptoseguros
-        List<Ticket> ticketsGuardados = generarYAuditarTickets(ventaGuardada, turnoCaja);
+        List<Ticket> ticketsGuardados = generarYAuditarTickets(ventaGuardada, turnoCaja, request.items());
 
         // 8. Actualizaciones colaterales (balance de caja y caché de aforo)
         actualizarBalanceCajaSiAplica(turnoCaja, request.metodoPago(), montoTotal);
@@ -253,9 +256,32 @@ public class VentaServiceImpl implements VentaService {
         }
     }
 
-    private Cliente obtenerCliente(Long clienteId) {
-        return clienteRepository.findById(clienteId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Cliente no encontrado con ID: " + clienteId));
+    private Cliente obtenerCliente(VentaProcesarRequestDTO request) {
+        Long clienteId = request.clienteId();
+        if (clienteId != null && clienteId > 0) {
+            return clienteRepository.findById(clienteId)
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Cliente no encontrado con ID: " + clienteId));
+        }
+
+        String doc = request.clienteDocumento() != null && !request.clienteDocumento().isBlank()
+                ? request.clienteDocumento().trim()
+                : "222222222222";
+        String nombreCompleto = request.clienteNombre() != null && !request.clienteNombre().isBlank()
+                ? request.clienteNombre().trim()
+                : "Cliente de Mostrador";
+
+        return clienteRepository.findByNumeroDocumento(doc).orElseGet(() -> {
+            String[] partes = nombreCompleto.split("\\s+", 2);
+            String nombres = partes[0];
+            String apellidos = partes.length > 1 ? partes[1] : "Mostrador";
+            Cliente nuevo = Cliente.builder()
+                    .numeroDocumento(doc)
+                    .nombres(nombres)
+                    .apellidos(apellidos)
+                    .fechaRegistro(LocalDateTime.now())
+                    .build();
+            return clienteRepository.save(nuevo);
+        });
     }
 
     private void validarAforoAcumulado(List<DetalleVentaRequestDTO> items) {
@@ -310,6 +336,26 @@ public class VentaServiceImpl implements VentaService {
                 if (menor.getCliente() == null || !menor.getCliente().getId().equals(cliente.getId())) {
                     throw new ReglaNegocioException("El menor con ID " + itemDto.menorId() +
                             " no está vinculado al cliente acudiente con ID " + cliente.getId());
+                }
+            } else if (itemDto.menorNombre() != null
+                    && !itemDto.menorNombre().isBlank()
+                    && !"Sin menor asignado".equalsIgnoreCase(itemDto.menorNombre().trim())) {
+                String nombreMenor = itemDto.menorNombre().trim();
+                if (cliente.getMenores() != null) {
+                    menor = cliente.getMenores().stream()
+                            .filter(m -> m.getNombreCompleto() != null && m.getNombreCompleto().equalsIgnoreCase(nombreMenor))
+                            .findFirst()
+                            .orElse(null);
+                }
+                if (menor == null && menorRepository != null && cliente.getId() != null) {
+                    Menor nuevoMenor = Menor.builder()
+                            .cliente(cliente)
+                            .nombreCompleto(nombreMenor)
+                            .edad(itemDto.menorEdad())
+                            .fechaRegistro(LocalDateTime.now())
+                            .build();
+                    menor = menorRepository.save(nuevoMenor);
+                    cliente.addMenor(menor);
                 }
             }
 
@@ -385,6 +431,40 @@ public class VentaServiceImpl implements VentaService {
         return ventaCalculoService.cotizarVenta(cotizacionRequest);
     }
 
+    private CotizacionResponseDTO ajustarCotizacionSegunModalidadPos(
+            CotizacionResponseDTO cotizacion,
+            BigDecimal montoRecibidoParam
+    ) {
+        if (cotizacion == null || montoRecibidoParam == null) {
+            return cotizacion;
+        }
+        // Si la configuración tiene IVA activo pero el POS opera con tarifas de IVA incluido
+        // (montoRecibido >= baseGravable y montoRecibido < totalNeto con IVA sumado encima)
+        if (cotizacion.impuestos() != null
+                && cotizacion.impuestos().compareTo(BigDecimal.ZERO) > 0
+                && cotizacion.baseGravable() != null
+                && montoRecibidoParam.compareTo(cotizacion.baseGravable()) >= 0
+                && montoRecibidoParam.compareTo(cotizacion.totalNeto()) < 0) {
+            BigDecimal totalIncluido = cotizacion.baseGravable().setScale(2, RoundingMode.HALF_UP);
+            BigDecimal divisor = BigDecimal.ONE.add(
+                    cotizacion.porcentajeImpuesto().divide(new BigDecimal("100.00"), 6, RoundingMode.HALF_UP)
+            );
+            BigDecimal baseNeta = totalIncluido.divide(divisor, 2, RoundingMode.HALF_UP);
+            BigDecimal impIncluido = totalIncluido.subtract(baseNeta).setScale(2, RoundingMode.HALF_UP);
+            return new CotizacionResponseDTO(
+                    cotizacion.subtotales(),
+                    cotizacion.items(),
+                    baseNeta,
+                    cotizacion.descuento(),
+                    baseNeta,
+                    cotizacion.porcentajeImpuesto(),
+                    impIncluido,
+                    totalIncluido
+            );
+        }
+        return cotizacion;
+    }
+
     private BigDecimal validarYCalcularCambio(BigDecimal montoRecibidoParam, BigDecimal montoTotal) {
         BigDecimal montoRecibido = montoRecibidoParam.setScale(2, RoundingMode.HALF_UP);
         if (montoRecibido.compareTo(montoTotal) < 0) {
@@ -446,11 +526,33 @@ public class VentaServiceImpl implements VentaService {
         return ventaRepository.save(venta);
     }
 
-    private List<Ticket> generarYAuditarTickets(Venta ventaGuardada, TurnoCaja turnoCaja) {
+    private List<Ticket> generarYAuditarTickets(
+            Venta ventaGuardada,
+            TurnoCaja turnoCaja,
+            List<DetalleVentaRequestDTO> itemsRequest
+    ) {
         List<Ticket> ticketsGenerados = new ArrayList<>();
-        for (DetalleVenta detalle : ventaGuardada.getDetalles()) {
+        List<DetalleVenta> detalles = ventaGuardada.getDetalles();
+        for (int idx = 0; idx < detalles.size(); idx++) {
+            DetalleVenta detalle = detalles.get(idx);
+            DetalleVentaRequestDTO itemDto = (itemsRequest != null && idx < itemsRequest.size()) ? itemsRequest.get(idx) : null;
             int cant = (detalle.getCantidad() != null && detalle.getCantidad() > 0) ? detalle.getCantidad() : 1;
-            List<UUID> uuids = uuidGeneratorService.generarUuidsUnicos(cant);
+
+            List<UUID> uuids = null;
+            if (cant == 1 && itemDto != null && itemDto.uuid() != null && !itemDto.uuid().isBlank()) {
+                try {
+                    UUID uuidPropuesto = UUID.fromString(itemDto.uuid().trim());
+                    if (!ticketRepository.existsByUuidCodigo(uuidPropuesto)) {
+                        uuids = List.of(uuidPropuesto);
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // Si el formato no es UUID estándar, se delega al generador criptoseguro
+                }
+            }
+            if (uuids == null) {
+                uuids = uuidGeneratorService.generarUuidsUnicos(cant);
+            }
+
             for (UUID uuid : uuids) {
                 Ticket ticket = Ticket.builder()
                         .uuidCodigo(uuid)

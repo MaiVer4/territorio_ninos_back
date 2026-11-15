@@ -193,8 +193,19 @@ public class OperacionServiceImpl implements OperacionService {
             ticket = ticketRepository.findByUuidCodigo(ticketUuid).orElse(null);
         } else if (!codigoRaw.isBlank()) {
             String prefijo = codigoRaw.toLowerCase();
+            if (prefijo.startsWith("tdn-qr:")) {
+                prefijo = prefijo.substring(7);
+            }
             if (prefijo.startsWith("bol-")) {
                 prefijo = prefijo.substring(4);
+            } else if (prefijo.startsWith("tdn-")) {
+                // Soporta formato visible de boleta POS: TDN-{atraccionId}-{prefijoUuid}-{consecutivo} o TDN-{prefijoUuid}
+                String[] segmentos = prefijo.split("-");
+                if (segmentos.length >= 3 && segmentos[2].matches("[0-9a-f]{4,12}")) {
+                    prefijo = segmentos[2];
+                } else if (segmentos.length >= 2 && segmentos[1].matches("[0-9a-f]{4,12}")) {
+                    prefijo = segmentos[1];
+                }
             }
             List<Ticket> coincidentes = ticketRepository.findByUuidCodigoStartingWith(prefijo);
             if (!coincidentes.isEmpty()) {

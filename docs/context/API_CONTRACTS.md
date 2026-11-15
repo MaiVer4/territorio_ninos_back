@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-14 (commit 0c25453).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-15 (commit 6ad176c).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -194,8 +194,10 @@
   - `TurnoCajaResponseDTO`: `{ id, idTurno (alias), usuarioId, idUsuario (alias), cajeroNombre, nombreCajero (alias), montoBase, montoInicial (alias), fechaApertura, fechaCierre, ventasEfectivoSistema, totalRecaudado (alias), totalVentas (alias), totalEsperado (montoBase + ventasEfectivoSistema), montoEfectivoReportado, montoFinal (alias), diferencia, estado, observaciones }`
   - `ItemVentaValidacionDTO`: `{ atraccionId (@JsonAlias("idAtraccion")), tarifaTiempoId?, tarifaEventoId?, cantidad, precioUnitario (@JsonAlias("precio","valorUnitario")), subtotal?, duracionMinutos?, intentos? }`
   - `CotizacionRequestDTO` / `ResponseDTO`: `{ items (@JsonAlias("lineas","detalles")), subtotales, subtotal, descuento, baseGravable, porcentajeImpuesto, impuestos, totalNeto, total (alias) }`
-  - `VentaProcesarRequestDTO`: `{ clienteId (@JsonAlias("idCliente")), turnoCajaId? (@JsonAlias("idTurnoCaja")), metodoPago (@JsonAlias("formaPago","medioPago")), montoRecibido (@JsonAlias("efectivoRecibido","valorRecibido")), descuento?, observaciones?, items: List<DetalleVentaRequestDTO> (@JsonAlias("detalles","lineas")) }`
+  - `VentaProcesarRequestDTO`: `{ clienteId (@JsonAlias("idCliente"), 0 para Cliente de Mostrador), turnoCajaId? (@JsonAlias("idTurnoCaja")), metodoPago (@JsonAlias("formaPago","medioPago")), montoRecibido (@JsonAlias("efectivoRecibido","valorRecibido")), descuento?, observaciones?, items: List<DetalleVentaRequestDTO> (@JsonAlias("detalles","lineas")), clienteDocumento?, clienteNombre? }`
+  - `DetalleVentaRequestDTO`: `{ atraccionId, menorId?, tipoTarifa, tarifaTiempoId?, tarifaEventoId?, cantidad, precioUnitario, subtotal?, uuid? (@JsonAlias("uuidCodigo","codigoQr")), codigoBoleta?, menorNombre?, menorEdad? }`
   - `VentaResponseDTO`: `{ id, ventaId (alias), clienteId, clienteDocumento, clienteNombreCompleto, clienteNombre (alias), turnoCajaId, subtotal, descuento, impuestos, montoTotal, montoRecibido, cambio, metodoPago, estadoVenta, fechaVenta, congelada, observaciones, detalles: List<DetalleVentaResponseDTO>, tickets: List<TicketResponseDTO> }`
+  - `TicketResponseDTO`: `{ uuidCodigo, id (alias), uuid (alias), codigoQr (alias), codigoBoleta (alias TDN-{atrId}-{uuidPrefix}-001), detalleVentaId, atraccionId, atraccionNombre, menorId, menorNombre, tipoTarifa, estadoTicket, fechaEmision }`
   - `TicketConsultaDTO`: `{ uuidCodigo, id (alias), uuid (alias), estadoTicket, estadoActual (alias), minutosContratados, fechaEmision, horaEmision (alias), menorId, menorNombre, menorDocumento, atraccionId, atraccionNombre, tipoTarifa, ventaId, detalleVentaId, clienteId, clienteDocumento, clienteNombre }`
 - **Operación, Reportes y Auditoría:**
   - `EscaneoQrRequestDTO`: `{ uuid: String (@JsonAlias("codigo","uuidTicket","codigoBoleta","codigoQr")), atraccionId: Long, timestamp?: LocalDateTime }`

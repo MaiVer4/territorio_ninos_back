@@ -46,4 +46,19 @@ public record TicketResponseDTO(
     public UUID uuid() {
         return uuidCodigo;
     }
+
+    @JsonProperty("codigoQr")
+    public String codigoQr() {
+        return uuidCodigo != null ? uuidCodigo.toString() : null;
+    }
+
+    @JsonProperty("codigoBoleta")
+    public String codigoBoleta() {
+        if (uuidCodigo == null) {
+            return null;
+        }
+        String prefijo = uuidCodigo.toString().substring(0, 8).toUpperCase();
+        long atrId = atraccionId != null ? atraccionId : 0L;
+        return "TDN-" + atrId + "-" + prefijo + "-001";
+    }
 }

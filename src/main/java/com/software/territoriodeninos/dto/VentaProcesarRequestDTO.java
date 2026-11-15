@@ -48,14 +48,34 @@ public record VentaProcesarRequestDTO(
     @Valid
     @JsonAlias({"detalles", "lineas"})
     @Schema(description = "Lista de ítems detallados de la venta")
-    List<@Valid DetalleVentaRequestDTO> items
+    List<@Valid DetalleVentaRequestDTO> items,
+
+    @JsonAlias({"numeroDocumento", "documentoCliente"})
+    @Schema(description = "Número de documento del cliente (opcional para resolución automática en mostrador)")
+    String clienteDocumento,
+
+    @JsonAlias({"nombreCliente", "titular"})
+    @Schema(description = "Nombre completo del cliente (opcional para resolución automática en mostrador)")
+    String clienteNombre
 ) {
+    public VentaProcesarRequestDTO(
+            Long clienteId,
+            Long turnoCajaId,
+            MetodoPago metodoPago,
+            BigDecimal montoRecibido,
+            BigDecimal descuento,
+            String observaciones,
+            List<DetalleVentaRequestDTO> items
+    ) {
+        this(clienteId, turnoCajaId, metodoPago, montoRecibido, descuento, observaciones, items, null, null);
+    }
+
     public VentaProcesarRequestDTO(
             Long clienteId,
             MetodoPago metodoPago,
             BigDecimal montoRecibido,
             List<DetalleVentaRequestDTO> items
     ) {
-        this(clienteId, null, metodoPago, montoRecibido, BigDecimal.ZERO, null, items);
+        this(clienteId, null, metodoPago, montoRecibido, BigDecimal.ZERO, null, items, null, null);
     }
 }

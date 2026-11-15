@@ -48,7 +48,20 @@ public record DetalleVentaRequestDTO(
 
     @DecimalMin(value = "0.00", inclusive = true, message = "El subtotal no puede ser negativo")
     @Schema(description = "Subtotal de la línea (precioUnitario * cantidad)", example = "15000.00")
-    BigDecimal subtotal
+    BigDecimal subtotal,
+
+    @JsonAlias({"uuidCodigo", "codigoQr"})
+    @Schema(description = "UUID v4 pre-generado en terminal POS para reconciliación inmediata (opcional)")
+    String uuid,
+
+    @Schema(description = "Código visible de boleta generado en POS (opcional)")
+    String codigoBoleta,
+
+    @Schema(description = "Nombre del menor asignado en POS cuando no tiene ID persistido previo (opcional)")
+    String menorNombre,
+
+    @Schema(description = "Edad del menor asignado en POS (opcional)")
+    Integer menorEdad
 ) {
     public DetalleVentaRequestDTO {
         if (cantidad == null) {
@@ -63,9 +76,23 @@ public record DetalleVentaRequestDTO(
             Long tarifaTiempoId,
             Long tarifaEventoId,
             Integer cantidad,
+            BigDecimal precioUnitario,
+            BigDecimal subtotal
+    ) {
+        this(atraccionId, menorId, tipoTarifa, tarifaTiempoId, tarifaEventoId, cantidad, precioUnitario, subtotal, null, null, null, null);
+    }
+
+    public DetalleVentaRequestDTO(
+            Long atraccionId,
+            Long menorId,
+            TipoTarifa tipoTarifa,
+            Long tarifaTiempoId,
+            Long tarifaEventoId,
+            Integer cantidad,
             BigDecimal precioUnitario
     ) {
         this(atraccionId, menorId, tipoTarifa, tarifaTiempoId, tarifaEventoId, cantidad, precioUnitario,
-                precioUnitario != null && cantidad != null ? precioUnitario.multiply(BigDecimal.valueOf(cantidad)) : null);
+                precioUnitario != null && cantidad != null ? precioUnitario.multiply(BigDecimal.valueOf(cantidad)) : null,
+                null, null, null, null);
     }
 }
