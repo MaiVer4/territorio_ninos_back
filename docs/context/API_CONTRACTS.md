@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-15 (commit c2aca55).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-15 (commit d904350).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -26,7 +26,7 @@
   - Endpoint STOMP (con y sin SockJS): `/territorioninos/ws-operacion`.
   - Broker prefixes: `/topic`, `/queue`. App destination prefix: `/app`.
   - Tópicos emitidos por `OperacionWebSocketPublisher`:
-    - `/topic/atraccion/{atraccionId}` y `/topic/operacion/dashboard`
+    - `/topic/atraccion/{atraccionId}`, `/topic/operacion/dashboard` y `/topic/admin/dashboard`
   - Payload: `OperacionWebSocketEvent { tipo, atraccionId, sesionId, mensaje, sesion: SesionJuegoResponseDTO, colaActualizada: ColaAtraccionResponseDTO, timestamp }`
   - Valores de `tipo`: `NUEVO_INGRESO`, `PAUSA`, `REANUDACION`, `PAUSA_GENERAL`, `ALERTA_PRE_EXPIRACION`, `COLA_ACTUALIZADA`, `TIEMPO_EXPIRADO`, `SESION_FINALIZADA`.
 
@@ -75,7 +75,7 @@
 | Método | Ruta (incluye alias) | Rol | Request | Response | Notas |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/atracciones` | `ADMIN` | `AtraccionRequestDTO` | `201 AtraccionResponseDTO` | `409` si nombre duplicado. |
-| `GET` | `/api/atracciones` | `ADMIN, TAQ` | — | `200 List<AtraccionResponseDTO>` | Todas las atracciones. |
+| `GET` | `/api/atracciones` | `ADMIN, TAQ` | — | `200 List<AtraccionResponseDTO>` | Excluye `INACTIVO`. Incluye `ocupacionActiva` calculada en tiempo real. |
 | `GET` | `/api/atracciones/activas` | `TODOS` | — | `200 List<AtraccionResponseDTO>` | Solo `estado == ACTIVO`. |
 | `GET` | `/api/atracciones/{id}` | `TODOS` | Path `id` | `200 AtraccionResponseDTO` | |
 | `PUT` | `/api/atracciones/{id}` | `ADMIN` | `AtraccionRequestDTO` | `200 AtraccionResponseDTO` | |
@@ -182,7 +182,7 @@
   - `ClienteResponseDTO`: `{ id, idCliente (alias), numeroDocumento, documento (alias), nombres, apellidos, nombreCompleto (calculado), telefono, correo, email (alias), fechaRegistro, menores: List<MenorDTO> }`
   - `MenorDTO`: `{ id (@JsonAlias("idMenor","id_menor")), idMenor (alias), numeroDocumento (@JsonAlias("documento","doc")), nombreCompleto (@JsonAlias("nombre")), fechaNacimiento (@JsonAlias("fechaNac")), edad (1..17) }`
 - **Atracciones, Tarifas y Asignaciones:**
-  - `AtraccionRequestDTO` / `AtraccionResponseDTO`: `{ id, nombre, descripcion, tarifaMinuto, estado, tipo (TipoAtraccion), capacidadMaxima, duracionMinutosBase, toleranciaMinutos, caidasLimite, edadMinima, edadMaxima, fechaCreacion }`
+  - `AtraccionRequestDTO` / `AtraccionResponseDTO`: `{ id, nombre, descripcion, tarifaMinuto, estado, tipo (TipoAtraccion), capacidadMaxima, duracionMinutosBase, toleranciaMinutos, caidasLimite, edadMinima, edadMaxima, ocupacionActiva, fechaCreacion }`
   - `CatalogoAtraccionVentaDTO`: `{ id, nombre, descripcion, tipo, estado, tarifaMinuto, duracionMinutosBase, toleranciaMinutos, caidasLimite, capacidadMaxima, ocupacionActual, ninosActivos (alias), aforoDisponible, tieneCupo (calculado), tieneOperarioAsignado, tarifasTiempo, tarifasEvento }`
   - `TarifaTiempoRequestDTO` / `ResponseDTO`: `{ id, atraccionId, nombreAtraccion, duracionMinutos (@JsonAlias("minutos")), precio, activo (@JsonAlias("vigente")), fechaCreacion }`
   - `TarifaEventoRequestDTO` / `ResponseDTO`: `{ id, atraccionId, nombreAtraccion, intentos, precio, activo (@JsonAlias("vigente")), fechaCreacion }`
