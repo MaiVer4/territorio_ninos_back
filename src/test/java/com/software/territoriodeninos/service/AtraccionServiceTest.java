@@ -83,7 +83,7 @@ class AtraccionServiceTest {
 
     @Test
     void obtenerTodas_Exito() {
-        when(atraccionRepository.findAll()).thenReturn(List.of(atraccionMock));
+        when(atraccionRepository.findByEstadoNotOrderByNombreAsc(EstadoAtraccion.INACTIVO)).thenReturn(List.of(atraccionMock));
 
         List<AtraccionResponseDTO> result = atraccionService.obtenerTodas();
 

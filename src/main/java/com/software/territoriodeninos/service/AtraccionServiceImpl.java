@@ -69,7 +69,7 @@ public class AtraccionServiceImpl implements AtraccionService {
     @Override
     @Transactional(readOnly = true)
     public List<AtraccionResponseDTO> obtenerTodas() {
-        return atraccionRepository.findAll().stream()
+        return atraccionRepository.findByEstadoNotOrderByNombreAsc(EstadoAtraccion.INACTIVO).stream()
                 .map(this::mapToDTO)
                 .toList();
     }
