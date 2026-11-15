@@ -22,6 +22,12 @@ public interface SesionJuegoRepository extends JpaRepository<SesionJuego, Long> 
             @Param("estados") Collection<EstadoSesionJuego> estados
     );
 
+    @Query("SELECT s.atraccion.id, COUNT(s) FROM SesionJuego s WHERE s.atraccion.id IN :atraccionIds AND s.estadoSesion IN :estados GROUP BY s.atraccion.id")
+    List<Object[]> countActivasPorAtraccionIds(
+            @Param("atraccionIds") Collection<Long> atraccionIds,
+            @Param("estados") Collection<EstadoSesionJuego> estados
+    );
+
     @EntityGraph(attributePaths = {
         "ticket",
         "ticket.detalleVenta",

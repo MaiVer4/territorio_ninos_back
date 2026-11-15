@@ -13,10 +13,12 @@ import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.repository.AsignacionOperarioRepository;
 import com.software.territoriodeninos.repository.AtraccionRepository;
 import com.software.territoriodeninos.repository.DetalleVentaRepository;
+import com.software.territoriodeninos.repository.SesionJuegoRepository;
 import com.software.territoriodeninos.repository.TarifaEventoRepository;
 import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoAtraccion;
+import com.software.territoriodeninos.util.EstadoSesionJuego;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ public class AtraccionServiceImpl implements AtraccionService {
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final TarifaEventoRepository tarifaEventoRepository;
     private final DetalleVentaRepository detalleVentaRepository;
+    private final SesionJuegoRepository sesionJuegoRepository;
 
     @Setter
     @Value("${app.catalogo.cache-ttl-ms:5000}")
@@ -69,16 +72,20 @@ public class AtraccionServiceImpl implements AtraccionService {
     @Override
     @Transactional(readOnly = true)
     public List<AtraccionResponseDTO> obtenerTodas() {
-        return atraccionRepository.findByEstadoNotOrderByNombreAsc(EstadoAtraccion.INACTIVO).stream()
-                .map(this::mapToDTO)
+        List<Atraccion> atracciones = atraccionRepository.findByEstadoNotOrderByNombreAsc(EstadoAtraccion.INACTIVO);
+        Map<Long, Integer> ocupacionPorAtraccion = obtenerOcupacionActivaPorAtraccion(atracciones);
+        return atracciones.stream()
+                .map(a -> mapToDTO(a, ocupacionPorAtraccion.getOrDefault(a.getId(), 0)))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AtraccionResponseDTO> obtenerActivas() {
-        return atraccionRepository.findByEstado(EstadoAtraccion.ACTIVO).stream()
-                .map(this::mapToDTO)
+        List<Atraccion> atracciones = atraccionRepository.findByEstado(EstadoAtraccion.ACTIVO);
+        Map<Long, Integer> ocupacionPorAtraccion = obtenerOcupacionActivaPorAtraccion(atracciones);
+        return atracciones.stream()
+                .map(a -> mapToDTO(a, ocupacionPorAtraccion.getOrDefault(a.getId(), 0)))
                 .toList();
     }
 
@@ -86,7 +93,8 @@ public class AtraccionServiceImpl implements AtraccionService {
     @Transactional(readOnly = true)
     public AtraccionResponseDTO obtenerPorId(Long id) {
         Atraccion atraccion = findAtraccionById(id);
-        return mapToDTO(atraccion);
+        int ocupacion = obtenerOcupacionActivaPorAtraccion(List.of(atraccion)).getOrDefault(atraccion.getId(), 0);
+        return mapToDTO(atraccion, ocupacion);
     }
 
     @Override
@@ -268,7 +276,38 @@ public class AtraccionServiceImpl implements AtraccionService {
         atraccion.setEdadMaxima(request.edadMaxima());
     }
 
+    private Map<Long, Integer> obtenerOcupacionActivaPorAtraccion(List<Atraccion> atracciones) {
+        if (sesionJuegoRepository == null || atracciones == null || atracciones.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Long> ids = atracciones.stream()
+                .map(Atraccion::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Object[]> rows = sesionJuegoRepository.countActivasPorAtraccionIds(
+                ids,
+                List.of(EstadoSesionJuego.EN_CURSO, EstadoSesionJuego.PAUSADA)
+        );
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Integer> result = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row != null && row.length >= 2 && row[0] instanceof Long atrId && row[1] instanceof Number count) {
+                result.put(atrId, count.intValue());
+            }
+        }
+        return result;
+    }
+
     private AtraccionResponseDTO mapToDTO(Atraccion atraccion) {
+        return mapToDTO(atraccion, 0);
+    }
+
+    private AtraccionResponseDTO mapToDTO(Atraccion atraccion, Integer ocupacionActiva) {
         return new AtraccionResponseDTO(
                 atraccion.getId(),
                 atraccion.getNombre(),
@@ -282,7 +321,8 @@ public class AtraccionServiceImpl implements AtraccionService {
                 atraccion.getToleranciaMinutos(),
                 atraccion.getCaidasLimite(),
                 atraccion.getEdadMinima(),
-                atraccion.getEdadMaxima()
+                atraccion.getEdadMaxima(),
+                ocupacionActiva != null ? ocupacionActiva : 0
         );
     }
 

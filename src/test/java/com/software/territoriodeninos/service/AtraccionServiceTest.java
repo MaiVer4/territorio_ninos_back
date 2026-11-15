@@ -41,6 +41,9 @@ class AtraccionServiceTest {
     @Mock
     private com.software.territoriodeninos.repository.DetalleVentaRepository detalleVentaRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.SesionJuegoRepository sesionJuegoRepository;
+
     @InjectMocks
     private AtraccionServiceImpl atraccionService;
 
@@ -84,11 +87,14 @@ class AtraccionServiceTest {
     @Test
     void obtenerTodas_Exito() {
         when(atraccionRepository.findByEstadoNotOrderByNombreAsc(EstadoAtraccion.INACTIVO)).thenReturn(List.of(atraccionMock));
+        when(sesionJuegoRepository.countActivasPorAtraccionIds(anyList(), anyList()))
+                .thenReturn(List.<Object[]>of(new Object[]{1L, 3L}));
 
         List<AtraccionResponseDTO> result = atraccionService.obtenerTodas();
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
+        assertEquals(3, result.get(0).ocupacionActiva());
     }
 
     @Test
