@@ -82,3 +82,18 @@ desktop.ini
 *~
 *.bak
 *.tmp
+
+### AI Assistants, Agents & MCP ###
+.gemini/
+.claude/
+.claude.json
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+.cursor/
+.windsurf/
+.deska/
+.agents/
+.cline/
+.roo/
+.continue/
