@@ -12,6 +12,8 @@ import com.software.territoriodeninos.entity.Atraccion;
 import com.software.territoriodeninos.entity.Cliente;
 import com.software.territoriodeninos.entity.DetalleVenta;
 import com.software.territoriodeninos.entity.Menor;
+import com.software.territoriodeninos.entity.TarifaEvento;
+import com.software.territoriodeninos.entity.TarifaTiempo;
 import com.software.territoriodeninos.entity.Ticket;
 import com.software.territoriodeninos.entity.TurnoCaja;
 import com.software.territoriodeninos.entity.Usuario;
@@ -21,6 +23,8 @@ import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.repository.AtraccionRepository;
 import com.software.territoriodeninos.repository.ClienteRepository;
 import com.software.territoriodeninos.repository.MenorRepository;
+import com.software.territoriodeninos.repository.TarifaEventoRepository;
+import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.repository.TicketRepository;
 import com.software.territoriodeninos.repository.TurnoCajaRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
@@ -72,6 +76,8 @@ public class VentaServiceImpl implements VentaService {
     private final UUIDGeneratorService uuidGeneratorService;
     private final AtraccionService atraccionService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final TarifaTiempoRepository tarifaTiempoRepository;
+    private final TarifaEventoRepository tarifaEventoRepository;
 
     @Autowired
     public VentaServiceImpl(
@@ -87,7 +93,9 @@ public class VentaServiceImpl implements VentaService {
             VentaCalculoService ventaCalculoService,
             UUIDGeneratorService uuidGeneratorService,
             AtraccionService atraccionService,
-            @Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
+            @Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider,
+            @Autowired(required = false) TarifaTiempoRepository tarifaTiempoRepository,
+            @Autowired(required = false) TarifaEventoRepository tarifaEventoRepository
     ) {
         this.ventaRepository = ventaRepository;
         this.ticketRepository = ticketRepository;
@@ -104,6 +112,28 @@ public class VentaServiceImpl implements VentaService {
         this.authenticatedUserProvider = authenticatedUserProvider != null
                 ? authenticatedUserProvider
                 : new AuthenticatedUserProvider(usuarioRepository);
+        this.tarifaTiempoRepository = tarifaTiempoRepository;
+        this.tarifaEventoRepository = tarifaEventoRepository;
+    }
+
+    public VentaServiceImpl(
+            VentaRepository ventaRepository,
+            TicketRepository ticketRepository,
+            ClienteRepository clienteRepository,
+            MenorRepository menorRepository,
+            TurnoCajaRepository turnoCajaRepository,
+            UsuarioRepository usuarioRepository,
+            AtraccionRepository atraccionRepository,
+            AuditoriaOperacionService auditoriaOperacionService,
+            AforoValidatorService aforoValidatorService,
+            VentaCalculoService ventaCalculoService,
+            UUIDGeneratorService uuidGeneratorService,
+            AtraccionService atraccionService,
+            AuthenticatedUserProvider authenticatedUserProvider
+    ) {
+        this(ventaRepository, ticketRepository, clienteRepository, menorRepository, turnoCajaRepository,
+                usuarioRepository, atraccionRepository, auditoriaOperacionService, aforoValidatorService,
+                ventaCalculoService, uuidGeneratorService, atraccionService, authenticatedUserProvider, null, null);
     }
 
     @Override
@@ -248,6 +278,8 @@ public class VentaServiceImpl implements VentaService {
         List<ItemCotizacionDTO> itemsParaCotizar = new ArrayList<>();
         List<Atraccion> atraccionesPorItem = new ArrayList<>();
         List<Menor> menoresPorItem = new ArrayList<>();
+        List<Long> tarifasTiempoPorItem = new ArrayList<>();
+        List<Long> tarifasEventoPorItem = new ArrayList<>();
         Map<Long, Atraccion> atraccionesCache = new HashMap<>();
         Map<Long, Menor> menoresCache = new HashMap<>();
 
@@ -289,11 +321,38 @@ public class VentaServiceImpl implements VentaService {
                 throw new ReglaNegocioException("El tipo de tarifa es obligatorio para cada ítem");
             }
 
-            if (TipoTarifa.TIEMPO.equals(itemDto.tipoTarifa()) && itemDto.tarifaTiempoId() == null) {
-                throw new ReglaNegocioException("Debe especificar tarifaTiempoId para tarifas de tipo TIEMPO");
+            Long tarifaTiempoId = itemDto.tarifaTiempoId();
+            if (TipoTarifa.TIEMPO.equals(itemDto.tipoTarifa()) && tarifaTiempoId == null) {
+                if (tarifaTiempoRepository != null) {
+                    List<TarifaTiempo> tarifasActivas = tarifaTiempoRepository.findByAtraccionIdAndActivoTrue(atraccion.getId());
+                    if (!tarifasActivas.isEmpty()) {
+                        tarifaTiempoId = tarifasActivas.stream()
+                                .filter(t -> t.getPrecio() != null && itemDto.precioUnitario() != null && t.getPrecio().compareTo(itemDto.precioUnitario()) == 0)
+                                .map(TarifaTiempo::getId)
+                                .findFirst()
+                                .orElse(tarifasActivas.get(0).getId());
+                    }
+                }
+                if (tarifaTiempoId == null) {
+                    throw new ReglaNegocioException("Debe especificar tarifaTiempoId para tarifas de tipo TIEMPO");
+                }
             }
-            if (TipoTarifa.EVENTO.equals(itemDto.tipoTarifa()) && itemDto.tarifaEventoId() == null) {
-                throw new ReglaNegocioException("Debe especificar tarifaEventoId para tarifas de tipo EVENTO");
+
+            Long tarifaEventoId = itemDto.tarifaEventoId();
+            if (TipoTarifa.EVENTO.equals(itemDto.tipoTarifa()) && tarifaEventoId == null) {
+                if (tarifaEventoRepository != null) {
+                    List<TarifaEvento> tarifasActivas = tarifaEventoRepository.findByAtraccionIdAndActivoTrue(atraccion.getId());
+                    if (!tarifasActivas.isEmpty()) {
+                        tarifaEventoId = tarifasActivas.stream()
+                                .filter(e -> e.getPrecio() != null && itemDto.precioUnitario() != null && e.getPrecio().compareTo(itemDto.precioUnitario()) == 0)
+                                .map(TarifaEvento::getId)
+                                .findFirst()
+                                .orElse(tarifasActivas.get(0).getId());
+                    }
+                }
+                if (tarifaEventoId == null) {
+                    throw new ReglaNegocioException("Debe especificar tarifaEventoId para tarifas de tipo EVENTO");
+                }
             }
 
             if (TipoTarifa.MINUTO_BASE.equals(itemDto.tipoTarifa())) {
@@ -305,8 +364,8 @@ public class VentaServiceImpl implements VentaService {
 
             itemsParaCotizar.add(new ItemCotizacionDTO(
                     atraccion.getId(),
-                    itemDto.tarifaTiempoId(),
-                    itemDto.tarifaEventoId(),
+                    tarifaTiempoId,
+                    tarifaEventoId,
                     atraccion.getNombre(),
                     cantidad,
                     itemDto.precioUnitario(),
@@ -314,9 +373,11 @@ public class VentaServiceImpl implements VentaService {
             ));
             atraccionesPorItem.add(atraccion);
             menoresPorItem.add(menor);
+            tarifasTiempoPorItem.add(tarifaTiempoId);
+            tarifasEventoPorItem.add(tarifaEventoId);
         }
 
-        return new ResultadoValidacionItems(itemsParaCotizar, atraccionesPorItem, menoresPorItem);
+        return new ResultadoValidacionItems(itemsParaCotizar, atraccionesPorItem, menoresPorItem, tarifasTiempoPorItem, tarifasEventoPorItem);
     }
 
     private CotizacionResponseDTO liquidarCotizacion(List<ItemCotizacionDTO> itemsParaCotizar, BigDecimal descuento) {
@@ -372,8 +433,8 @@ public class VentaServiceImpl implements VentaService {
                     .atraccion(atr)
                     .menor(menor)
                     .tipoTarifa(itemDto.tipoTarifa())
-                    .tarifaTiempoId(itemDto.tarifaTiempoId())
-                    .tarifaEventoId(itemDto.tarifaEventoId())
+                    .tarifaTiempoId(resultadoItems.tarifasTiempoPorItem().get(i))
+                    .tarifaEventoId(resultadoItems.tarifasEventoPorItem().get(i))
                     .cantidad(cant)
                     .precioUnitario(precioUnitario)
                     .subtotal(subtotalLinea)
@@ -544,6 +605,8 @@ public class VentaServiceImpl implements VentaService {
     private record ResultadoValidacionItems(
             List<ItemCotizacionDTO> itemsParaCotizar,
             List<Atraccion> atraccionesPorItem,
-            List<Menor> menoresPorItem
+            List<Menor> menoresPorItem,
+            List<Long> tarifasTiempoPorItem,
+            List<Long> tarifasEventoPorItem
     ) {}
 }

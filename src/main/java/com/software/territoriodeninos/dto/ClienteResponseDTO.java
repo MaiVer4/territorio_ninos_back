@@ -57,6 +57,12 @@ public record ClienteResponseDTO(
         return correo;
     }
 
+    @JsonProperty("idCliente")
+    @Schema(description = "Alias para ID único del cliente para compatibilidad con el frontend", example = "1")
+    public Long idCliente() {
+        return id;
+    }
+
     public static ClienteResponseDTO fromEntity(Cliente cliente) {
         if (cliente == null) {
             return null;

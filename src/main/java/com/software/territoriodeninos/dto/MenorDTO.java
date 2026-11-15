@@ -2,6 +2,7 @@ package com.software.territoriodeninos.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.software.territoriodeninos.entity.Menor;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -74,5 +75,11 @@ public record MenorDTO(
                 m.getFechaNacimiento(),
                 edad
         );
+    }
+
+    @JsonProperty("idMenor")
+    @Schema(description = "Alias para ID del menor para compatibilidad con el frontend", example = "1")
+    public Long idMenor() {
+        return id;
     }
 }
