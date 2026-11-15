@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.controller;
 
+import com.software.territoriodeninos.dto.ReporteGraficosDTO;
 import com.software.territoriodeninos.dto.DetalleTurnoAuditadoDTO;
 import com.software.territoriodeninos.dto.GraficoTendenciaDTO;
 import com.software.territoriodeninos.dto.ReporteTurnoDTO;
@@ -134,5 +135,15 @@ public class ReporteController implements ReporteApi {
     public ResponseEntity<GraficoTendenciaDTO> obtenerEvolucionIngresos() {
         GraficoTendenciaDTO grafico = estadisticasReporteService.obtenerEvolucionIngresosUltimos7Dias();
         return ResponseEntity.ok(grafico);
+    }
+
+    @GetMapping("/graficos")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
+    public ResponseEntity<ReporteGraficosDTO> obtenerDatosGraficos(
+            @RequestParam(required = false, defaultValue = "HOY") String periodo,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin
+    ) {
+        return ResponseEntity.ok(estadisticasReporteService.obtenerDatosGraficos(periodo, fechaInicio, fechaFin));
     }
 }

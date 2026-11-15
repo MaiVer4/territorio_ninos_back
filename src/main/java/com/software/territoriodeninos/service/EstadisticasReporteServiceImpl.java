@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.service;
 
+import com.software.territoriodeninos.dto.ReporteGraficosDTO;
 import com.software.territoriodeninos.dto.DatasetGraficoDTO;
 import com.software.territoriodeninos.dto.GraficoTendenciaDTO;
 import com.software.territoriodeninos.entity.Venta;
@@ -184,5 +185,126 @@ public class EstadisticasReporteServiceImpl implements EstadisticasReporteServic
                 .totalAcumulado(totalDouble)
                 .dataset(dataset)
                 .build();
+    }
+
+    private static final int HORA_APERTURA = 8;
+    private static final int HORA_CIERRE = 20;
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReporteGraficosDTO obtenerDatosGraficos(String periodo, String fechaInicio, String fechaFin) {
+        LocalDateTime[] rango = resolverRango(periodo, fechaInicio, fechaFin);
+        LocalDateTime inicio = rango[0];
+        LocalDateTime fin = rango[1];
+
+        List<Venta> ventas = ventaRepository.findByFechaVentaBetweenOrderByFechaVentaDesc(inicio, fin);
+
+        // Ventas reales (COP) y tiquetes agrupados por hora de venta
+        Map<Integer, BigDecimal> montoPorHora = new TreeMap<>();
+        Map<Integer, Long> conteoPorHora = new TreeMap<>();
+        for (int h = HORA_APERTURA; h < HORA_CIERRE; h++) {
+            montoPorHora.put(h, BigDecimal.ZERO);
+            conteoPorHora.put(h, 0L);
+        }
+        for (Venta venta : ventas) {
+            if (!esVentaValida(venta)) continue;
+            int hora = venta.getFechaVenta().getHour();
+            BigDecimal monto = venta.getMontoTotal() != null ? venta.getMontoTotal() : BigDecimal.ZERO;
+            montoPorHora.merge(hora, monto, BigDecimal::add);
+            conteoPorHora.merge(hora, 1L, Long::sum);
+        }
+
+        List<ReporteGraficosDTO.VentaPorHoraDTO> ventasPorHora = new ArrayList<>();
+        for (Map.Entry<Integer, BigDecimal> e : montoPorHora.entrySet()) {
+            ventasPorHora.add(ReporteGraficosDTO.VentaPorHoraDTO.builder()
+                    .hora(etiquetaHora(e.getKey()))
+                    .ventasCop(e.getValue())
+                    .afluencia(conteoPorHora.getOrDefault(e.getKey(), 0L))
+                    .build());
+        }
+
+        // Evolución semanal (últimos 7 días)
+        String[] dias = {"Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"};
+        List<ReporteGraficosDTO.EvolucionSemanalDTO> evolucion = new ArrayList<>();
+        GraficoTendenciaDTO semanal = obtenerEvolucionIngresosUltimos7Dias();
+        for (DatasetGraficoDTO.PuntoGraficoDTO punto : semanal.dataset().puntos()) {
+            LocalDate dia = LocalDate.parse(punto.etiqueta());
+            evolucion.add(ReporteGraficosDTO.EvolucionSemanalDTO.builder()
+                    .fecha(punto.etiqueta())
+                    .etiquetaDia(dias[dia.getDayOfWeek().getValue() - 1])
+                    .ingresosCop(BigDecimal.valueOf(punto.valor()))
+                    .build());
+        }
+
+        // Distribución por método de pago en el mismo rango
+        List<ReporteGraficosDTO.DistribucionMetodoPagoDTO> metodos = new ArrayList<>();
+        GraficoTendenciaDTO pagos = obtenerDistribucionMetodosPago(inicio, fin);
+        for (DatasetGraficoDTO.PuntoGraficoDTO punto : pagos.dataset().puntos()) {
+            metodos.add(ReporteGraficosDTO.DistribucionMetodoPagoDTO.builder()
+                    .metodo(punto.etiqueta())
+                    .etiqueta(etiquetaMetodo(punto.etiqueta()))
+                    .montoCop(BigDecimal.valueOf(punto.valor()))
+                    .porcentaje(punto.porcentajeRelativo())
+                    .build());
+        }
+
+        return ReporteGraficosDTO.builder()
+                .ventasPorHora(ventasPorHora)
+                .evolucionSemanal(evolucion)
+                .distribucionMetodosPago(metodos)
+                .build();
+    }
+
+    private boolean esVentaValida(Venta venta) {
+        return venta.getFechaVenta() != null
+                && (venta.getEstadoVenta() == EstadoVenta.PAGADO || venta.getEstadoVenta() == EstadoVenta.COMPLETADA);
+    }
+
+    static LocalDateTime[] resolverRango(String periodo, String fechaInicio, String fechaFin) {
+        LocalDate hoy = LocalDate.now();
+        LocalDateTime finDia = hoy.atTime(java.time.LocalTime.MAX);
+        LocalDateTime inicioCustom = parseFecha(fechaInicio, false);
+        LocalDateTime finCustom = parseFecha(fechaFin, true);
+        if (inicioCustom != null || finCustom != null) {
+            return new LocalDateTime[]{
+                    inicioCustom != null ? inicioCustom : hoy.atStartOfDay(),
+                    finCustom != null ? finCustom : finDia};
+        }
+        String p = periodo != null ? periodo.trim().toUpperCase() : "HOY";
+        return switch (p) {
+            case "ULTIMOS_7_DIAS" -> new LocalDateTime[]{hoy.minusDays(6).atStartOfDay(), finDia};
+            case "ESTE_MES" -> new LocalDateTime[]{hoy.withDayOfMonth(1).atStartOfDay(), finDia};
+            default -> new LocalDateTime[]{hoy.atStartOfDay(), finDia};
+        };
+    }
+
+    private static LocalDateTime parseFecha(String valor, boolean finDeDia) {
+        if (valor == null || valor.isBlank()) return null;
+        String v = valor.trim();
+        try {
+            if (v.length() <= 10) {
+                LocalDate d = LocalDate.parse(v);
+                return finDeDia ? d.atTime(java.time.LocalTime.MAX) : d.atStartOfDay();
+            }
+            return LocalDateTime.parse(v);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    static String etiquetaHora(int h) {
+        if (h == 0) return "12am";
+        if (h == 12) return "12pm";
+        return h < 12 ? h + "am" : (h - 12) + "pm";
+    }
+
+    private static String etiquetaMetodo(String metodo) {
+        return switch (metodo) {
+            case "EFECTIVO" -> "Efectivo";
+            case "TARJETA_DEBITO" -> "Tarjeta Débito";
+            case "TARJETA_CREDITO" -> "Tarjeta Crédito";
+            case "TRANSFERENCIA" -> "Transferencia";
+            default -> metodo;
+        };
     }
 }

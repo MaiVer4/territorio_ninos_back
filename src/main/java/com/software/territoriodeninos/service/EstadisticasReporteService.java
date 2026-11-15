@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.service;
 
+import com.software.territoriodeninos.dto.ReporteGraficosDTO;
 import com.software.territoriodeninos.dto.GraficoTendenciaDTO;
 
 import java.time.LocalDateTime;
@@ -20,4 +21,10 @@ public interface EstadisticasReporteService {
      * Calcula la evolución diaria de ingresos facturados en los últimos 7 días (HU-40.04).
      */
     GraficoTendenciaDTO obtenerEvolucionIngresosUltimos7Dias();
+
+    /**
+     * Datos unificados para los gráficos del panel de reportes (HU-40): ventas reales por hora,
+     * evolución semanal y distribución por método de pago.
+     */
+    ReporteGraficosDTO obtenerDatosGraficos(String periodo, String fechaInicio, String fechaFin);
 }
