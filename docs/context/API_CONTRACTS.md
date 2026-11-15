@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-15 (commit ccac536).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-15 (commit c2aca55).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -155,6 +155,7 @@
 | `GET` | `/api/reportes/rotacion-atracciones` | `ADMIN` | `?fechaInicio=&fechaFin=&periodo=MENSUAL&criterioOrden=USOS` | `200 List<RotacionAtraccionDTO>` |
 | `GET` | `/api/reportes/exportar/pdf` | `ADMIN` | `?tipoReporte=TURNOS&fechaInicio=&fechaFin=&usuarioId=&atraccionId=` | `200 application/pdf` (`byte[]`) |
 | `GET` | `/api/reportes/exportar/csv` | `ADMIN` | `?tipoReporte=TURNOS&fechaInicio=&fechaFin=&usuarioId=&atraccionId=` | `200 text/csv;charset=UTF-8` (`byte[]`) |
+| `GET` | `/api/reportes/graficos` | `ADMIN` | `?periodo=HOY&fechaInicio=&fechaFin=` | `200 ReporteGraficosDTO` |
 | `GET` | `/api/reportes/graficos/horas-pico` | `ADMIN` | `?fechaInicio=&fechaFin=` | `200 GraficoTendenciaDTO` |
 | `GET` | `/api/reportes/graficos/metodos-pago` | `ADMIN` | `?fechaInicio=&fechaFin=` | `200 GraficoTendenciaDTO` |
 | `GET` | `/api/reportes/graficos/evolucion-ingresos` | `ADMIN` | — | `200 GraficoTendenciaDTO` |

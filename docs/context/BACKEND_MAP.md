@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Servicios del Backend
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-15 (commit ccac536).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-15 (commit c2aca55).
 
 ## 1. Stack, Convenciones y Reglas de Arquitectura
 - **Stack:** Java 21, Spring Boot `4.0.6`, Spring Security + JWT (`jjwt`), Spring Data JPA (Hibernate), Flyway, WebSocket STOMP, ZXing (QR), OpenPDF / CSV, Lombok `1.18.38`.
@@ -48,7 +48,7 @@
 | `OperacionServiceImpl` | `obtenerEstacionActiva`, `escanearTicket`, `iniciarSesion`, `obtenerCola`, `pausarSesion`, `reanudarSesion`, `pausaGeneral`, `registrarSalida`, `descontarIntento`, `sincronizarReloj`, `obtenerAforoActual` | Motor operativo de atracciones: validación QR antifraude, control de sesiones, pausas, caídas, aforo y emisión WS. | `TicketRepository`, `SesionJuegoRepository`, `LogEscaneoQrRepository`, `LogIncidentePausaRepository`, `OperacionWebSocketPublisher`, `AuditoriaOperacionService` |
 | `SesionJuegoMonitorScheduler` | `monitorearSesionesPreExpiracion` (`@Scheduled(fixedRate = 5000)`) | Revisa cada 5s sesiones `EN_CURSO` para disparar alertas WS de pre-expiración (`<= 120s`) y tiempo expirado (`<= 0s`). | `SesionJuegoRepository`, `OperacionWebSocketPublisher`, `OperacionService` |
 | `ConciliacionTurnoServiceImpl` | `obtenerReporteTurnos`, `obtenerDetalleTurno`, `obtenerRotacionAtracciones` | Consolida cierres de caja (`CUADRADO`/`SOBRANTE`/`FALTANTE`), desglose de ventas/boletas y métricas de rotación. | `TurnoCajaRepository`, `VentaRepository`, `SesionJuegoRepository`, `TicketRepository` |
-| `EstadisticasReporteServiceImpl` | `obtenerHorasPico`, `obtenerDistribucionMetodosPago`, `obtenerEvolucionIngresosUltimos7Dias` | Agrega series estadísticas para gráficos gerenciales. | `SesionJuegoRepository`, `VentaRepository` |
+| `EstadisticasReporteServiceImpl` | `obtenerHorasPico`, `obtenerDistribucionMetodosPago`, `obtenerEvolucionIngresosUltimos7Dias`, `obtenerDatosGraficos` | Agrega series estadísticas para gráficos gerenciales y consolida `ReporteGraficosDTO` con ventas reales por hora (8:00 - 20:00). | `SesionJuegoRepository`, `VentaRepository` |
 | `ExportacionReporteServiceImpl` | `exportarPdf`, `exportarCsv` | Genera archivos descargables PDF y CSV UTF-8 con BOM para reportes de turnos, rotación e incidentes. | `ConciliacionTurnoService`, `AuditoriaOperacionService`, `ConfiguracionParqueService` |
 | `AuditoriaOperacionServiceImpl` | `registrarTransicionTicket`, `consultarTimelinePorCriterio`, `consultarIncidentes` | Bitácora inmutable de cambios de estado de boletas (`auditoria_tickets`) y consulta de pausas/incidentes. | `AuditoriaTicketRepository`, `LogIncidentePausaRepository`, `TicketRepository` |
 
