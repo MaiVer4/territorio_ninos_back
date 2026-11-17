@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-15 (commit d904350).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-16 (commit 5b66326).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -146,6 +146,8 @@
 | `POST` | `/api/operacion/sesiones/{id}/descontar-intento` | `OPE, ADMIN` | `RegistroIntentoEventoDTO` (opc.) | `200 SesionJuegoResponseDTO` | Para `EVENTOS_CAIDAS`: descuenta 1 intento; si llega a 0, finaliza sesión automáticamente. |
 | `GET` | `/api/operacion/sincronizar/{atraccionId}` | `TODOS` | Path `atraccionId` | `200 SincronizacionRelojResponseDTO` | Devuelve `serverEpochMillis`, `serverTimestamp` y `colaActualizada`. |
 | `GET` | `/api/operacion/atraccion/{id}/aforo-actual` | `TODOS` | Path `id` | `200 AforoActualDTO` | Ocupación activa, capacidad máxima y porcentaje. |
+| `POST` | `/api/operacion/vincular` | `OPE, ADMIN` | `VincularEstacionRequestDTO` | `200 EstacionTrabajoDTO` | Vincula al operario autenticado a la estación seleccionada creando o reactivando la asignación. Lanza `409` si ya está ocupada por otro operario o `404`/`400` si está inactiva/no existe. |
+| `POST` | `/api/operacion/desvincular` | `OPE, ADMIN` | — | `204 No Content` | Desvincula al operario autenticado de su estación activa actual pasando la asignación a `FINALIZADA`. |
 
 ### 2.11 Reportes y Auditoría (`ReporteController` — `/api/reportes`, `AuditoriaController` — `/api/auditoria`)
 | Método | Ruta | Rol | Request (Query / Path) | Response |
@@ -201,6 +203,7 @@
   - `TicketResponseDTO`: `{ uuidCodigo, id (alias), uuid (alias), codigoQr (alias), codigoBoleta (alias TDN-{atrId}-{uuidPrefix}-001), detalleVentaId, atraccionId, atraccionNombre, menorId, menorNombre, tipoTarifa, estadoTicket, fechaEmision }`
   - `TicketConsultaDTO`: `{ uuidCodigo, id (alias), uuid (alias), estadoTicket, estadoActual (alias), minutosContratados, fechaEmision, horaEmision (alias), menorId, menorNombre, menorDocumento, atraccionId, atraccionNombre, tipoTarifa, ventaId, detalleVentaId, clienteId, clienteDocumento, clienteNombre }`
 - **Operación, Reportes y Auditoría:**
+  - `VincularEstacionRequestDTO`: `{ atraccionId: Long (@NotNull) }`
   - `EscaneoQrRequestDTO`: `{ uuid: String (@JsonAlias("codigo","uuidTicket","codigoBoleta","codigoQr")), atraccionId: Long, timestamp?: LocalDateTime }`
   - `ValidacionTicketResponseDTO`: `{ valido, mensaje, uuidTicket, estadoActual, atraccionId, atraccionNombre, tipoAtraccion, menorId, menorNombre, menorEdad, acudienteNombre, acudienteDocumento, acudienteTelefono, tipoTarifa, minutosAutorizados, intentosAutorizados, duracionMinutosBase, toleranciaMinutos, caidasLimite, fechaEmision }`
   - `InicioSesionRequestDTO`: `{ uuidTicket: UUID (@JsonAlias("ticketUuid","ticket_uuid")), atraccionId: Long, timestamp?: LocalDateTime }`
