@@ -171,4 +171,32 @@ public interface OperacionApi {
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
     })
     ResponseEntity<AforoActualDTO> obtenerAforoActual(@PathVariable Long id);
+
+    @Operation(
+        summary = "Vincular operario autenticado a una atracción",
+        description = "Asigna o confirma la estación física seleccionada para habilitar escáner y operaciones (HU-24)"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Estación vinculada correctamente",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = EstacionTrabajoDTO.class))),
+        @ApiResponse(responseCode = "400", description = "Parámetros inválidos"),
+        @ApiResponse(responseCode = "404", description = "Atracción no encontrada"),
+        @ApiResponse(responseCode = "409", description = "Conflicto: La atracción ya tiene otro operario activo asignado")
+    })
+    ResponseEntity<EstacionTrabajoDTO> vincularEstacion(
+            @Valid @RequestBody VincularEstacionRequestDTO request,
+            @Parameter(hidden = true) Authentication authentication
+    );
+
+    @Operation(
+        summary = "Desvincular la estación activa del operario autenticado",
+        description = "Finaliza el turno de operación física en la atracción (HU-24.06)"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Estación desvinculada exitosamente")
+    })
+    ResponseEntity<Void> desvincularEstacion(
+            @RequestBody(required = false) java.util.Map<String, Object> body,
+            @Parameter(hidden = true) Authentication authentication
+    );
 }

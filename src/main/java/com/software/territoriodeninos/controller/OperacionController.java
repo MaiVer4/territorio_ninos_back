@@ -113,6 +113,27 @@ public class OperacionController implements OperacionApi {
         return ResponseEntity.ok(operacionService.obtenerAforoActual(id));
     }
 
+    @Override
+    @PostMapping("/vincular")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    public ResponseEntity<EstacionTrabajoDTO> vincularEstacion(
+            @Valid @RequestBody VincularEstacionRequestDTO request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(operacionService.vincularEstacion(request.atraccionId(), authentication));
+    }
+
+    @Override
+    @PostMapping("/desvincular")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    public ResponseEntity<Void> desvincularEstacion(
+            @RequestBody(required = false) java.util.Map<String, Object> body,
+            Authentication authentication
+    ) {
+        operacionService.desvincularEstacion(authentication);
+        return ResponseEntity.noContent().build();
+    }
+
     private String extractClientIp(HttpServletRequest request) {
         if (request == null) {
             return "127.0.0.1";

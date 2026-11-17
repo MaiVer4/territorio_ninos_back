@@ -243,6 +243,73 @@ class OperacionServiceImplTest {
         assertThrows(RecursoNoEncontradoException.class, () -> operacionService.obtenerEstacionActiva(authentication));
     }
 
+    @Test
+    @DisplayName("vincularEstacion - Vincula correctamente al operario cuando la atracción está libre")
+    void vincularEstacion_exito() {
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+        when(asignacionRepository.findByAtraccionIdAndEstado(10L, EstadoAsignacion.ACTIVA)).thenReturn(List.of());
+        when(asignacionRepository.findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+                eq(5L), eq(LocalDate.now()), eq(EstadoAsignacion.ACTIVA)
+        )).thenReturn(Optional.empty(), Optional.of(asignacion));
+        when(asignacionRepository.findByUsuarioIdAndEstado(eq(5L), eq(EstadoAsignacion.ACTIVA)))
+                .thenReturn(Optional.empty());
+
+        EstacionTrabajoDTO dto = operacionService.vincularEstacion(10L, authentication);
+
+        assertNotNull(dto);
+        assertEquals(10L, dto.atraccionId());
+        verify(asignacionRepository, times(1)).save(any(AsignacionOperario.class));
+    }
+
+    @Test
+    @DisplayName("vincularEstacion - Lanza ConflictoException si la atracción ya está ocupada por otro operario")
+    void vincularEstacion_ocupadaPorOtro_lanzaConflicto() {
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+
+        Usuario otroOperario = Usuario.builder()
+                .id(99L)
+                .nombre("Otro Operario")
+                .correo("otro@territoriodeninos.com")
+                .build();
+        AsignacionOperario asignacionOtro = AsignacionOperario.builder()
+                .id(200L)
+                .usuario(otroOperario)
+                .atraccion(atraccion)
+                .estado(EstadoAsignacion.ACTIVA)
+                .build();
+
+        when(asignacionRepository.findByAtraccionIdAndEstado(10L, EstadoAsignacion.ACTIVA)).thenReturn(List.of(asignacionOtro));
+
+        assertThrows(com.software.territoriodeninos.exception.ConflictoException.class,
+                () -> operacionService.vincularEstacion(10L, authentication));
+        verify(asignacionRepository, never()).save(any(AsignacionOperario.class));
+    }
+
+    @Test
+    @DisplayName("desvincularEstacion - Finaliza la asignación activa del operario")
+    void desvincularEstacion_exito() {
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(asignacionRepository.findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+                eq(5L), eq(LocalDate.now()), eq(EstadoAsignacion.ACTIVA)
+        )).thenReturn(Optional.of(asignacion));
+
+        operacionService.desvincularEstacion(authentication);
+
+        assertEquals(EstadoAsignacion.FINALIZADA, asignacion.getEstado());
+        verify(asignacionRepository, times(1)).save(asignacion);
+    }
+
     // =========================================================
     // Pruebas HU-24.04: Intercepción de Estación No Asignada
     // =========================================================

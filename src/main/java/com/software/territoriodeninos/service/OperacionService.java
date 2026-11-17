@@ -61,6 +61,16 @@ public interface OperacionService {
     AforoActualDTO obtenerAforoActual(Long atraccionId);
 
     /**
+     * Vincula al operario autenticado con una estación física de atracción seleccionada (HU-24).
+     */
+    EstacionTrabajoDTO vincularEstacion(Long atraccionId, Authentication auth);
+
+    /**
+     * Desvincula la estación activa del operario autenticado al culminar el turno (HU-24.06).
+     */
+    void desvincularEstacion(Authentication auth);
+
+    /**
      * Convierte una entidad SesionJuego en su representación DTO calculando el tiempo restante actual.
      */
     SesionJuegoResponseDTO mapearSesionResponse(com.software.territoriodeninos.entity.SesionJuego sesion);

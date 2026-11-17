@@ -25,6 +25,7 @@ import com.software.territoriodeninos.entity.Ticket;
 import com.software.territoriodeninos.entity.Usuario;
 import com.software.territoriodeninos.entity.Venta;
 import com.software.territoriodeninos.exception.AforoCompletoException;
+import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.EstacionNoAutorizadaException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
@@ -40,6 +41,7 @@ import com.software.territoriodeninos.repository.TicketRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.AuthenticatedUserProvider;
 import com.software.territoriodeninos.util.EstadoAsignacion;
+import com.software.territoriodeninos.util.EstadoAtraccion;
 import com.software.territoriodeninos.util.EstadoSesionJuego;
 import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.NombreRol;
@@ -668,6 +670,77 @@ public class OperacionServiceImpl implements OperacionService {
                 aforoCompleto,
                 LocalDateTime.now()
         );
+    }
+
+    @Override
+    @Transactional
+    public EstacionTrabajoDTO vincularEstacion(Long atraccionId, Authentication auth) {
+        if (atraccionId == null) {
+            throw new ReglaNegocioException("El ID de la atracción es obligatorio para la vinculación.");
+        }
+
+        Usuario usuario = resolverUsuarioAutenticado(auth);
+        if (usuario == null) {
+            throw new ReglaNegocioException("Usuario no autenticado o sesión no válida.");
+        }
+
+        Atraccion atraccion = atraccionRepository.findById(atraccionId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + atraccionId));
+
+        if (atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
+            throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' no se encuentra activa");
+        }
+
+        // Validar que la atracción no esté ocupada por otro operario en turno activo
+        List<AsignacionOperario> activasEnAtraccion = asignacionRepository.findByAtraccionIdAndEstado(atraccionId, EstadoAsignacion.ACTIVA);
+        for (AsignacionOperario asig : activasEnAtraccion) {
+            if (!asig.getUsuario().getId().equals(usuario.getId())) {
+                String nombreOtro = asig.getUsuario().getNombre();
+                throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' ya tiene asignado al operario " + nombreOtro + " en turno.");
+            }
+        }
+
+        // Revisar asignación previa del operario actual
+        AsignacionOperario miAsignacionActiva = resolverAsignacionActiva(usuario);
+        if (miAsignacionActiva != null) {
+            if (miAsignacionActiva.getAtraccion().getId().equals(atraccionId)) {
+                return obtenerEstacionActiva(auth);
+            }
+            miAsignacionActiva.setEstado(EstadoAsignacion.REASIGNADA);
+            miAsignacionActiva.setHoraFin(LocalDateTime.now());
+            asignacionRepository.save(miAsignacionActiva);
+            log.info("Operario {} reasignado desde {} a {}", usuario.getCorreo(), miAsignacionActiva.getAtraccion().getNombre(), atraccion.getNombre());
+        }
+
+        AsignacionOperario nuevaAsignacion = AsignacionOperario.builder()
+                .usuario(usuario)
+                .atraccion(atraccion)
+                .fechaAsignacion(LocalDate.now())
+                .horaInicio(LocalDateTime.now())
+                .estado(EstadoAsignacion.ACTIVA)
+                .observaciones("Vinculación confirmada por operario en consola de campo")
+                .build();
+        asignacionRepository.save(nuevaAsignacion);
+
+        log.info("Operario {} vinculado exitosamente a atracción {}", usuario.getCorreo(), atraccion.getNombre());
+        return obtenerEstacionActiva(auth);
+    }
+
+    @Override
+    @Transactional
+    public void desvincularEstacion(Authentication auth) {
+        Usuario usuario = resolverUsuarioAutenticado(auth);
+        if (usuario == null) {
+            return;
+        }
+
+        AsignacionOperario asignacion = resolverAsignacionActiva(usuario);
+        if (asignacion != null) {
+            asignacion.setEstado(EstadoAsignacion.FINALIZADA);
+            asignacion.setHoraFin(LocalDateTime.now());
+            asignacionRepository.save(asignacion);
+            log.info("Operario {} desvinculó su estación activa de {}", usuario.getCorreo(), asignacion.getAtraccion().getNombre());
+        }
     }
 
     // --- Métodos Auxiliares y Mapeos ---

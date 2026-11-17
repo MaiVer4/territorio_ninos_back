@@ -259,6 +259,36 @@ class OperacionControllerTest {
         verify(operacionService).obtenerAforoActual(999L);
     }
 
+    @Test
+    @DisplayName("POST /api/operacion/vincular - Retorna 200 OK cuando vincula correctamente")
+    void vincularEstacion_exito_retorna200() throws Exception {
+        EstacionTrabajoDTO dto = new EstacionTrabajoDTO(
+                10L, 5L, "Carlos Operario", "carlos@tdn.com",
+                1L, "Piscina de Pelotas", "Atraccion", "TEMPORIZADA",
+                20, 5, 15, 15, 5, 3, 3, 10, "3 a 10 años", "ACTIVO",
+                java.time.LocalDate.now(), java.time.LocalDateTime.now()
+        );
+        when(operacionService.vincularEstacion(eq(1L), any())).thenReturn(dto);
+
+        mockMvc.perform(post("/api/operacion/vincular")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"atraccionId\": 1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.atraccionId", is(1)))
+                .andExpect(jsonPath("$.atraccionNombre", is("Piscina de Pelotas")));
+    }
+
+    @Test
+    @DisplayName("POST /api/operacion/desvincular - Retorna 204 No Content")
+    void desvincularEstacion_exito_retorna204() throws Exception {
+        mockMvc.perform(post("/api/operacion/desvincular")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNoContent());
+
+        verify(operacionService).desvincularEstacion(any());
+    }
+
     // =========================================================
     // Pruebas Fase 2: Inicio, Cola Activa, Pausas y Reanudación
     // =========================================================
