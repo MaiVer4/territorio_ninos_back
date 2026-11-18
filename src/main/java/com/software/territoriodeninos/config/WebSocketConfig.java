@@ -124,7 +124,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
                 String destination = accessor.getDestination();
                 if (destination != null) {
-                    if (destination.startsWith("/topic/admin")) {
+                    if (destination.equals("/topic/admin/dashboard")) {
+                        boolean autorizado = tieneRol(accessor.getUser(), "ROLE_ADMINISTRADOR")
+                                || tieneRol(accessor.getUser(), "ROLE_TAQUILLERO")
+                                || tieneRol(accessor.getUser(), "ROLE_OPERARIO");
+                        if (!autorizado) {
+                            throw new TokenInvalidoException("Acceso denegado: suscripción a telemetría de ocupación requiere rol autorizado.");
+                        }
+                    } else if (destination.startsWith("/topic/admin")) {
                         boolean esAdmin = tieneRol(accessor.getUser(), "ROLE_ADMINISTRADOR");
                         if (!esAdmin) {
                             throw new TokenInvalidoException("Acceso denegado: suscripción a canal administrativo requiere rol ADMINISTRADOR.");

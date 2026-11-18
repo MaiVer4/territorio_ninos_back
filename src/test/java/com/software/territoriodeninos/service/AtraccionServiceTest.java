@@ -39,9 +39,6 @@ class AtraccionServiceTest {
     private com.software.territoriodeninos.repository.TarifaEventoRepository tarifaEventoRepository;
 
     @Mock
-    private com.software.territoriodeninos.repository.DetalleVentaRepository detalleVentaRepository;
-
-    @Mock
     private com.software.territoriodeninos.repository.SesionJuegoRepository sesionJuegoRepository;
 
     @InjectMocks

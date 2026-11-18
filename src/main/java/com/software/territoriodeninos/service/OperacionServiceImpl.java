@@ -947,22 +947,10 @@ public class OperacionServiceImpl implements OperacionService {
     }
 
     private int calcularOcupacionActiva(Long atraccionId) {
-        int sesionesActivas = sesionJuegoRepository.countByAtraccionIdAndEstadoSesionIn(
+        // Fuente única de aforo: sesiones EN_CURSO/PAUSADA
+        return sesionJuegoRepository.countByAtraccionIdAndEstadoSesionIn(
                 atraccionId, List.of(EstadoSesionJuego.EN_CURSO, EstadoSesionJuego.PAUSADA)
         );
-
-        if (sesionesActivas > 0) {
-            return sesionesActivas;
-        }
-
-        LocalDate hoy = LocalDate.now();
-        List<Ticket> ticketsEnUso = ticketRepository.findByAtraccionIdAndEstadoTicketAndFechaEmisionBetween(
-                atraccionId,
-                EstadoTicket.EN_USO,
-                hoy.atStartOfDay(),
-                hoy.atTime(23, 59, 59)
-        );
-        return ticketsEnUso.size();
     }
 
     private Integer resolverMinutosAutorizados(DetalleVenta detalle, Atraccion atraccion) {

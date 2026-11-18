@@ -12,7 +12,6 @@ import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.repository.AsignacionOperarioRepository;
 import com.software.territoriodeninos.repository.AtraccionRepository;
-import com.software.territoriodeninos.repository.DetalleVentaRepository;
 import com.software.territoriodeninos.repository.SesionJuegoRepository;
 import com.software.territoriodeninos.repository.TarifaEventoRepository;
 import com.software.territoriodeninos.repository.TarifaTiempoRepository;
@@ -40,7 +39,6 @@ public class AtraccionServiceImpl implements AtraccionService {
     private final AsignacionOperarioRepository asignacionRepository;
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final TarifaEventoRepository tarifaEventoRepository;
-    private final DetalleVentaRepository detalleVentaRepository;
     private final SesionJuegoRepository sesionJuegoRepository;
 
     @Setter
@@ -188,19 +186,8 @@ public class AtraccionServiceImpl implements AtraccionService {
         Set<Long> atraccionesConOperario = asignacionRepository
                 .findAtraccionIdsConAsignacionEnEstado(atraccionIds, EstadoAsignacion.ACTIVA);
 
-        // 5. Batch query: Ocupación actual calculada en base a boletas activas (últimos 15 minutos)
-        Map<Long, Integer> ocupacionPorAtraccion = new HashMap<>();
-        if (detalleVentaRepository != null && !atraccionIds.isEmpty()) {
-            java.time.LocalDateTime ventanaBase = java.time.LocalDateTime.now().minusMinutes(15);
-            List<Object[]> rows = detalleVentaRepository.countBoletasActivasPorAtraccionIds(atraccionIds, ventanaBase);
-            if (rows != null) {
-                for (Object[] row : rows) {
-                    if (row != null && row.length >= 2 && row[0] instanceof Long atrId && row[1] instanceof Number count) {
-                        ocupacionPorAtraccion.put(atrId, count.intValue());
-                    }
-                }
-            }
-        }
+        // 5. Batch query: Ocupación real = sesiones EN_CURSO/PAUSADA (fuente única de aforo)
+        Map<Long, Integer> ocupacionPorAtraccion = obtenerOcupacionActivaPorAtraccion(atraccionesActivas);
 
         // 6. Ensamblar DTOs con cálculo de aforo disponible en tiempo real
         List<CatalogoAtraccionVentaDTO> catalogo = atraccionesActivas.stream().map(atraccion -> {
