@@ -17,7 +17,7 @@ public class ConfiguracionParqueController implements ConfiguracionParqueApi {
 
     @Override
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<ConfiguracionParqueDTO> obtener() {
         return ResponseEntity.ok(configuracionParqueService.obtenerConfiguracion());
     }

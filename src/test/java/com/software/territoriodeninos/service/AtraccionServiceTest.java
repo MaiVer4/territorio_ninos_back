@@ -179,6 +179,16 @@ class AtraccionServiceTest {
     }
 
     @Test
+    void cambiarEstado_AFueraDeServicioConOperariosActivos_PermitidoYNotifica() {
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionMock));
+
+        AtraccionResponseDTO result = atraccionService.cambiarEstado(1L, "FUERA_DE_SERVICIO");
+
+        assertEquals("FUERA_DE_SERVICIO", result.estado());
+        verify(asignacionRepository, never()).existsByAtraccionIdAndEstado(anyLong(), any());
+    }
+
+    @Test
     void obtenerCatalogoVenta_ExitoYOrdenamientoTarifas() {
         Atraccion atraccion1 = Atraccion.builder()
                 .id(1L)
@@ -213,7 +223,8 @@ class AtraccionServiceTest {
                 .activo(true)
                 .build();
 
-        when(atraccionRepository.findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO)).thenReturn(List.of(atraccion1));
+        when(atraccionRepository.findByEstadoInOrderByNombreAsc(List.of(EstadoAtraccion.ACTIVO, EstadoAtraccion.FUERA_DE_SERVICIO)))
+                .thenReturn(List.of(atraccion1));
         when(tarifaTiempoRepository.findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(List.of(1L)))
                 .thenReturn(List.of(tt1, tt2));
         when(tarifaEventoRepository.findByAtraccionIdInAndActivoTrueOrderByIntentosAsc(List.of(1L)))
@@ -240,11 +251,11 @@ class AtraccionServiceTest {
         // Segunda llamada dentro del TTL: debe servirse de caché sin volver a consultar repositorios
         List<com.software.territoriodeninos.dto.CatalogoAtraccionVentaDTO> cachedCatalogo = atraccionService.obtenerCatalogoVenta();
         assertSame(catalogo, cachedCatalogo);
-        verify(atraccionRepository, times(1)).findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO);
+        verify(atraccionRepository, times(1)).findByEstadoInOrderByNombreAsc(List.of(EstadoAtraccion.ACTIVO, EstadoAtraccion.FUERA_DE_SERVICIO));
 
         // Invalidación forzada
         atraccionService.invalidarCacheCatalogo();
         atraccionService.obtenerCatalogoVenta();
-        verify(atraccionRepository, times(2)).findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO);
+        verify(atraccionRepository, times(2)).findByEstadoInOrderByNombreAsc(List.of(EstadoAtraccion.ACTIVO, EstadoAtraccion.FUERA_DE_SERVICIO));
     }
 }

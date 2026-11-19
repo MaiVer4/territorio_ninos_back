@@ -137,7 +137,20 @@ class WebSocketConfigTest {
         TokenInvalidoException ex = assertThrows(TokenInvalidoException.class, () ->
                 interceptor.preSend(message, messageChannel)
         );
-        assertTrue(ex.getMessage().contains("requiere rol OPERARIO o ADMINISTRADOR"));
+        assertTrue(ex.getMessage().contains("requiere rol OPERARIO, COORDINADOR o ADMINISTRADOR"));
+    }
+
+    @Test
+    @DisplayName("SUBSCRIBE a /topic/atraccion/** por rol COORDINADOR es permitido")
+    void testSubscribe_CanalAtraccionConRolCoordinador_Permitido() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/topic/atraccion/5");
+        accessor.setUser(new UsernamePasswordAuthenticationToken(
+                "coord@parque.com", null, List.of(new SimpleGrantedAuthority("ROLE_COORDINADOR"))
+        ));
+        Message<?> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertNotNull(interceptor.preSend(message, messageChannel));
     }
 
     @Test

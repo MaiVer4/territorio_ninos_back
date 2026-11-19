@@ -44,6 +44,9 @@ public class AtraccionServiceImpl implements AtraccionService {
     @Setter(onMethod_ = {@org.springframework.beans.factory.annotation.Autowired(required = false)})
     private EstimadorIngresoService estimadorIngresoService;
 
+    @Setter(onMethod_ = {@org.springframework.beans.factory.annotation.Autowired(required = false)})
+    private OperacionWebSocketPublisher webSocketPublisher;
+
     @Setter
     @Value("${app.catalogo.cache-ttl-ms:5000}")
     private long cacheTtlMs = 5000L;
@@ -124,11 +127,15 @@ public class AtraccionServiceImpl implements AtraccionService {
 
         try {
             EstadoAtraccion estado = EstadoAtraccion.fromString(nuevoEstado);
-            if (estado != EstadoAtraccion.ACTIVO) {
+            // FUERA_DE_SERVICIO se permite de inmediato aunque haya operarios asignados o sesiones activas
+            if (estado != EstadoAtraccion.ACTIVO && estado != EstadoAtraccion.FUERA_DE_SERVICIO) {
                 verificarSinOperariosActivos(atraccion);
             }
             atraccion.setEstado(estado);
             invalidarCacheCatalogo();
+            if (webSocketPublisher != null) {
+                webSocketPublisher.publicarCambioEstadoAtraccion(atraccion.getId(), atraccion.getNombre(), estado.name());
+            }
             log.info("Estado de atracción {} cambiado a {}", atraccion.getNombre(), estado);
         } catch (IllegalArgumentException e) {
             throw new ConflictoException("Estado de atracción inválido: " + nuevoEstado);
@@ -157,8 +164,10 @@ public class AtraccionServiceImpl implements AtraccionService {
             return cached.data();
         }
 
-        // 1. Atracciones activas ordenadas por nombre
-        List<Atraccion> atraccionesActivas = atraccionRepository.findByEstadoOrderByNombreAsc(EstadoAtraccion.ACTIVO);
+        // 1. Atracciones activas y fuera de servicio ordenadas por nombre (visible pero bloqueada en POS)
+        List<Atraccion> atraccionesActivas = atraccionRepository.findByEstadoInOrderByNombreAsc(
+                List.of(EstadoAtraccion.ACTIVO, EstadoAtraccion.FUERA_DE_SERVICIO)
+        );
         if (atraccionesActivas.isEmpty()) {
             List<CatalogoAtraccionVentaDTO> vacio = Collections.emptyList();
             catalogoCache.set(new CachedCatalogo(now + cacheTtlMs, vacio));

@@ -5,7 +5,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 public enum EstadoAtraccion {
     ACTIVO,
     INACTIVO,
-    MANTENIMIENTO;
+    MANTENIMIENTO,
+    FUERA_DE_SERVICIO;
 
     @JsonCreator
     public static EstadoAtraccion fromString(String value) {
@@ -18,6 +19,9 @@ public enum EstadoAtraccion {
         }
         if ("INACTIVA".equals(clean)) {
             return INACTIVO;
+        }
+        if ("FUERADESERVICIO".equals(clean) || "FUERA DE SERVICIO".equals(clean) || "FUERA-DE-SERVICIO".equals(clean)) {
+            return FUERA_DE_SERVICIO;
         }
         return EstadoAtraccion.valueOf(clean);
     }

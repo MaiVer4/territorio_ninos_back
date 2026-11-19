@@ -31,7 +31,7 @@ public class TicketController implements TicketApi {
 
     @Override
     @GetMapping("/buscar")
-    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<List<TicketConsultaDTO>> buscarTickets(
             @RequestParam(name = "criterio", required = false) String criterio
     ) {
@@ -40,14 +40,14 @@ public class TicketController implements TicketApi {
 
     @Override
     @GetMapping("/{uuid}")
-    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<TicketConsultaDTO> obtenerTicketPorUuid(@PathVariable UUID uuid) {
         return ResponseEntity.ok(ticketService.obtenerTicketPorUuid(uuid));
     }
 
     @Override
     @GetMapping(value = "/{uuid}/qr", produces = MediaType.IMAGE_PNG_VALUE)
-    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<byte[]> obtenerQrTicket(@PathVariable UUID uuid) {
         byte[] qrPng = qrCodeService.generarQrTicketPng(uuid);
         return ResponseEntity.ok()
@@ -59,7 +59,7 @@ public class TicketController implements TicketApi {
 
     @Override
     @GetMapping(value = "/{uuid}/print-payload", produces = "text/plain;charset=UTF-8")
-    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('TAQUILLERO', 'OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<String> obtenerPrintPayload(@PathVariable UUID uuid) {
         String payload = ticketPrintService.generarPayloadImpresion(uuid);
         return ResponseEntity.ok()

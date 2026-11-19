@@ -123,7 +123,10 @@ public class OperacionServiceImpl implements OperacionService {
             );
         }
 
-        Atraccion atraccion = asignacion.getAtraccion();
+        return construirEstacionTrabajoDTO(usuario, asignacion.getAtraccion(), asignacion);
+    }
+
+    private EstacionTrabajoDTO construirEstacionTrabajoDTO(Usuario usuario, Atraccion atraccion, AsignacionOperario asignacion) {
         int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
         int aforoActual = calcularOcupacionActiva(atraccion.getId());
         int cuposDisponibles = Math.max(0, capacidad - aforoActual);
@@ -131,7 +134,7 @@ public class OperacionServiceImpl implements OperacionService {
         String rangoEdad = EstacionTrabajoDTO.formatearRangoEdad(atraccion.getEdadMinima(), atraccion.getEdadMaxima());
 
         return new EstacionTrabajoDTO(
-                asignacion.getId(),
+                asignacion != null ? asignacion.getId() : null,
                 usuario.getId(),
                 usuario.getNombre(),
                 usuario.getCorreo(),
@@ -149,8 +152,8 @@ public class OperacionServiceImpl implements OperacionService {
                 atraccion.getEdadMaxima(),
                 rangoEdad,
                 atraccion.getEstado() != null ? atraccion.getEstado().name() : "ACTIVO",
-                asignacion.getFechaAsignacion(),
-                asignacion.getHoraInicio()
+                asignacion != null ? asignacion.getFechaAsignacion() : LocalDate.now(),
+                asignacion != null ? asignacion.getHoraInicio() : LocalDateTime.now()
         );
     }
 
@@ -176,6 +179,15 @@ public class OperacionServiceImpl implements OperacionService {
 
         // 1. Intercepción de seguridad: Validar que el operario no intente operar otra estación (HU-24.04 / CA-02 -> HTTP 403)
         validarEstacionAsignadaAlOperario(operario, atraccionEstacion);
+
+        if (atraccionEstacion.getEstado() != null && atraccionEstacion.getEstado() != EstadoAtraccion.ACTIVO) {
+            throw new TicketInvalidoOperacionException(
+                    "La atracción '" + atraccionEstacion.getNombre() + "' se encuentra " +
+                            atraccionEstacion.getEstado().name().replace("_", " ").toLowerCase() +
+                            " y no permite nuevos ingresos.",
+                    HttpStatus.CONFLICT
+            );
+        }
 
         // 2. Control de Aforo en tiempo real (HU-34.01, HU-34.02 -> HTTP 409)
         int capacidadMaxima = atraccionEstacion.getCapacidadMaxima() != null ? atraccionEstacion.getCapacidadMaxima() : 1;
@@ -689,6 +701,13 @@ public class OperacionServiceImpl implements OperacionService {
 
         if (atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
             throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' no se encuentra activa");
+        }
+
+        // Coordinador y Administrador tienen acceso libre a cualquier atracción activa sin desplazar al operario titular
+        NombreRol rolUsuario = usuario.getRol() != null ? usuario.getRol().getNombre() : null;
+        if (NombreRol.COORDINADOR.equals(rolUsuario) || NombreRol.ADMINISTRADOR.equals(rolUsuario)) {
+            log.info("Acceso libre operativo concedido a {} ({}) en atracción {}", usuario.getCorreo(), rolUsuario, atraccion.getNombre());
+            return construirEstacionTrabajoDTO(usuario, atraccion, null);
         }
 
         // Validar que la atracción no esté ocupada por otro operario en turno activo

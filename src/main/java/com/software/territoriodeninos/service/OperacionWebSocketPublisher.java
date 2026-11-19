@@ -111,6 +111,14 @@ public class OperacionWebSocketPublisher {
         difundir(atraccionId, evento);
     }
 
+    public void publicarCambioEstadoAtraccion(Long atraccionId, String nombreAtraccion, String nuevoEstado) {
+        String mensaje = "FUERA_DE_SERVICIO".equals(nuevoEstado)
+                ? "La atracción '" + nombreAtraccion + "' fue marcada FUERA DE SERVICIO"
+                : "Estado de la atracción '" + nombreAtraccion + "' actualizado a " + nuevoEstado;
+        OperacionWebSocketEvent evento = OperacionWebSocketEvent.crearCambioEstado(atraccionId, nuevoEstado, mensaje);
+        difundir(atraccionId, evento);
+    }
+
     private void difundir(Long atraccionId, OperacionWebSocketEvent evento) {
         try {
             String destinoEstacion = "/topic/atraccion/" + atraccionId;

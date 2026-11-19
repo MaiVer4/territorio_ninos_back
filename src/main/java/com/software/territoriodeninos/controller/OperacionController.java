@@ -19,7 +19,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/escanear")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<ValidacionTicketResponseDTO> escanearTicket(
             @Valid @RequestBody EscaneoQrRequestDTO request,
             Authentication authentication,
@@ -31,7 +31,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/iniciar-sesion")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<SesionJuegoResponseDTO> iniciarSesion(
             @Valid @RequestBody InicioSesionRequestDTO request,
             Authentication authentication
@@ -41,14 +41,14 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @GetMapping("/cola/{atraccionId}")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'TAQUILLERO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<ColaAtraccionResponseDTO> obtenerCola(@PathVariable Long atraccionId) {
         return ResponseEntity.ok(operacionService.obtenerCola(atraccionId));
     }
 
     @Override
     @PostMapping("/sesiones/{id}/pausar")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<SesionJuegoResponseDTO> pausarSesion(
             @PathVariable Long id,
             @Valid @RequestBody PausaRequestDTO request,
@@ -59,7 +59,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/sesiones/{id}/reanudar")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<SesionJuegoResponseDTO> reanudarSesion(
             @PathVariable Long id,
             Authentication authentication
@@ -69,7 +69,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/atraccion/{id}/pausa-general")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<ColaAtraccionResponseDTO> pausaGeneral(
             @PathVariable Long id,
             @Valid @RequestBody PausaGeneralRequestDTO request,
@@ -80,7 +80,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/sesiones/{id}/salida")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<SesionJuegoResponseDTO> registrarSalida(
             @PathVariable Long id,
             Authentication authentication
@@ -90,7 +90,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/sesiones/{id}/descontar-intento")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<SesionJuegoResponseDTO> descontarIntento(
             @PathVariable Long id,
             @Valid @RequestBody(required = false) RegistroIntentoEventoDTO request,
@@ -101,21 +101,21 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @GetMapping("/sincronizar/{atraccionId}")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'TAQUILLERO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<SincronizacionRelojResponseDTO> sincronizarReloj(@PathVariable Long atraccionId) {
         return ResponseEntity.ok(operacionService.sincronizarReloj(atraccionId));
     }
 
     @Override
     @GetMapping("/atraccion/{id}/aforo-actual")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'TAQUILLERO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'TAQUILLERO', 'ADMINISTRADOR')")
     public ResponseEntity<AforoActualDTO> obtenerAforoActual(@PathVariable Long id) {
         return ResponseEntity.ok(operacionService.obtenerAforoActual(id));
     }
 
     @Override
     @PostMapping("/vincular")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<EstacionTrabajoDTO> vincularEstacion(
             @Valid @RequestBody VincularEstacionRequestDTO request,
             Authentication authentication
@@ -125,7 +125,7 @@ public class OperacionController implements OperacionApi {
 
     @Override
     @PostMapping("/desvincular")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<Void> desvincularEstacion(
             @RequestBody(required = false) java.util.Map<String, Object> body,
             Authentication authentication

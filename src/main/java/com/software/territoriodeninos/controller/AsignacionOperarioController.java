@@ -50,21 +50,21 @@ public class AsignacionOperarioController implements AsignacionOperarioApi {
 
     @Override
     @GetMapping("/activas")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<List<AsignacionResponseDTO>> obtenerActivas() {
         return ResponseEntity.ok(asignacionOperarioService.obtenerActivas());
     }
 
     @Override
     @GetMapping({"/operario/{usuarioId}/activa", "/operator/{usuarioId}/current"})
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<AsignacionResponseDTO> obtenerActivaPorOperario(@PathVariable Long usuarioId) {
         return ResponseEntity.ok(asignacionOperarioService.obtenerActivaPorOperario(usuarioId));
     }
 
     @Override
     @GetMapping("/atraccion/{atraccionId}/activas")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<List<AsignacionResponseDTO>> obtenerActivasPorAtraccion(@PathVariable Long atraccionId) {
         return ResponseEntity.ok(asignacionOperarioService.obtenerActivasPorAtraccion(atraccionId));
     }

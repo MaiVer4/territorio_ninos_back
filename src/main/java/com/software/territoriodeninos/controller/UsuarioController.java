@@ -40,7 +40,7 @@ public class UsuarioController implements UsuarioApi {
     
     @Override
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<UsuarioResponseDTO> obtenerPorId(@PathVariable Long id) {
         UsuarioResponseDTO usuario = usuarioService.obtenerPorId(id);
         return ResponseEntity.ok(usuario);
@@ -57,7 +57,7 @@ public class UsuarioController implements UsuarioApi {
     
     @Override
     @PatchMapping("/{id}/password")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<?> cambiarPassword(@PathVariable Long id, 
                                              @Valid @RequestBody ChangePasswordRequest request) {
         usuarioService.cambiarPassword(id, request);

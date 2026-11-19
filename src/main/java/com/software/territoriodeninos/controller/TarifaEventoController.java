@@ -28,14 +28,14 @@ public class TarifaEventoController implements TarifaEventoApi {
 
     @Override
     @GetMapping({"/atraccion/{atraccionId}", "/attraction/{atraccionId}"})
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<List<TarifaEventoResponseDTO>> obtenerPorAtraccion(@PathVariable Long atraccionId) {
         return ResponseEntity.ok(tarifaEventoService.obtenerPorAtraccion(atraccionId));
     }
 
     @Override
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<TarifaEventoResponseDTO> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(tarifaEventoService.obtenerPorId(id));
     }

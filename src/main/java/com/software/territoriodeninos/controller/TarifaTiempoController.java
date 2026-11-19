@@ -28,14 +28,14 @@ public class TarifaTiempoController implements TarifaTiempoApi {
 
     @Override
     @GetMapping({"/atraccion/{atraccionId}", "/attraction/{atraccionId}"})
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<List<TarifaTiempoResponseDTO>> obtenerPorAtraccion(@PathVariable Long atraccionId) {
         return ResponseEntity.ok(tarifaTiempoService.obtenerPorAtraccion(atraccionId));
     }
 
     @Override
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<TarifaTiempoResponseDTO> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(tarifaTiempoService.obtenerPorId(id));
     }

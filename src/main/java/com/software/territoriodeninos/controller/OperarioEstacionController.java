@@ -19,7 +19,7 @@ public class OperarioEstacionController implements OperarioEstacionApi {
 
     @Override
     @GetMapping("/estacion-activa")
-    @PreAuthorize("hasAnyRole('OPERARIO', 'ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
     public ResponseEntity<EstacionTrabajoDTO> obtenerEstacionActiva(Authentication authentication) {
         return ResponseEntity.ok(operacionService.obtenerEstacionActiva(authentication));
     }

@@ -127,7 +127,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     if (destination.equals("/topic/admin/dashboard")) {
                         boolean autorizado = tieneRol(accessor.getUser(), "ROLE_ADMINISTRADOR")
                                 || tieneRol(accessor.getUser(), "ROLE_TAQUILLERO")
-                                || tieneRol(accessor.getUser(), "ROLE_OPERARIO");
+                                || tieneRol(accessor.getUser(), "ROLE_OPERARIO")
+                                || tieneRol(accessor.getUser(), "ROLE_COORDINADOR");
                         if (!autorizado) {
                             throw new TokenInvalidoException("Acceso denegado: suscripción a telemetría de ocupación requiere rol autorizado.");
                         }
@@ -138,9 +139,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         }
                     } else if (destination.startsWith("/topic/atraccion/")) {
                         boolean autorizado = tieneRol(accessor.getUser(), "ROLE_ADMINISTRADOR")
-                                || tieneRol(accessor.getUser(), "ROLE_OPERARIO");
+                                || tieneRol(accessor.getUser(), "ROLE_OPERARIO")
+                                || tieneRol(accessor.getUser(), "ROLE_COORDINADOR");
                         if (!autorizado) {
-                            throw new TokenInvalidoException("Acceso denegado: suscripción a canal de atracción requiere rol OPERARIO o ADMINISTRADOR.");
+                            throw new TokenInvalidoException("Acceso denegado: suscripción a canal de atracción requiere rol OPERARIO, COORDINADOR o ADMINISTRADOR.");
                         }
                     }
                 }

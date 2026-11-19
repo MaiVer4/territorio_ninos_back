@@ -28,21 +28,21 @@ public class AtraccionController implements AtraccionApi {
 
     @Override
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'COORDINADOR')")
     public ResponseEntity<List<AtraccionResponseDTO>> obtenerTodas() {
         return ResponseEntity.ok(atraccionService.obtenerTodas());
     }
 
     @Override
     @GetMapping("/activas")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<List<AtraccionResponseDTO>> obtenerActivas() {
         return ResponseEntity.ok(atraccionService.obtenerActivas());
     }
 
     @Override
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO', 'OPERARIO', 'COORDINADOR')")
     public ResponseEntity<AtraccionResponseDTO> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(atraccionService.obtenerPorId(id));
     }
@@ -56,7 +56,7 @@ public class AtraccionController implements AtraccionApi {
 
     @Override
     @PatchMapping("/{id}/estado")
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'COORDINADOR')")
     public ResponseEntity<AtraccionResponseDTO> cambiarEstado(@PathVariable Long id, @RequestParam String estado) {
         return ResponseEntity.ok(atraccionService.cambiarEstado(id, estado));
     }

@@ -25,8 +25,23 @@ public record OperacionWebSocketEvent(
     ColaAtraccionResponseDTO colaActualizada,
 
     @Schema(description = "Timestamp del servidor", example = "2026-11-02T15:30:00")
-    LocalDateTime timestamp
+    LocalDateTime timestamp,
+
+    @Schema(description = "Estado operativo actual de la atracción cuando aplica (ACTIVO, FUERA_DE_SERVICIO, etc.)", example = "FUERA_DE_SERVICIO")
+    String estadoAtraccion
 ) {
+    public OperacionWebSocketEvent(
+            String tipo,
+            Long atraccionId,
+            Long sesionId,
+            String mensaje,
+            SesionJuegoResponseDTO sesion,
+            ColaAtraccionResponseDTO colaActualizada,
+            LocalDateTime timestamp
+    ) {
+        this(tipo, atraccionId, sesionId, mensaje, sesion, colaActualizada, timestamp, null);
+    }
+
     public static OperacionWebSocketEvent crear(
             String tipo,
             Long atraccionId,
@@ -42,7 +57,25 @@ public record OperacionWebSocketEvent(
                 mensaje,
                 sesion,
                 cola,
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                null
+        );
+    }
+
+    public static OperacionWebSocketEvent crearCambioEstado(
+            Long atraccionId,
+            String estadoAtraccion,
+            String mensaje
+    ) {
+        return new OperacionWebSocketEvent(
+                "ESTADO_ATRACCION_CAMBIADO",
+                atraccionId,
+                null,
+                mensaje,
+                null,
+                null,
+                LocalDateTime.now(),
+                estadoAtraccion
         );
     }
 }
