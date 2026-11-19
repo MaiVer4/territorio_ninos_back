@@ -1,5 +1,5 @@
 # Esquema de Base de Datos (PostgreSQL + JPA + Flyway)
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V9__*.sql`. Última sincronización: 2026-11-13 (commit 46c09a1).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V10__*.sql`. Última sincronización: 2026-11-19 (commit 1f4fc09).
 
 ## 1. Gestión del Esquema y Convenciones
 - **Motor:** PostgreSQL (`jdbc:postgresql://localhost:5432/territorioNinos` por defecto en `DB_URL`). En tests se usa H2 en memoria.
@@ -156,6 +156,7 @@ erDiagram
   | `estado_ticket` | `VARCHAR(20)` / `EstadoTicket` | NO | Default `PAGADO` |
   | `fecha_emision` | `TIMESTAMP` / `LocalDateTime` | NO | Default `NOW()` |
   | `fecha_consumo` | `TIMESTAMP` / `LocalDateTime` | SÍ | Añadida en V8; se llena al iniciar o finalizar uso |
+  | `hora_ingreso_estimada` | `TIMESTAMP` / `LocalDateTime` | SÍ | Añadida en V10; `NULL` = ingreso inmediato (`AHORA`) |
 
 ### 3.4 Operación en Tiempo Real y Auditoría
 - **`sesiones_juego`** (`entity/SesionJuego.java`):
@@ -219,3 +220,4 @@ erDiagram
 - **`V7__log_reimpresion_table.sql`**: Crea tabla inmutable `log_reimpresion` e índices por ticket, usuario y fecha.
 - **`V8__operacion_fase1_y_base.sql`**: Re-agrega `edad_minima`/`edad_maxima` en `atracciones`, añade `fecha_consumo` en `tickets`, y crea `log_escaneo_qr`, `sesiones_juego` y `log_incidente_pausa`.
 - **`V9__reportes_auditoria_y_estadisticas.sql`**: Añade `atraccion_id` y `tipo_pausa` a `log_incidente_pausa`, y crea `auditoria_tickets` con sus índices.
+- **`V10__ticket_hora_ingreso_estimada.sql`**: Añade `hora_ingreso_estimada TIMESTAMP` (nullable) a `tickets` para sobreventa con cola FIFO.
