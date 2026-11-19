@@ -41,6 +41,9 @@ public class AtraccionServiceImpl implements AtraccionService {
     private final TarifaEventoRepository tarifaEventoRepository;
     private final SesionJuegoRepository sesionJuegoRepository;
 
+    @Setter(onMethod_ = {@org.springframework.beans.factory.annotation.Autowired(required = false)})
+    private EstimadorIngresoService estimadorIngresoService;
+
     @Setter
     @Value("${app.catalogo.cache-ttl-ms:5000}")
     private long cacheTtlMs = 5000L;
@@ -199,6 +202,9 @@ public class AtraccionServiceImpl implements AtraccionService {
             int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
             int ocupacionActual = ocupacionPorAtraccion.getOrDefault(id, 0);
             int aforoDisponible = Math.max(0, capacidad - ocupacionActual);
+            java.time.LocalDateTime proximoIngreso = estimadorIngresoService != null
+                    ? estimadorIngresoService.estimarProximoIngreso(atraccion, java.time.LocalDateTime.now())
+                    : null;
 
             return new CatalogoAtraccionVentaDTO(
                     id,
@@ -215,7 +221,9 @@ public class AtraccionServiceImpl implements AtraccionService {
                     aforoDisponible,
                     tieneOperario,
                     tt,
-                    te
+                    te,
+                    proximoIngreso,
+                    com.software.territoriodeninos.util.IngresoTextoFormatter.texto(proximoIngreso, atraccion.getTipo())
             );
         }).toList();
 

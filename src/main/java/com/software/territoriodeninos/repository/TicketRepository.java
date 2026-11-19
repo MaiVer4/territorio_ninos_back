@@ -103,4 +103,12 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
             @Param("inicio") java.time.LocalDateTime inicio,
             @Param("fin") java.time.LocalDateTime fin
     );
+
+    /** Boletas en espera (cola FIFO) de una atracción emitidas desde {@code desde}, ordenadas por emisión. */
+    @Query("SELECT t FROM Ticket t JOIN FETCH t.detalleVenta d WHERE d.atraccion.id = :atraccionId AND t.estadoTicket = :estado AND t.fechaEmision >= :desde ORDER BY t.fechaEmision ASC")
+    List<Ticket> findEnEsperaPorAtraccion(
+            @Param("atraccionId") Long atraccionId,
+            @Param("estado") com.software.territoriodeninos.util.EstadoTicket estado,
+            @Param("desde") java.time.LocalDateTime desde
+    );
 }

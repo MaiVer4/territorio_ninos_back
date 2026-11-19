@@ -294,14 +294,17 @@ class VentaRollbackIntegrationTest {
     }
 
     @Test
-    @DisplayName("Rollback Integral (CA-01): Si la suma de tickets excede el aforo disponible, se realiza rollback integral")
+    @DisplayName("Sobreventa y Rollback por Atracción Inactiva: Permite sobreventa con hora estimada, pero hace rollback si la atracción está en mantenimiento")
     void testRollbackIntegral_FalloPorExcesoAforo() throws Exception {
+        // 1. Si la atracción está en MANTENIMIENTO, hace rollback integral
+        atraccion.setEstado(EstadoAtraccion.MANTENIMIENTO);
+        atraccionRepository.saveAndFlush(atraccion);
+
         long ventasAntes = ventaRepository.count();
         long detallesAntes = detalleVentaRepository.count();
         long ticketsAntes = ticketRepository.count();
         BigDecimal balanceAntes = turnoCajaRepository.findById(turnoCaja.getId()).orElseThrow().getVentasEfectivoSistema();
 
-        // Capacidad máxima de atraccion es 2. Solicitamos 5 tickets.
         DetalleVentaRequestDTO itemSobrecupo = new DetalleVentaRequestDTO(
                 atraccion.getId(),
                 menor.getId(),
@@ -327,13 +330,27 @@ class VentaRollbackIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detalles", containsString("Aforo máximo excedido")));
+                .andExpect(jsonPath("$.detalles", containsString("no se encuentra activa")));
 
         assertEquals(ventasAntes, ventaRepository.count());
         assertEquals(detallesAntes, detalleVentaRepository.count());
         assertEquals(ticketsAntes, ticketRepository.count(), "No debe persistirse ningún ticket");
         TurnoCaja turnoPost = turnoCajaRepository.findById(turnoCaja.getId()).orElseThrow();
         assertEquals(balanceAntes, turnoPost.getVentasEfectivoSistema());
+
+        // 2. Con la atracción ACTIVA, permite vender 5 boletas aunque capacidad sea 2, asignando AHORA a las 2 primeras y hora estimada a las 3 siguientes
+        atraccion.setEstado(EstadoAtraccion.ACTIVO);
+        atraccionRepository.saveAndFlush(atraccion);
+
+        mockMvc.perform(post("/api/ventas/procesar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tickets.length()").value(5))
+                .andExpect(jsonPath("$.tickets[0].ingresoTexto").value("AHORA"))
+                .andExpect(jsonPath("$.tickets[1].ingresoTexto").value("AHORA"))
+                .andExpect(jsonPath("$.tickets[2].horaIngresoEstimada").isNotEmpty())
+                .andExpect(jsonPath("$.tickets[2].ingresoTexto", containsString("(aprox.)")));
     }
 
     @Test

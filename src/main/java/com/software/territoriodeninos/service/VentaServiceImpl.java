@@ -78,6 +78,12 @@ public class VentaServiceImpl implements VentaService {
     private final AuthenticatedUserProvider authenticatedUserProvider;
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final TarifaEventoRepository tarifaEventoRepository;
+    private EstimadorIngresoService estimadorIngresoService;
+
+    @Autowired(required = false)
+    public void setEstimadorIngresoService(EstimadorIngresoService estimadorIngresoService) {
+        this.estimadorIngresoService = estimadorIngresoService;
+    }
 
     @Autowired
     public VentaServiceImpl(
@@ -533,6 +539,25 @@ public class VentaServiceImpl implements VentaService {
     ) {
         List<Ticket> ticketsGenerados = new ArrayList<>();
         List<DetalleVenta> detalles = ventaGuardada.getDetalles();
+        Map<Long, List<Integer>> duracionesPorAtraccion = new java.util.LinkedHashMap<>();
+        for (DetalleVenta d : detalles) {
+            int c = (d.getCantidad() != null && d.getCantidad() > 0) ? d.getCantidad() : 1;
+            int dur = resolverDuracionMinutos(d);
+            List<Integer> lista = duracionesPorAtraccion.computeIfAbsent(d.getAtraccion().getId(), k -> new ArrayList<>());
+            for (int i = 0; i < c; i++) lista.add(dur);
+        }
+        Map<Long, java.util.Iterator<LocalDateTime>> horasPorAtraccion = new HashMap<>();
+        LocalDateTime ahora = LocalDateTime.now();
+        for (DetalleVenta d : detalles) {
+            Long atrId = d.getAtraccion().getId();
+            if (!horasPorAtraccion.containsKey(atrId)) {
+                List<Integer> duraciones = duracionesPorAtraccion.get(atrId);
+                List<LocalDateTime> horas = estimadorIngresoService != null
+                        ? estimadorIngresoService.estimar(d.getAtraccion(), duraciones, ahora)
+                        : java.util.Collections.nCopies(duraciones.size(), (LocalDateTime) null);
+                horasPorAtraccion.put(atrId, horas.iterator());
+            }
+        }
         for (int idx = 0; idx < detalles.size(); idx++) {
             DetalleVenta detalle = detalles.get(idx);
             DetalleVentaRequestDTO itemDto = (itemsRequest != null && idx < itemsRequest.size()) ? itemsRequest.get(idx) : null;
@@ -553,13 +578,16 @@ public class VentaServiceImpl implements VentaService {
                 uuids = uuidGeneratorService.generarUuidsUnicos(cant);
             }
 
-            for (UUID uuid : uuids) {
+            List<LocalDateTime> horasIngreso = estimarHorasIngreso(detalle, uuids.size(), horasPorAtraccion);
+            for (int u = 0; u < uuids.size(); u++) {
+                UUID uuid = uuids.get(u);
                 Ticket ticket = Ticket.builder()
                         .uuidCodigo(uuid)
                         .detalleVenta(detalle)
                         .menor(detalle.getMenor())
                         .estadoTicket(EstadoTicket.PAGADO)
                         .fechaEmision(ventaGuardada.getFechaVenta())
+                        .horaIngresoEstimada(horasIngreso.get(u))
                         .build();
                 detalle.addTicket(ticket);
                 ticketsGenerados.add(ticket);
@@ -686,6 +714,27 @@ public class VentaServiceImpl implements VentaService {
         );
     }
 
+    private List<LocalDateTime> estimarHorasIngreso(DetalleVenta detalle, int cantidad,
+                                                    Map<Long, java.util.Iterator<LocalDateTime>> horasPorAtraccion) {
+        java.util.Iterator<LocalDateTime> it = horasPorAtraccion.get(detalle.getAtraccion().getId());
+        List<LocalDateTime> horas = new ArrayList<>(cantidad);
+        for (int i = 0; i < cantidad; i++) {
+            horas.add(it != null && it.hasNext() ? it.next() : null);
+        }
+        return horas;
+    }
+
+    private int resolverDuracionMinutos(DetalleVenta d) {
+        Atraccion a = d.getAtraccion();
+        int base = a != null && a.getDuracionMinutosBase() != null && a.getDuracionMinutosBase() > 0
+                ? a.getDuracionMinutosBase() : 15;
+        if (d.getTarifaTiempoId() != null && tarifaTiempoRepository != null) {
+            return tarifaTiempoRepository.findById(d.getTarifaTiempoId())
+                    .map(TarifaTiempo::getDuracionMinutos).orElse(base);
+        }
+        return base;
+    }
+
     private TicketResponseDTO mapTicketToDTO(Ticket t) {
         DetalleVenta d = t.getDetalleVenta();
         return new TicketResponseDTO(
@@ -697,7 +746,10 @@ public class VentaServiceImpl implements VentaService {
                 t.getMenor() != null ? t.getMenor().getNombreCompleto() : null,
                 d != null ? d.getTipoTarifa() : null,
                 t.getEstadoTicket(),
-                t.getFechaEmision()
+                t.getFechaEmision(),
+                t.getHoraIngresoEstimada(),
+                com.software.territoriodeninos.util.IngresoTextoFormatter.texto(t.getHoraIngresoEstimada(),
+                        d != null && d.getAtraccion() != null ? d.getAtraccion().getTipo() : null)
         );
     }
 

@@ -35,8 +35,21 @@ public record TicketResponseDTO(
     EstadoTicket estadoTicket,
 
     @Schema(description = "Fecha y hora exacta de emisión del ticket")
-    LocalDateTime fechaEmision
+    LocalDateTime fechaEmision,
+
+    @Schema(description = "Hora estimada de ingreso a la atracción (null = AHORA)")
+    LocalDateTime horaIngresoEstimada,
+
+    @Schema(description = "Texto de ingreso: AHORA, HH:mm (aprox.) o PRÓXIMO TURNO", example = "AHORA")
+    String ingresoTexto
 ) {
+    public TicketResponseDTO(UUID uuidCodigo, Long detalleVentaId, Long atraccionId, String atraccionNombre,
+                             Long menorId, String menorNombre, TipoTarifa tipoTarifa, EstadoTicket estadoTicket,
+                             LocalDateTime fechaEmision) {
+        this(uuidCodigo, detalleVentaId, atraccionId, atraccionNombre, menorId, menorNombre, tipoTarifa,
+                estadoTicket, fechaEmision, null, "AHORA");
+    }
+
     @JsonProperty("id")
     public UUID id() {
         return uuidCodigo;

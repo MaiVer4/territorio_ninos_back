@@ -114,6 +114,10 @@ public class TicketPrintFormatter {
                 .append(StringUtils.hasText(ticket.nombreMenor()) ? ticket.nombreMenor() : "Sin menor asignado")
                 .append(ESC_BOLD_OFF).append(LF);
 
+        sb.append("Ingreso    : ").append(ESC_BOLD_ON)
+                .append(StringUtils.hasText(ticket.ingresoTexto()) ? ticket.ingresoTexto() : IngresoTextoFormatter.AHORA)
+                .append(ESC_BOLD_OFF).append(LF);
+
         if (ticket.precioUnitario() != null) {
             sb.append("Valor Pag. : ").append(formatearMoneda(ticket.precioUnitario())).append(" COP").append(LF);
         }

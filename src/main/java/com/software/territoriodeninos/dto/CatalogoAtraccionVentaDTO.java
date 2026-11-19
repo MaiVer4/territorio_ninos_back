@@ -54,8 +54,24 @@ public record CatalogoAtraccionVentaDTO(
     List<TarifaTiempoResponseDTO> tarifasTiempo,
 
     @Schema(description = "Lista de tarifas por evento vigentes ordenadas por número de intentos ascendente")
-    List<TarifaEventoResponseDTO> tarifasEvento
+    List<TarifaEventoResponseDTO> tarifasEvento,
+
+    @Schema(description = "Hora estimada en que una boleta nueva podría ingresar (null = AHORA)")
+    java.time.LocalDateTime horaProximoIngreso,
+
+    @Schema(description = "Texto de ingreso: AHORA, HH:mm (aprox.) o PRÓXIMO TURNO", example = "AHORA")
+    String ingresoTexto
 ) {
+    public CatalogoAtraccionVentaDTO(Long id, String nombre, String descripcion, String tipo, String estado,
+                                     BigDecimal tarifaMinuto, Integer duracionMinutosBase, Integer toleranciaMinutos,
+                                     Integer caidasLimite, Integer capacidadMaxima, Integer ocupacionActual,
+                                     Integer aforoDisponible, Boolean tieneOperarioAsignado,
+                                     List<TarifaTiempoResponseDTO> tarifasTiempo, List<TarifaEventoResponseDTO> tarifasEvento) {
+        this(id, nombre, descripcion, tipo, estado, tarifaMinuto, duracionMinutosBase, toleranciaMinutos, caidasLimite,
+                capacidadMaxima, ocupacionActual, aforoDisponible, tieneOperarioAsignado, tarifasTiempo, tarifasEvento,
+                null, "AHORA");
+    }
+
     public CatalogoAtraccionVentaDTO {
         if (tarifasTiempo == null) {
             tarifasTiempo = Collections.emptyList();

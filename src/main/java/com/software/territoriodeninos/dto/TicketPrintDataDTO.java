@@ -29,8 +29,16 @@ public record TicketPrintDataDTO(
     LocalDateTime fechaEmision,
 
     @Schema(description = "Indica si la impresión corresponde a una reimpresión auditada", example = "false")
-    Boolean esReimpresion
+    Boolean esReimpresion,
+
+    @Schema(description = "Texto de ingreso a la atracción", example = "AHORA")
+    String ingresoTexto
 ) {
+    public TicketPrintDataDTO(UUID uuidTicket, String nombreAtraccion, String nombreMenor, String tiempoOModalidad,
+                              BigDecimal precioUnitario, LocalDateTime fechaEmision, Boolean esReimpresion) {
+        this(uuidTicket, nombreAtraccion, nombreMenor, tiempoOModalidad, precioUnitario, fechaEmision, esReimpresion, null);
+    }
+
     public TicketPrintDataDTO(
         UUID uuidTicket,
         String nombreAtraccion,

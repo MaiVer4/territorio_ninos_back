@@ -58,13 +58,14 @@ public class AforoValidatorServiceImpl implements AforoValidatorService {
                 : 0;
         int aforoDisponible = Math.max(0, capacidadMaxima - ocupacionActual);
 
+        // Sobreventa permitida: con aforo lleno la boleta se emite con hora estimada de ingreso
+        // (EstimadorIngresoService). El control físico estricto de aforo ocurre en el escáner del operario.
         if (cantidadTickets > aforoDisponible) {
-            throw new ReglaNegocioException("Aforo máximo excedido para la atracción '" + atraccion.getNombre() +
-                    "'. Se solicitaron " + cantidadTickets + " ticket(s) pero solo hay " + aforoDisponible +
-                    " cupo(s) disponible(s) (Capacidad máxima: " + capacidadMaxima + ", Ocupación actual: " + ocupacionActual + ")");
+            log.info("Venta con aforo lleno en '{}': solicitados {}, disponibles {} (ocupación {}/{}). Se emitirá con hora estimada.",
+                    atraccion.getNombre(), cantidadTickets, aforoDisponible, ocupacionActual, capacidadMaxima);
         }
 
-        return aforoDisponible - cantidadTickets;
+        return Math.max(0, aforoDisponible - cantidadTickets);
     }
 
     @Override

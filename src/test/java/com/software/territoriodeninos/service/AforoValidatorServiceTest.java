@@ -89,15 +89,13 @@ class AforoValidatorServiceTest {
     }
 
     @Test
-    @DisplayName("validarCapacidadAtraccion - Lanza ReglaNegocioException cuando la cantidad supera la capacidad máxima")
+    @DisplayName("validarCapacidadAtraccion - Permite sobreventa cuando la cantidad supera la capacidad máxima y retorna 0 cupos libres")
     void testValidarCapacidadAtraccion_Excedido() {
         when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionActiva));
 
-        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () ->
-                aforoValidatorService.validarCapacidadAtraccion(1L, 11)
-        );
+        int cuposRestantes = aforoValidatorService.validarCapacidadAtraccion(1L, 11);
 
-        assertTrue(ex.getMessage().contains("Aforo máximo excedido"));
+        assertEquals(0, cuposRestantes);
     }
 
     @Test
@@ -252,10 +250,11 @@ class AforoValidatorServiceTest {
     }
 
     @Test
-    @DisplayName("validarItemsVenta - Agrupa tickets por atracción y detecta sobrecupo en la suma acumulada")
+    @DisplayName("validarItemsVenta - Permite sobrecupo en la suma acumulada y deja aforo restante en 0")
     void testValidarItemsVenta_SobrecupoAcumulado() {
         // Capacidad de la atracción 1 es 10
         when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionActiva));
+        when(tarifaTiempoRepository.findById(100L)).thenReturn(Optional.of(tarifaTiempoOficial));
 
         // Dos líneas en el carrito: línea 1 pide 6 tickets, línea 2 pide 5 tickets (Suma = 11 > 10)
         ItemVentaValidacionDTO linea1 = new ItemVentaValidacionDTO(
@@ -265,12 +264,11 @@ class AforoValidatorServiceTest {
                 1L, 100L, null, 5, new BigDecimal("15000.00"), null, 15, null
         );
 
-        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () ->
-                aforoValidatorService.validarItemsVenta(List.of(linea1, linea2))
-        );
+        ResultadoValidacionVentaDTO resultado = aforoValidatorService.validarItemsVenta(List.of(linea1, linea2));
 
-        assertTrue(ex.getMessage().contains("Aforo máximo excedido"));
-        assertTrue(ex.getMessage().contains("11 ticket(s)"));
+        assertTrue(resultado.valido());
+        assertEquals(11, resultado.totalTickets());
+        assertEquals(0, resultado.aforoRestantePorAtraccion().get(1L));
     }
 
     @Test

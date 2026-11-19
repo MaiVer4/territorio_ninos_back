@@ -116,6 +116,8 @@ public class TicketPrintServiceImpl implements TicketPrintService {
                 .tiempoOModalidad(tiempoOModalidad)
                 .precioUnitario(detalle != null ? detalle.getPrecioUnitario() : null)
                 .fechaEmision(ticket.getFechaEmision())
+                .ingresoTexto(com.software.territoriodeninos.util.IngresoTextoFormatter.texto(
+                        ticket.getHoraIngresoEstimada(), atraccion != null ? atraccion.getTipo() : null))
                 .esReimpresion(false)
                 .build();
 
@@ -202,6 +204,8 @@ public class TicketPrintServiceImpl implements TicketPrintService {
                 .tiempoOModalidad(tiempoOModalidad)
                 .precioUnitario(detalle != null ? detalle.getPrecioUnitario() : null)
                 .fechaEmision(ticket.getFechaEmision())
+                .ingresoTexto(com.software.territoriodeninos.util.IngresoTextoFormatter.texto(
+                        ticket.getHoraIngresoEstimada(), atraccion != null ? atraccion.getTipo() : null))
                 .esReimpresion(true)
                 .build();
 

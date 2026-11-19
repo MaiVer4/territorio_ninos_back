@@ -53,8 +53,23 @@ public record TicketConsultaDTO(
     String clienteDocumento,
 
     @Schema(description = "Nombre completo del cliente acudiente", example = "Laura Castro")
-    String clienteNombre
+    String clienteNombre,
+
+    @Schema(description = "Hora estimada de ingreso a la atracción (null = AHORA)")
+    LocalDateTime horaIngresoEstimada,
+
+    @Schema(description = "Texto de ingreso: AHORA, HH:mm (aprox.) o PRÓXIMO TURNO", example = "AHORA")
+    String ingresoTexto
 ) {
+    public TicketConsultaDTO(UUID uuidCodigo, EstadoTicket estadoTicket, Integer minutosContratados,
+                             LocalDateTime fechaEmision, Long menorId, String menorNombre, String menorDocumento,
+                             Long atraccionId, String atraccionNombre, TipoTarifa tipoTarifa, Long ventaId,
+                             Long detalleVentaId, Long clienteId, String clienteDocumento, String clienteNombre) {
+        this(uuidCodigo, estadoTicket, minutosContratados, fechaEmision, menorId, menorNombre, menorDocumento,
+                atraccionId, atraccionNombre, tipoTarifa, ventaId, detalleVentaId, clienteId, clienteDocumento,
+                clienteNombre, null, "AHORA");
+    }
+
     @JsonProperty("id")
     public UUID id() {
         return uuidCodigo;

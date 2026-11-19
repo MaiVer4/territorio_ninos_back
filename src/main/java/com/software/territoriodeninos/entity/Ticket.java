@@ -51,6 +51,10 @@ public class Ticket implements Persistable<UUID> {
     @Column(name = "fecha_consumo")
     private LocalDateTime fechaConsumo;
 
+    /** Hora estimada de ingreso informada en taquilla. NULL = ingreso inmediato (AHORA). */
+    @Column(name = "hora_ingreso_estimada", updatable = false)
+    private LocalDateTime horaIngresoEstimada;
+
     @Transient
     @Builder.Default
     private boolean isNew = true;

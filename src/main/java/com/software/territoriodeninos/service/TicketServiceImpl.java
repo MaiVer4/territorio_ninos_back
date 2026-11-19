@@ -128,7 +128,10 @@ public class TicketServiceImpl implements TicketService {
                 dv != null ? dv.getId() : null,
                 cliente != null ? cliente.getId() : null,
                 cliente != null ? cliente.getNumeroDocumento() : null,
-                cliente != null ? cliente.getNombreCompleto() : null
+                cliente != null ? cliente.getNombreCompleto() : null,
+                t.getHoraIngresoEstimada(),
+                com.software.territoriodeninos.util.IngresoTextoFormatter.texto(
+                        t.getHoraIngresoEstimada(), atraccion != null ? atraccion.getTipo() : null)
         );
     }
 }
