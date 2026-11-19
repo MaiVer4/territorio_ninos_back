@@ -1,5 +1,5 @@
 # Esquema de Base de Datos (PostgreSQL + JPA + Flyway)
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V10__*.sql`. Última sincronización: 2026-11-19 (commit 1f4fc09).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V11__*.sql`. Última sincronización: 2026-11-19 (commit d326d97).
 
 ## 1. Gestión del Esquema y Convenciones
 - **Motor:** PostgreSQL (`jdbc:postgresql://localhost:5432/territorioNinos` por defecto en `DB_URL`). En tests se usa H2 en memoria.
@@ -181,15 +181,19 @@ erDiagram
   - **`log_escaneo_qr`** (`entity/LogEscaneoQr.java`): `id` (PK), `uuid_leido` (`UUID NOT NULL`), `ticket_encontrado` (`BOOLEAN NOT NULL`), `atraccion_id` (FK), `operario_id` (FK), `direccion_ip` (`VARCHAR(64)`), `timestamp_cliente` (`TIMESTAMP`), `fecha_escaneo` (`TIMESTAMP NOT NULL`), `resultado` (`VARCHAR(40) NOT NULL`: `VALIDO`, `NO_ENCONTRADO`, `YA_CONSUMIDO`, `ATRACCION_INCORRECTA`, `EDAD_FUERA_RANGO`, `AFORO_COMPLETO`), `detalle` (`VARCHAR(500)`).
   - **`log_incidente_pausa`** (`entity/LogIncidentePausa.java`): `id` (PK), `sesion_juego_id` (FK -> `sesiones_juego`), `atraccion_id` (FK -> `atracciones`, V9), `operario_id` (FK -> `usuarios`), `motivo` (`VARCHAR(500) NOT NULL`), `tipo_pausa` (`VARCHAR(50)` default `'OPERATIVA'`, V9), `es_pausa_general` (`BOOLEAN NOT NULL`), `fecha_inicio_pausa` (`TIMESTAMP NOT NULL`), `fecha_fin_pausa` (`TIMESTAMP`), `duracion_segundos` (`INTEGER`).
   - **`log_reimpresion`** (`entity/LogReimpresion.java`, `@Immutable`): `id` (PK), `ticket_uuid` (FK -> `tickets(uuid_codigo)`), `usuario_id` (FK -> `usuarios(id)`), `motivo` (`VARCHAR(500) NOT NULL`), `fecha_reimpresion` (`TIMESTAMP NOT NULL`).
+  - **`reportes_atraccion`** (`entity/ReporteAtraccion.java`, V11): `id` (PK), `atraccion_id` (FK -> `atracciones`), `usuario_reporta_id` (FK -> `usuarios`), `tipo_reporte` (`VARCHAR(40)` / `TipoReporteAtraccion`), `severidad` (`VARCHAR(20)` / `SeveridadReporte`), `descripcion` (`VARCHAR(1000)`), `estado` (`VARCHAR(20)` / `EstadoReporteAtraccion`), `atraccion_desactivada` (`BOOLEAN`), `fecha_reporte`, `fecha_resolucion`, `usuario_resuelve_id` (FK -> `usuarios`), `observaciones_resolucion` (`VARCHAR(1000)`).
 
 ---
 
 ## 4. Diccionario de Enums (`util/*.java`)
 | Enum | Valores Exactos | Notas / Alias `@JsonCreator` |
 | :--- | :--- | :--- |
-| `NombreRol` | `ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO` | En Spring Security se prefijan con `ROLE_`. |
+| `NombreRol` | `ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO`, `COORDINADOR` | En Spring Security se prefijan con `ROLE_`. |
 | `EstadoUsuario` | `ACTIVO`, `INACTIVO`, `SUSPENDIDO` | Usuarios no `ACTIVO` no pueden autenticarse. |
-| `EstadoAtraccion` | `ACTIVO`, `INACTIVO`, `MANTENIMIENTO` | Acepta alias `"ACTIVA" -> ACTIVO`, `"INACTIVA" -> INACTIVO`. |
+| `EstadoAtraccion` | `ACTIVO`, `INACTIVO`, `MANTENIMIENTO`, `FUERA_DE_SERVICIO` | Acepta alias `"ACTIVA"`, `"INACTIVA"`, `"FUERA DE SERVICIO"`. |
+| `TipoReporteAtraccion` | `DANO`, `FALTA_SUPLEMENTOS`, `MANTENIMIENTO_PREVENTIVO`, `OTRO` | Reportes operativos de atracciones (V11). |
+| `SeveridadReporte` | `BAJA`, `MEDIA`, `ALTA`, `CRITICA` | Severidad de reportes de atracciones (V11). |
+| `EstadoReporteAtraccion` | `ABIERTO`, `EN_PROCESO`, `RESUELTO` | Ciclo de atención de reportes de atracciones (V11). |
 | `TipoAtraccion` | `TEMPORIZADA`, `EVENTOS_CAIDAS` | Acepta `"TIME"/"TIEMPO"/"VIP" -> TEMPORIZADA`, `"FALLS"/"CAIDAS"/"EVENTO" -> EVENTOS_CAIDAS`. |
 | `TipoTarifa` | `TIEMPO`, `EVENTO`, `MINUTO_BASE` | Acepta variantes con/sin tilde y en inglés. |
 | `EstadoAsignacion` | `ACTIVA`, `FINALIZADA`, `REASIGNADA` | Default `ACTIVA`. |
@@ -221,3 +225,4 @@ erDiagram
 - **`V8__operacion_fase1_y_base.sql`**: Re-agrega `edad_minima`/`edad_maxima` en `atracciones`, añade `fecha_consumo` en `tickets`, y crea `log_escaneo_qr`, `sesiones_juego` y `log_incidente_pausa`.
 - **`V9__reportes_auditoria_y_estadisticas.sql`**: Añade `atraccion_id` y `tipo_pausa` a `log_incidente_pausa`, y crea `auditoria_tickets` con sus índices.
 - **`V10__ticket_hora_ingreso_estimada.sql`**: Añade `hora_ingreso_estimada TIMESTAMP` (nullable) a `tickets` para sobreventa con cola FIFO.
+- **`V11__rol_coordinador_y_reportes_atraccion.sql`**: Inserta rol `COORDINADOR`, libera constraints CHECK para `FUERA_DE_SERVICIO` y crea tabla `reportes_atraccion`.

@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-19 (commit 1f4fc09).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-19 (commit d326d97).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -75,11 +75,11 @@
 | Método | Ruta (incluye alias) | Rol | Request | Response | Notas |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/atracciones` | `ADMIN` | `AtraccionRequestDTO` | `201 AtraccionResponseDTO` | `409` si nombre duplicado. |
-| `GET` | `/api/atracciones` | `ADMIN, TAQ` | — | `200 List<AtraccionResponseDTO>` | Excluye `INACTIVO`. Incluye `ocupacionActiva` calculada en tiempo real. |
+| `GET` | `/api/atracciones` | `ADMIN, TAQ, COORD` | — | `200 List<AtraccionResponseDTO>` | Excluye `INACTIVO`. Incluye `ocupacionActiva` calculada en tiempo real. |
 | `GET` | `/api/atracciones/activas` | `TODOS` | — | `200 List<AtraccionResponseDTO>` | Solo `estado == ACTIVO`. |
 | `GET` | `/api/atracciones/{id}` | `TODOS` | Path `id` | `200 AtraccionResponseDTO` | |
 | `PUT` | `/api/atracciones/{id}` | `ADMIN` | `AtraccionRequestDTO` | `200 AtraccionResponseDTO` | |
-| `PATCH` | `/api/atracciones/{id}/estado` | `ADMIN` | Query `?estado=` | `200 AtraccionResponseDTO` | `ACTIVO`, `INACTIVO`, `MANTENIMIENTO`. |
+| `PATCH` | `/api/atracciones/{id}/estado` | `ADMIN, COORD` | Query `?estado=` | `200 AtraccionResponseDTO` | `ACTIVO`, `INACTIVO`, `MANTENIMIENTO`, `FUERA_DE_SERVICIO`. Difunde WS `ESTADO_ATRACCION_CAMBIADO`. |
 | `DELETE` | `/api/atracciones/{id}` | `ADMIN` | Path `id` | `204 No Content` | Bloquea si tiene ventas/sesiones históricas. |
 | `POST` | `/api/tarifas-tiempo` (o `/api/rates`) | `ADMIN` | `TarifaTiempoRequestDTO` | `201 TarifaTiempoResponseDTO` | `409` si `(atraccionId, duracionMinutos)` ya existe. |
 | `GET` | `/api/tarifas-tiempo/atraccion/{atraccionId}` (o `/attraction/{atraccionId}`) | `TODOS` | Path `atraccionId` | `200 List<TarifaTiempoResponseDTO>` | |
@@ -163,6 +163,14 @@
 | `GET` | `/api/reportes/graficos/evolucion-ingresos` | `ADMIN` | — | `200 GraficoTendenciaDTO` |
 | `GET` | `/api/auditoria/tickets/{criterio}` | `ADMIN` | Path `criterio` (UUID, prefijo o doc) | `200 List<TimelineTicketDTO>` |
 | `GET` | `/api/auditoria/incidentes` | `ADMIN` | `?fechaInicio=&fechaFin=&atraccionId=&tipoPausa=` | `200 ResumenIncidentesAuditoriaDTO` |
+
+### 2.12 Reportes de Atracciones (`ReporteAtraccionController` — `/api/reportes-atraccion`)
+| Método | Ruta | Rol | Request | Response | Notas |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/reportes-atraccion` | `COORD, ADMIN` | `ReporteAtraccionRequestDTO` | `201 ReporteAtraccionResponseDTO` | Registra daño/falta de suplementos; si `desactivarAtraccion=true` marca `FUERA_DE_SERVICIO`. |
+| `GET` | `/api/reportes-atraccion` | `COORD, ADMIN` | Query `?atraccionId=&tipoReporte=&estado=` | `200 List<ReporteAtraccionResponseDTO>` | Listado filtrado ordenado por fecha descendente. |
+| `GET` | `/api/reportes-atraccion/{id}` | `COORD, ADMIN` | Path `id` | `200 ReporteAtraccionResponseDTO` | |
+| `PATCH` | `/api/reportes-atraccion/{id}/estado` | `COORD, ADMIN` | `ReporteAtraccionEstadoDTO` | `200 ReporteAtraccionResponseDTO` | Actualiza a `EN_PROCESO`/`RESUELTO`; permite reactivar la atracción al resolver. |
 
 ---
 
