@@ -43,6 +43,12 @@ public interface SesionJuegoRepository extends JpaRepository<SesionJuego, Long> 
             @Param("estados") Collection<EstadoSesionJuego> estados
     );
 
+    @Query("SELECT s FROM SesionJuego s WHERE s.atraccion.id IN :atraccionIds AND s.estadoSesion IN :estados ORDER BY s.horaFin ASC NULLS LAST, s.horaInicio ASC")
+    List<SesionJuego> findByAtraccionIdInAndEstadoSesionIn(
+            @Param("atraccionIds") Collection<Long> atraccionIds,
+            @Param("estados") Collection<EstadoSesionJuego> estados
+    );
+
     @EntityGraph(attributePaths = {"ticket", "atraccion", "menor", "operario"})
     Optional<SesionJuego> findByTicketUuidCodigo(UUID uuidCodigo);
 

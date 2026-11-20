@@ -3,10 +3,12 @@ package com.software.territoriodeninos.service;
 import com.software.territoriodeninos.entity.Atraccion;
 import com.software.territoriodeninos.entity.DetalleVenta;
 import com.software.territoriodeninos.entity.SesionJuego;
+import com.software.territoriodeninos.entity.TarifaTiempo;
 import com.software.territoriodeninos.entity.Ticket;
 import com.software.territoriodeninos.repository.SesionJuegoRepository;
 import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.repository.TicketRepository;
+import com.software.territoriodeninos.util.EstadoAtraccion;
 import com.software.territoriodeninos.util.EstadoSesionJuego;
 import com.software.territoriodeninos.util.IngresoTextoFormatter;
 import com.software.territoriodeninos.util.TipoAtraccion;
@@ -19,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,6 +29,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,5 +105,53 @@ class EstimadorIngresoServiceTest {
         assertThat(IngresoTextoFormatter.texto(null, TipoAtraccion.TEMPORIZADA)).isEqualTo("AHORA");
         assertThat(IngresoTextoFormatter.texto(ahora.plusMinutes(35), TipoAtraccion.TEMPORIZADA)).isEqualTo("14:35 (aprox.)");
         assertThat(IngresoTextoFormatter.texto(ahora, TipoAtraccion.EVENTOS_CAIDAS)).isEqualTo("PRÓXIMO TURNO");
+    }
+
+    @Test
+    void estimarProximoIngresoBatch_reutilizaDuracionesSinConsultarTarifaYOmiteFueraDeServicio() {
+        atraccion.setEstado(EstadoAtraccion.ACTIVO);
+        Atraccion fueraServicio = Atraccion.builder()
+                .id(2L)
+                .nombre("Toro Mecánico")
+                .estado(EstadoAtraccion.FUERA_DE_SERVICIO)
+                .capacidadMaxima(1)
+                .duracionMinutosBase(5)
+                .build();
+
+        SesionJuego sesion1 = SesionJuego.builder()
+                .atraccion(atraccion)
+                .estadoSesion(EstadoSesionJuego.EN_CURSO)
+                .horaInicio(ahora.minusMinutes(10))
+                .horaFin(ahora.plusMinutes(20))
+                .build();
+        SesionJuego sesion2 = SesionJuego.builder()
+                .atraccion(atraccion)
+                .estadoSesion(EstadoSesionJuego.EN_CURSO)
+                .horaInicio(ahora.minusMinutes(10))
+                .horaFin(ahora.plusMinutes(5))
+                .build();
+
+        Ticket ticketEnEspera = Ticket.builder()
+                .fechaEmision(ahora.minusMinutes(1))
+                .horaIngresoEstimada(ahora.plusMinutes(5))
+                .detalleVenta(DetalleVenta.builder().atraccion(atraccion).tarifaTiempoId(77L).build())
+                .build();
+
+        when(sesionJuegoRepository.findByAtraccionIdInAndEstadoSesionIn(eq(List.of(1L)), anyCollection()))
+                .thenReturn(List.of(sesion1, sesion2));
+        when(ticketRepository.findEnEsperaPorAtracciones(eq(List.of(1L)), any(), any()))
+                .thenReturn(List.of(ticketEnEspera));
+
+        Map<Long, LocalDateTime> resultado = estimador.estimarProximoIngresoBatch(
+                List.of(atraccion, fueraServicio),
+                ahora,
+                Map.of(77L, 30)
+        );
+
+        assertThat(resultado).containsKey(1L);
+        assertThat(resultado.get(1L)).isEqualTo(ahora.plusMinutes(20));
+        assertThat(resultado).doesNotContainKey(2L);
+        verify(tarifaTiempoRepository, never()).findById(anyLong());
+        verify(tarifaTiempoRepository, never()).findAllById(anyCollection());
     }
 }

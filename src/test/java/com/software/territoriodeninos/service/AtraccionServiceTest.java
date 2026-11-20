@@ -7,12 +7,17 @@ import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.repository.AtraccionRepository;
 import com.software.territoriodeninos.util.EstadoAtraccion;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -59,6 +64,11 @@ class AtraccionServiceTest {
                 .build();
 
         requestMock = new AtraccionRequestDTO("Inflable", "Juego para saltar", new BigDecimal("100.50"));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -257,5 +267,45 @@ class AtraccionServiceTest {
         atraccionService.invalidarCacheCatalogo();
         atraccionService.obtenerCatalogoVenta();
         verify(atraccionRepository, times(2)).findByEstadoInOrderByNombreAsc(List.of(EstadoAtraccion.ACTIVO, EstadoAtraccion.FUERA_DE_SERVICIO));
+    }
+
+    @Test
+    void cambiarEstado_coordinadorAFueraDeServicio_permitidoYRetornaOcupacion() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("coord@tdn.com", null,
+                        List.of(new SimpleGrantedAuthority("ROLE_COORDINADOR")))
+        );
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionMock));
+        when(sesionJuegoRepository.countActivasPorAtraccionIds(anyList(), anyList()))
+                .thenReturn(List.<Object[]>of(new Object[]{1L, 4L}));
+
+        AtraccionResponseDTO result = atraccionService.cambiarEstado(1L, "FUERA_DE_SERVICIO");
+
+        assertEquals("FUERA_DE_SERVICIO", result.estado());
+        assertEquals(4, result.ocupacionActiva());
+    }
+
+    @Test
+    void cambiarEstado_coordinadorAInactivo_lanzaAccessDenied() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("coord@tdn.com", null,
+                        List.of(new SimpleGrantedAuthority("ROLE_COORDINADOR")))
+        );
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionMock));
+
+        assertThrows(AccessDeniedException.class, () -> atraccionService.cambiarEstado(1L, "INACTIVO"));
+        assertEquals(EstadoAtraccion.ACTIVO, atraccionMock.getEstado());
+    }
+
+    @Test
+    void cambiarEstado_coordinadorAMantenimiento_lanzaAccessDenied() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("coord@tdn.com", null,
+                        List.of(new SimpleGrantedAuthority("ROLE_COORDINADOR")))
+        );
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionMock));
+
+        assertThrows(AccessDeniedException.class, () -> atraccionService.cambiarEstado(1L, "MANTENIMIENTO"));
+        assertEquals(EstadoAtraccion.ACTIVO, atraccionMock.getEstado());
     }
 }

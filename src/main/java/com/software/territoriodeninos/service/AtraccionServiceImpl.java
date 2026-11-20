@@ -22,8 +22,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -116,9 +121,10 @@ public class AtraccionServiceImpl implements AtraccionService {
 
         aplicarAtributosOpcionales(atraccion, request);
 
-        invalidarCacheCatalogo();
+        ejecutarDespuesDeCommit(this::invalidarCacheCatalogo);
         log.info("Atracción actualizada: {}", atraccion.getNombre());
-        return mapToDTO(atraccion);
+        int ocupacion = obtenerOcupacionActivaPorAtraccion(List.of(atraccion)).getOrDefault(atraccion.getId(), 0);
+        return mapToDTO(atraccion, ocupacion);
     }
 
     @Override
@@ -127,21 +133,28 @@ public class AtraccionServiceImpl implements AtraccionService {
 
         try {
             EstadoAtraccion estado = EstadoAtraccion.fromString(nuevoEstado);
+            validarPermisoTransicionEstado(estado);
             // FUERA_DE_SERVICIO se permite de inmediato aunque haya operarios asignados o sesiones activas
             if (estado != EstadoAtraccion.ACTIVO && estado != EstadoAtraccion.FUERA_DE_SERVICIO) {
                 verificarSinOperariosActivos(atraccion);
             }
             atraccion.setEstado(estado);
-            invalidarCacheCatalogo();
-            if (webSocketPublisher != null) {
-                webSocketPublisher.publicarCambioEstadoAtraccion(atraccion.getId(), atraccion.getNombre(), estado.name());
-            }
+            final Long atraccionId = atraccion.getId();
+            final String atraccionNombre = atraccion.getNombre();
+            final String estadoNombre = estado.name();
+            ejecutarDespuesDeCommit(() -> {
+                invalidarCacheCatalogo();
+                if (webSocketPublisher != null) {
+                    webSocketPublisher.publicarCambioEstadoAtraccion(atraccionId, atraccionNombre, estadoNombre);
+                }
+            });
             log.info("Estado de atracción {} cambiado a {}", atraccion.getNombre(), estado);
         } catch (IllegalArgumentException e) {
             throw new ConflictoException("Estado de atracción inválido: " + nuevoEstado);
         }
 
-        return mapToDTO(atraccion);
+        int ocupacion = obtenerOcupacionActivaPorAtraccion(List.of(atraccion)).getOrDefault(atraccion.getId(), 0);
+        return mapToDTO(atraccion, ocupacion);
     }
 
     @Override
@@ -201,7 +214,15 @@ public class AtraccionServiceImpl implements AtraccionService {
         // 5. Batch query: Ocupación real = sesiones EN_CURSO/PAUSADA (fuente única de aforo)
         Map<Long, Integer> ocupacionPorAtraccion = obtenerOcupacionActivaPorAtraccion(atraccionesActivas);
 
-        // 6. Ensamblar DTOs con cálculo de aforo disponible en tiempo real
+        // 6. Batch query: Estimación de próximo ingreso para atracciones llenas
+        Map<Long, Integer> duracionesTarifaTiempo = tarifasTiempo.stream()
+                .filter(t -> t.getId() != null && t.getDuracionMinutos() != null)
+                .collect(Collectors.toMap(TarifaTiempo::getId, TarifaTiempo::getDuracionMinutos, (a, b) -> a));
+        Map<Long, java.time.LocalDateTime> proximosIngresos = estimadorIngresoService != null
+                ? estimadorIngresoService.estimarProximoIngresoBatch(atraccionesActivas, java.time.LocalDateTime.now(), duracionesTarifaTiempo)
+                : Collections.emptyMap();
+
+        // 7. Ensamblar DTOs con cálculo de aforo disponible en tiempo real
         List<CatalogoAtraccionVentaDTO> catalogo = atraccionesActivas.stream().map(atraccion -> {
             Long id = atraccion.getId();
             List<TarifaTiempoResponseDTO> tt = tarifasTiempoPorAtraccion.getOrDefault(id, Collections.emptyList());
@@ -211,9 +232,7 @@ public class AtraccionServiceImpl implements AtraccionService {
             int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
             int ocupacionActual = ocupacionPorAtraccion.getOrDefault(id, 0);
             int aforoDisponible = Math.max(0, capacidad - ocupacionActual);
-            java.time.LocalDateTime proximoIngreso = estimadorIngresoService != null
-                    ? estimadorIngresoService.estimarProximoIngreso(atraccion, java.time.LocalDateTime.now())
-                    : null;
+            java.time.LocalDateTime proximoIngreso = proximosIngresos != null ? proximosIngresos.get(id) : null;
 
             return new CatalogoAtraccionVentaDTO(
                     id,
@@ -247,6 +266,38 @@ public class AtraccionServiceImpl implements AtraccionService {
     }
 
     // --- Métodos Privados Auxiliares ---
+
+    private void validarPermisoTransicionEstado(EstadoAtraccion nuevoEstado) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getAuthorities() == null) {
+            return;
+        }
+        boolean esAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMINISTRADOR".equals(a.getAuthority()));
+        boolean esCoordinador = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_COORDINADOR".equals(a.getAuthority()));
+        if (!esAdmin && esCoordinador
+                && nuevoEstado != EstadoAtraccion.ACTIVO
+                && nuevoEstado != EstadoAtraccion.FUERA_DE_SERVICIO) {
+            throw new AccessDeniedException(
+                    "El rol COORDINADOR solo puede cambiar el estado entre ACTIVO y FUERA_DE_SERVICIO."
+            );
+        }
+    }
+
+    private void ejecutarDespuesDeCommit(Runnable accion) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    accion.run();
+                }
+            });
+        } else {
+            accion.run();
+        }
+    }
 
     private void verificarSinOperariosActivos(Atraccion atraccion) {
         if (asignacionRepository.existsByAtraccionIdAndEstado(atraccion.getId(), EstadoAsignacion.ACTIVA)) {

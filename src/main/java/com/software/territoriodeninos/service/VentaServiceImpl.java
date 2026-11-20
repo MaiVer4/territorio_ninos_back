@@ -539,10 +539,11 @@ public class VentaServiceImpl implements VentaService {
     ) {
         List<Ticket> ticketsGenerados = new ArrayList<>();
         List<DetalleVenta> detalles = ventaGuardada.getDetalles();
+        Map<Long, Integer> duracionesTarifas = precargarDuracionesTarifas(detalles);
         Map<Long, List<Integer>> duracionesPorAtraccion = new java.util.LinkedHashMap<>();
         for (DetalleVenta d : detalles) {
             int c = (d.getCantidad() != null && d.getCantidad() > 0) ? d.getCantidad() : 1;
-            int dur = resolverDuracionMinutos(d);
+            int dur = resolverDuracionMinutos(d, duracionesTarifas);
             List<Integer> lista = duracionesPorAtraccion.computeIfAbsent(d.getAtraccion().getId(), k -> new ArrayList<>());
             for (int i = 0; i < c; i++) lista.add(dur);
         }
@@ -724,13 +725,42 @@ public class VentaServiceImpl implements VentaService {
         return horas;
     }
 
-    private int resolverDuracionMinutos(DetalleVenta d) {
+    private Map<Long, Integer> precargarDuracionesTarifas(List<DetalleVenta> detalles) {
+        if (tarifaTiempoRepository == null || detalles == null || detalles.isEmpty()) {
+            return Map.of();
+        }
+        java.util.Set<Long> tarifaIds = detalles.stream()
+                .map(DetalleVenta::getTarifaTiempoId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (tarifaIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> mapa = new HashMap<>();
+        List<TarifaTiempo> tarifas = tarifaTiempoRepository.findAllById(tarifaIds);
+        if (tarifas != null) {
+            for (TarifaTiempo tt : tarifas) {
+                if (tt.getId() != null && tt.getDuracionMinutos() != null) {
+                    mapa.put(tt.getId(), tt.getDuracionMinutos());
+                }
+            }
+        }
+        return mapa;
+    }
+
+    private int resolverDuracionMinutos(DetalleVenta d, Map<Long, Integer> duracionesTarifas) {
         Atraccion a = d.getAtraccion();
         int base = a != null && a.getDuracionMinutosBase() != null && a.getDuracionMinutosBase() > 0
                 ? a.getDuracionMinutosBase() : 15;
-        if (d.getTarifaTiempoId() != null && tarifaTiempoRepository != null) {
-            return tarifaTiempoRepository.findById(d.getTarifaTiempoId())
-                    .map(TarifaTiempo::getDuracionMinutos).orElse(base);
+        if (d.getTarifaTiempoId() != null) {
+            Integer cached = duracionesTarifas.get(d.getTarifaTiempoId());
+            if (cached != null) {
+                return cached;
+            }
+            if (tarifaTiempoRepository != null) {
+                return tarifaTiempoRepository.findById(d.getTarifaTiempoId())
+                        .map(TarifaTiempo::getDuracionMinutos).orElse(base);
+            }
         }
         return base;
     }

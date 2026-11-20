@@ -4,6 +4,7 @@ import com.software.territoriodeninos.entity.Atraccion;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Estima la hora de ingreso de nuevas boletas cuando la atracción puede estar llena (cola FIFO).
@@ -25,4 +26,11 @@ public interface EstimadorIngresoService {
 
     /** Hora en que podría ingresar una boleta nueva adicional ({@code null} = AHORA). */
     LocalDateTime estimarProximoIngreso(Atraccion atraccion, LocalDateTime ahora);
+
+    /** Estima en lote el próximo ingreso para múltiples atracciones evitando consultas N+1. */
+    Map<Long, LocalDateTime> estimarProximoIngresoBatch(
+            List<Atraccion> atracciones,
+            LocalDateTime ahora,
+            Map<Long, Integer> duracionesTarifaTiempo
+    );
 }
