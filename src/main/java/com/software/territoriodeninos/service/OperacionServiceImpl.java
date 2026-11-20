@@ -1,6 +1,7 @@
 package com.software.territoriodeninos.service;
 
 import com.software.territoriodeninos.dto.AforoActualDTO;
+import com.software.territoriodeninos.dto.AutorizarSobreaforoRequestDTO;
 import com.software.territoriodeninos.dto.ColaAtraccionResponseDTO;
 import com.software.territoriodeninos.dto.EscaneoQrRequestDTO;
 import com.software.territoriodeninos.dto.EstacionTrabajoDTO;
@@ -45,13 +46,21 @@ import com.software.territoriodeninos.util.EstadoAtraccion;
 import com.software.territoriodeninos.util.EstadoSesionJuego;
 import com.software.territoriodeninos.util.EstadoTicket;
 import com.software.territoriodeninos.util.NombreRol;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -77,6 +86,11 @@ public class OperacionServiceImpl implements OperacionService {
     private final OperacionWebSocketPublisher webSocketPublisher;
     private final AuditoriaOperacionService auditoriaOperacionService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final PasswordEncoder passwordEncoder;
+
+    @Setter
+    @Value("${app.operacion.supervisor-pin:}")
+    private String supervisorPin = "";
 
     public OperacionServiceImpl(
             AsignacionOperarioRepository asignacionRepository,
@@ -90,7 +104,8 @@ public class OperacionServiceImpl implements OperacionService {
             TarifaEventoRepository tarifaEventoRepository,
             OperacionWebSocketPublisher webSocketPublisher,
             AuditoriaOperacionService auditoriaOperacionService,
-            @org.springframework.beans.factory.annotation.Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider
+            @org.springframework.beans.factory.annotation.Autowired(required = false) AuthenticatedUserProvider authenticatedUserProvider,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) PasswordEncoder passwordEncoder
     ) {
         this.asignacionRepository = asignacionRepository;
         this.usuarioRepository = usuarioRepository;
@@ -106,6 +121,7 @@ public class OperacionServiceImpl implements OperacionService {
         this.authenticatedUserProvider = authenticatedUserProvider != null
                 ? authenticatedUserProvider
                 : new AuthenticatedUserProvider(usuarioRepository);
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -328,6 +344,15 @@ public class OperacionServiceImpl implements OperacionService {
 
         validarEstacionAsignadaAlOperario(operario, atraccion);
 
+        if (atraccion.getEstado() != null && atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
+            throw new TicketInvalidoOperacionException(
+                    "La atracción '" + atraccion.getNombre() + "' se encuentra " +
+                            atraccion.getEstado().name().replace("_", " ").toLowerCase() +
+                            " y no permite nuevos ingresos.",
+                    HttpStatus.CONFLICT
+            );
+        }
+
         // Control de aforo
         int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
         int ocupacionActiva = calcularOcupacionActiva(atraccion.getId());
@@ -404,8 +429,9 @@ public class OperacionServiceImpl implements OperacionService {
         SesionJuegoResponseDTO sesionDTO = mapearSesionResponse(sesion);
         ColaAtraccionResponseDTO colaDTO = construirColaAtraccion(atraccion);
 
-        // Difusión en tiempo real por WebSocket (HU-27.06, HU-28.03)
-        webSocketPublisher.publicarNuevoIngreso(atraccion.getId(), sesionDTO, colaDTO);
+        // Difusión en tiempo real por WebSocket tras confirmar transacción (HU-27.06, HU-28.03)
+        final Long atrId = atraccion.getId();
+        ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarNuevoIngreso(atrId, sesionDTO, colaDTO));
 
         return sesionDTO;
     }
@@ -447,7 +473,9 @@ public class OperacionServiceImpl implements OperacionService {
         SesionJuegoResponseDTO sesionDTO = mapearSesionResponse(sesion);
         ColaAtraccionResponseDTO colaDTO = construirColaAtraccion(sesion.getAtraccion());
 
-        webSocketPublisher.publicarPausa(sesion.getAtraccion().getId(), sesionId, request.motivo(), sesionDTO, colaDTO);
+        final Long atrId = sesion.getAtraccion().getId();
+        final String motivo = request.motivo();
+        ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarPausa(atrId, sesionId, motivo, sesionDTO, colaDTO));
 
         return sesionDTO;
     }
@@ -506,7 +534,8 @@ public class OperacionServiceImpl implements OperacionService {
         SesionJuegoResponseDTO sesionDTO = mapearSesionResponse(sesion);
         ColaAtraccionResponseDTO colaDTO = construirColaAtraccion(sesion.getAtraccion());
 
-        webSocketPublisher.publicarReanudacion(sesion.getAtraccion().getId(), sesionId, sesionDTO, colaDTO);
+        final Long atrId = sesion.getAtraccion().getId();
+        ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarReanudacion(atrId, sesionId, sesionDTO, colaDTO));
 
         return sesionDTO;
     }
@@ -543,7 +572,8 @@ public class OperacionServiceImpl implements OperacionService {
                 atraccion.getNombre(), operario.getCorreo(), sesionesEnCurso.size(), request.motivo());
 
         ColaAtraccionResponseDTO colaDTO = construirColaAtraccion(atraccion);
-        webSocketPublisher.publicarPausaGeneral(atraccionId, request.motivo(), colaDTO);
+        final String motivo = request.motivo();
+        ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarPausaGeneral(atraccionId, motivo, colaDTO));
 
         return colaDTO;
     }
@@ -593,8 +623,9 @@ public class OperacionServiceImpl implements OperacionService {
         SesionJuegoResponseDTO sesionDTO = mapearSesionResponse(sesion);
         ColaAtraccionResponseDTO colaDTO = construirColaAtraccion(sesion.getAtraccion());
 
-        // Notificación WebSocket (HU-32.05) y liberación de aforo (HU-32.04)
-        webSocketPublisher.publicarSesionFinalizada(sesion.getAtraccion().getId(), sesionDTO, colaDTO);
+        // Notificación WebSocket tras commit (HU-32.05) y liberación de aforo (HU-32.04)
+        final Long atrId = sesion.getAtraccion().getId();
+        ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarSesionFinalizada(atrId, sesionDTO, colaDTO));
 
         return sesionDTO;
     }
@@ -634,10 +665,11 @@ public class OperacionServiceImpl implements OperacionService {
         SesionJuegoResponseDTO sesionDTO = mapearSesionResponse(sesion);
         ColaAtraccionResponseDTO colaDTO = construirColaAtraccion(sesion.getAtraccion());
 
+        final Long atrId = sesion.getAtraccion().getId();
         if (nuevosRestantes == 0) {
-            webSocketPublisher.publicarSesionFinalizada(sesion.getAtraccion().getId(), sesionDTO, colaDTO);
+            ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarSesionFinalizada(atrId, sesionDTO, colaDTO));
         } else {
-            webSocketPublisher.publicarColaActualizada(sesion.getAtraccion().getId(), colaDTO);
+            ejecutarDespuesDeCommit(() -> webSocketPublisher.publicarColaActualizada(atrId, colaDTO));
         }
 
         return sesionDTO;
@@ -696,7 +728,9 @@ public class OperacionServiceImpl implements OperacionService {
             throw new ReglaNegocioException("Usuario no autenticado o sesión no válida.");
         }
 
-        Atraccion atraccion = atraccionRepository.findById(atraccionId)
+        // Lock pesimista para serializar vinculaciones concurrentes sobre la misma atracción (evita TOCTOU)
+        Atraccion atraccion = atraccionRepository.findByIdForUpdate(atraccionId)
+                .or(() -> atraccionRepository.findById(atraccionId))
                 .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + atraccionId));
 
         if (atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
@@ -723,11 +757,12 @@ public class OperacionServiceImpl implements OperacionService {
         AsignacionOperario miAsignacionActiva = resolverAsignacionActiva(usuario);
         if (miAsignacionActiva != null) {
             if (miAsignacionActiva.getAtraccion().getId().equals(atraccionId)) {
-                return obtenerEstacionActiva(auth);
+                return construirEstacionTrabajoDTO(usuario, atraccion, miAsignacionActiva);
             }
             miAsignacionActiva.setEstado(EstadoAsignacion.REASIGNADA);
             miAsignacionActiva.setHoraFin(LocalDateTime.now());
-            asignacionRepository.save(miAsignacionActiva);
+            // Flush explícito para no violar ux_asignacion_operario_activa antes de insertar la nueva asignación
+            asignacionRepository.saveAndFlush(miAsignacionActiva);
             log.info("Operario {} reasignado desde {} a {}", usuario.getCorreo(), miAsignacionActiva.getAtraccion().getNombre(), atraccion.getNombre());
         }
 
@@ -739,10 +774,10 @@ public class OperacionServiceImpl implements OperacionService {
                 .estado(EstadoAsignacion.ACTIVA)
                 .observaciones("Vinculación confirmada por operario en consola de campo")
                 .build();
-        asignacionRepository.save(nuevaAsignacion);
+        AsignacionOperario guardada = asignacionRepository.save(nuevaAsignacion);
 
         log.info("Operario {} vinculado exitosamente a atracción {}", usuario.getCorreo(), atraccion.getNombre());
-        return obtenerEstacionActiva(auth);
+        return construirEstacionTrabajoDTO(usuario, atraccion, guardada != null ? guardada : nuevaAsignacion);
     }
 
     @Override
@@ -759,6 +794,89 @@ public class OperacionServiceImpl implements OperacionService {
             asignacion.setHoraFin(LocalDateTime.now());
             asignacionRepository.save(asignacion);
             log.info("Operario {} desvinculó su estación activa de {}", usuario.getCorreo(), asignacion.getAtraccion().getNombre());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void autorizarSobreaforo(AutorizarSobreaforoRequestDTO request, Authentication auth) {
+        if (request == null || request.atraccionId() == null
+                || request.claveSupervisor() == null || request.claveSupervisor().isBlank()) {
+            throw new ReglaNegocioException("El ID de la atracción y la clave de supervisor son obligatorios.");
+        }
+
+        Usuario usuario = resolverUsuarioAutenticado(auth);
+        if (usuario == null) {
+            throw new ReglaNegocioException("Usuario no autenticado o sesión no válida.");
+        }
+
+        Atraccion atraccion = atraccionRepository.findById(request.atraccionId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Atracción no encontrada con ID: " + request.atraccionId()));
+
+        if (atraccion.getEstado() != EstadoAtraccion.ACTIVO) {
+            throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' no se encuentra activa.");
+        }
+
+        String pinIngresado = request.claveSupervisor().trim();
+        if (!validarCredencialSupervisor(pinIngresado, usuario)) {
+            throw new AccessDeniedException("PIN o credencial de supervisor inválida.");
+        }
+
+        String motivo = (request.motivo() != null && !request.motivo().isBlank())
+                ? request.motivo().trim()
+                : "Override de capacidad máxima autorizado";
+        log.warn("Sobreaforo autorizado en atracción '{}' (ID {}) por usuario {}. Motivo: {}",
+                atraccion.getNombre(), atraccion.getId(), usuario.getCorreo(), motivo);
+    }
+
+    private boolean validarCredencialSupervisor(String pinIngresado, Usuario usuarioActual) {
+        if (supervisorPin != null && !supervisorPin.isBlank()) {
+            byte[] esperado = supervisorPin.trim().getBytes(StandardCharsets.UTF_8);
+            byte[] recibido = pinIngresado.getBytes(StandardCharsets.UTF_8);
+            if (MessageDigest.isEqual(esperado, recibido)) {
+                return true;
+            }
+        }
+
+        if (passwordEncoder == null) {
+            return false;
+        }
+
+        NombreRol rolActual = usuarioActual.getRol() != null ? usuarioActual.getRol().getNombre() : null;
+        if ((NombreRol.ADMINISTRADOR.equals(rolActual) || NombreRol.COORDINADOR.equals(rolActual))
+                && usuarioActual.getPassword() != null
+                && passwordEncoder.matches(pinIngresado, usuarioActual.getPassword())) {
+            return true;
+        }
+
+        return coincidePasswordSupervisor(usuarioRepository.findByRolNombre(NombreRol.ADMINISTRADOR), pinIngresado)
+                || coincidePasswordSupervisor(usuarioRepository.findByRolNombre(NombreRol.COORDINADOR), pinIngresado);
+    }
+
+    private boolean coincidePasswordSupervisor(List<Usuario> supervisores, String pinIngresado) {
+        if (supervisores == null) {
+            return false;
+        }
+        for (Usuario sup : supervisores) {
+            if (sup != null && sup.estaActivo() && sup.getPassword() != null
+                    && passwordEncoder.matches(pinIngresado, sup.getPassword())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void ejecutarDespuesDeCommit(Runnable accion) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    accion.run();
+                }
+            });
+        } else {
+            accion.run();
         }
     }
 

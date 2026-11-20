@@ -72,6 +72,7 @@ public class AsignacionOperarioServiceImpl implements AsignacionOperarioService 
             String obs = asignacionActual.getObservaciones();
             asignacionActual.setObservaciones((obs != null && !obs.isBlank() ? obs + " | " : "") + "Reasignado: " + motivo);
         }
+        asignacionRepository.saveAndFlush(asignacionActual);
 
         // Crear nueva asignación activa
         String nuevasObservaciones = "Reasignado desde " + asignacionActual.getAtraccion().getNombre() +

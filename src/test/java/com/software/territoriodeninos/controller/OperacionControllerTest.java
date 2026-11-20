@@ -641,4 +641,41 @@ class OperacionControllerTest {
                 eq(ipExtremadamenteLarga.substring(0, 64))
         );
     }
+
+    @Test
+    @DisplayName("POST /api/operacion/autorizar-sobreaforo - Retorna 204 No Content si autorización es válida")
+    void autorizarSobreaforo_exito_retorna204() throws Exception {
+        AutorizarSobreaforoRequestDTO request = new AutorizarSobreaforoRequestDTO(1L, "clave-valida", "Grupo familiar");
+
+        mockMvc.perform(post("/api/operacion/autorizar-sobreaforo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        verify(operacionService).autorizarSobreaforo(any(AutorizarSobreaforoRequestDTO.class), any());
+    }
+
+    @Test
+    @DisplayName("POST /api/operacion/autorizar-sobreaforo - Retorna 400 Bad Request si faltan campos")
+    void autorizarSobreaforo_camposFaltantes_retorna400() throws Exception {
+        mockMvc.perform(post("/api/operacion/autorizar-sobreaforo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"atraccionId\": 1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)));
+    }
+
+    @Test
+    @DisplayName("POST /api/operacion/autorizar-sobreaforo - Retorna 403 Forbidden si la credencial es inválida")
+    void autorizarSobreaforo_pinInvalido_retorna403() throws Exception {
+        AutorizarSobreaforoRequestDTO request = new AutorizarSobreaforoRequestDTO(1L, "clave-erronea", null);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("PIN o credencial de supervisor inválida."))
+                .when(operacionService).autorizarSobreaforo(any(AutorizarSobreaforoRequestDTO.class), any());
+
+        mockMvc.perform(post("/api/operacion/autorizar-sobreaforo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo", is(403)));
+    }
 }

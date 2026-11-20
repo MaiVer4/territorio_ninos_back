@@ -71,6 +71,11 @@ public interface OperacionService {
     void desvincularEstacion(Authentication auth);
 
     /**
+     * Valida la autorización de un supervisor/administrador para permitir ingreso por sobreaforo (HU-34.05).
+     */
+    void autorizarSobreaforo(AutorizarSobreaforoRequestDTO request, Authentication auth);
+
+    /**
      * Convierte una entidad SesionJuego en su representación DTO calculando el tiempo restante actual.
      */
     SesionJuegoResponseDTO mapearSesionResponse(com.software.territoriodeninos.entity.SesionJuego sesion);

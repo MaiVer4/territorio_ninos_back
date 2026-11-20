@@ -134,6 +134,17 @@ public class OperacionController implements OperacionApi {
         return ResponseEntity.noContent().build();
     }
 
+    @Override
+    @PostMapping("/autorizar-sobreaforo")
+    @PreAuthorize("hasAnyRole('OPERARIO', 'COORDINADOR', 'ADMINISTRADOR')")
+    public ResponseEntity<Void> autorizarSobreaforo(
+            @Valid @RequestBody AutorizarSobreaforoRequestDTO request,
+            Authentication authentication
+    ) {
+        operacionService.autorizarSobreaforo(request, authentication);
+        return ResponseEntity.noContent().build();
+    }
+
     private String extractClientIp(HttpServletRequest request) {
         if (request == null) {
             return "127.0.0.1";

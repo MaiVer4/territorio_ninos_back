@@ -55,6 +55,8 @@ class OperacionServiceImplTest {
     private OperacionWebSocketPublisher webSocketPublisher;
     @Mock
     private AuditoriaOperacionService auditoriaOperacionService;
+    @Mock
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Mock
     private Authentication authentication;
@@ -1126,5 +1128,119 @@ class OperacionServiceImplTest {
         assertTrue(dto.serverEpochMillis() > 0);
         assertNotNull(dto.serverTimestamp());
         assertNotNull(dto.colaActualizada());
+    }
+
+    @Test
+    @DisplayName("vincularEstacion - Reasigna operario desde otra atracción ejecutando saveAndFlush antes del insert")
+    void vincularEstacion_conAsignacionPreviaEnOtraAtraccion_reasignaConSaveAndFlush() {
+        AsignacionOperario asignacionPrevia = AsignacionOperario.builder()
+                .id(101L)
+                .usuario(operario)
+                .atraccion(otraAtraccion)
+                .fechaAsignacion(LocalDate.now())
+                .horaInicio(LocalDateTime.now().minusHours(1))
+                .estado(EstadoAsignacion.ACTIVA)
+                .build();
+
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(atraccion));
+        when(asignacionRepository.findByAtraccionIdAndEstado(10L, EstadoAsignacion.ACTIVA)).thenReturn(List.of());
+        when(asignacionRepository.findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+                eq(5L), eq(LocalDate.now()), eq(EstadoAsignacion.ACTIVA)
+        )).thenReturn(Optional.of(asignacionPrevia));
+        when(asignacionRepository.save(any(AsignacionOperario.class))).thenAnswer(inv -> {
+            AsignacionOperario a = inv.getArgument(0);
+            a.setId(202L);
+            return a;
+        });
+
+        EstacionTrabajoDTO dto = operacionService.vincularEstacion(10L, authentication);
+
+        assertNotNull(dto);
+        assertEquals(202L, dto.asignacionId());
+        assertEquals(10L, dto.atraccionId());
+        assertEquals(EstadoAsignacion.REASIGNADA, asignacionPrevia.getEstado());
+        assertNotNull(asignacionPrevia.getHoraFin());
+        verify(asignacionRepository).saveAndFlush(asignacionPrevia);
+        verify(asignacionRepository).save(any(AsignacionOperario.class));
+    }
+
+    @Test
+    @DisplayName("iniciarSesion - Lanza TicketInvalidoOperacionException (409) si atracción está FUERA_DE_SERVICIO")
+    void iniciarSesion_atraccionFueraDeServicio_lanza409() {
+        atraccion.setEstado(EstadoAtraccion.FUERA_DE_SERVICIO);
+
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(atraccion));
+        when(asignacionRepository.findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+                eq(5L), eq(LocalDate.now()), eq(EstadoAsignacion.ACTIVA)
+        )).thenReturn(Optional.of(asignacion));
+
+        InicioSesionRequestDTO request = new InicioSesionRequestDTO(ticketUuid, 10L, LocalDateTime.now());
+
+        TicketInvalidoOperacionException ex = assertThrows(
+                TicketInvalidoOperacionException.class,
+                () -> operacionService.iniciarSesion(request, authentication)
+        );
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+        verify(ticketRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("autorizarSobreaforo - Autoriza cuando coincide con PIN configurado")
+    void autorizarSobreaforo_conPinConfiguradoValido_exito() {
+        operacionService.setSupervisorPin("PIN-SEG-9988");
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+
+        AutorizarSobreaforoRequestDTO req = new AutorizarSobreaforoRequestDTO(10L, "PIN-SEG-9988", "Hermano menor");
+
+        assertDoesNotThrow(() -> operacionService.autorizarSobreaforo(req, authentication));
+    }
+
+    @Test
+    @DisplayName("autorizarSobreaforo - Autoriza usando contraseña validada de administrador activo")
+    void autorizarSobreaforo_conPasswordDeSupervisor_exito() {
+        operacionService.setSupervisorPin("");
+        admin.setPassword("$2a$10$hashedAdminPassword");
+
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+        when(usuarioRepository.findByRolNombre(NombreRol.ADMINISTRADOR)).thenReturn(List.of(admin));
+        when(passwordEncoder.matches("AdminSecret99", "$2a$10$hashedAdminPassword")).thenReturn(true);
+
+        AutorizarSobreaforoRequestDTO req = new AutorizarSobreaforoRequestDTO(10L, "AdminSecret99", "Autorización gerencial");
+
+        assertDoesNotThrow(() -> operacionService.autorizarSobreaforo(req, authentication));
+    }
+
+    @Test
+    @DisplayName("autorizarSobreaforo - Lanza AccessDeniedException si el PIN no es válido")
+    void autorizarSobreaforo_conPinInvalido_lanzaAccessDenied() {
+        operacionService.setSupervisorPin("PIN-REAL");
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+        when(usuarioRepository.findByRolNombre(NombreRol.ADMINISTRADOR)).thenReturn(List.of());
+        when(usuarioRepository.findByRolNombre(NombreRol.COORDINADOR)).thenReturn(List.of());
+
+        AutorizarSobreaforoRequestDTO req = new AutorizarSobreaforoRequestDTO(10L, "1234", "Intento inválido");
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> operacionService.autorizarSobreaforo(req, authentication));
     }
 }

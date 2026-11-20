@@ -199,4 +199,20 @@ public interface OperacionApi {
             @RequestBody(required = false) java.util.Map<String, Object> body,
             @Parameter(hidden = true) Authentication authentication
     );
+
+    @Operation(
+        summary = "Autorizar ingreso por sobreaforo con credencial de supervisor",
+        description = "Verifica PIN operativo o contraseña de administrador/coordinador antes de habilitar sobreaforo (HU-34.05)"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Sobreaforo autorizado exitosamente"),
+        @ApiResponse(responseCode = "400", description = "Solicitud o parámetros inválidos"),
+        @ApiResponse(responseCode = "403", description = "Credencial o PIN de supervisor inválido"),
+        @ApiResponse(responseCode = "404", description = "Atracción no encontrada"),
+        @ApiResponse(responseCode = "409", description = "La atracción no se encuentra activa")
+    })
+    ResponseEntity<Void> autorizarSobreaforo(
+            @Valid @RequestBody AutorizarSobreaforoRequestDTO request,
+            @Parameter(hidden = true) Authentication authentication
+    );
 }
