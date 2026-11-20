@@ -75,6 +75,15 @@ public class UsuarioServiceImpl implements UsuarioService {
     public UsuarioResponseDTO obtenerPorId(Long id) {
         Usuario usuario = findUsuarioById(id);
 
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            boolean esAdmin = auth.getAuthorities() != null && auth.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMINISTRADOR".equals(a.getAuthority()));
+            if (!esAdmin && (usuario.getCorreo() == null || !usuario.getCorreo().equalsIgnoreCase(auth.getName()))) {
+                throw new AccessDeniedException("No tiene permisos para consultar el perfil de otro usuario.");
+            }
+        }
+
         if (!usuario.estaActivo()) {
             throw new RecursoNoEncontradoException("Usuario inactivo con ID " + id);
         }

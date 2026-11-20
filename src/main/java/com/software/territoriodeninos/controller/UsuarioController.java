@@ -32,7 +32,7 @@ public class UsuarioController implements UsuarioApi {
     
     @Override
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<List<UsuarioResponseDTO>> obtenerTodos() {
         List<UsuarioResponseDTO> usuarios = usuarioService.obtenerTodos();
         return ResponseEntity.ok(usuarios);
@@ -82,7 +82,7 @@ public class UsuarioController implements UsuarioApi {
 
     @Override
     @GetMapping("/rol/{rol}")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TAQUILLERO')")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<List<UsuarioResponseDTO>> obtenerPorRol(@PathVariable String rol) {
         List<UsuarioResponseDTO> usuarios = usuarioService.obtenerPorRol(rol);
         return ResponseEntity.ok(usuarios);

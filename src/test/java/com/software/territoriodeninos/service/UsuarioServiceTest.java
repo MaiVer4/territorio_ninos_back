@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -97,6 +98,11 @@ public class UsuarioServiceTest {
         lenient().doReturn(authorities).when(authentication).getAuthorities();
         org.springframework.security.core.context.SecurityContext securityContext = new org.springframework.security.core.context.SecurityContextImpl(authentication);
         org.springframework.security.core.context.SecurityContextHolder.setContext(securityContext);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     // =========================================================================
@@ -280,6 +286,38 @@ public class UsuarioServiceTest {
 
             assertThrows(RecursoNoEncontradoException.class,
                     () -> usuarioService.obtenerPorCorreo("noexiste@test.com"));
+        }
+
+        @Test
+        @DisplayName("No-admin intentando consultar perfil de otro usuario lanza AccessDeniedException (IDOR)")
+        void obtenerPorId_NoAdminOtroUsuario_LanzaAccessDenied() {
+            org.springframework.security.core.Authentication authOperario =
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                            "otro.operario@test.com", null,
+                            List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_OPERARIO")));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authOperario);
+
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+
+            assertThrows(AccessDeniedException.class, () -> usuarioService.obtenerPorId(1L));
+        }
+
+        @Test
+        @DisplayName("No-admin consultando su propio perfil obtiene sus datos")
+        void obtenerPorId_NoAdminPropioPerfil_Exito() {
+            org.springframework.security.core.Authentication authPropio =
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                            "juan@test.com", null,
+                            List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_OPERARIO")));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authPropio);
+
+            when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
+            when(usuarioMapper.toResponseDTO(mockUsuario)).thenReturn(mockResponseDTO);
+
+            UsuarioResponseDTO result = usuarioService.obtenerPorId(1L);
+
+            assertNotNull(result);
+            assertEquals("juan@test.com", result.getCorreo());
         }
     }
 

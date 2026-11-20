@@ -9,12 +9,14 @@ import com.software.territoriodeninos.exception.CuentaBloqueadaException;
 import com.software.territoriodeninos.exception.CuentaInactivaException;
 import com.software.territoriodeninos.exception.CredencialesInvalidasException;
 import com.software.territoriodeninos.exception.TokenInvalidoException;
+import com.software.territoriodeninos.repository.AsignacionOperarioRepository;
 import com.software.territoriodeninos.repository.PasswordResetTokenRepository;
 import com.software.territoriodeninos.repository.TurnoCajaRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.JwtUtil;
 import com.software.territoriodeninos.security.LoginAttemptService;
 import com.software.territoriodeninos.security.TokenBlacklistService;
+import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoTurnoCaja;
 import com.software.territoriodeninos.util.EstadoUsuario;
 import com.software.territoriodeninos.util.HashUtil;
@@ -54,6 +56,7 @@ public class AuthServiceImpl implements AuthService {
     private final LoginAttemptService loginAttemptService;
     private final TokenBlacklistService tokenBlacklistService;
     private final TurnoCajaRepository turnoCajaRepository;
+    private final AsignacionOperarioRepository asignacionOperarioRepository;
 
     @Value("${app.frontend.url:http://localhost:4200}")
     private String frontendUrl;
@@ -172,6 +175,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void cerrarSesion(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return;
@@ -199,6 +203,16 @@ public class AuthServiceImpl implements AuthService {
                 if (turnoCajaRepository.findFirstByUsuarioIdAndEstadoOrderByFechaAperturaDesc(usuario.getId(), EstadoTurnoCaja.ABIERTO).isPresent()) {
                     throw new ConflictoException("No puedes cerrar sesión teniendo una caja activa sin cerrar.");
                 }
+            }
+            if (usuario != null && usuario.getRol() != null && usuario.getRol().getNombre() == NombreRol.OPERARIO
+                    && asignacionOperarioRepository != null) {
+                asignacionOperarioRepository.findByUsuarioIdAndEstado(usuario.getId(), EstadoAsignacion.ACTIVA)
+                        .ifPresent(asignacion -> {
+                            asignacion.setEstado(EstadoAsignacion.FINALIZADA);
+                            asignacion.setHoraFin(LocalDateTime.now());
+                            asignacionOperarioRepository.save(asignacion);
+                            log.info("Estación activa del operario {} liberada al cerrar sesión", usuario.getCorreo());
+                        });
             }
         }
 

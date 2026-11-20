@@ -63,6 +63,9 @@ public class AuthServiceTest {
     @Mock
     private com.software.territoriodeninos.repository.TurnoCajaRepository turnoCajaRepository;
 
+    @Mock
+    private com.software.territoriodeninos.repository.AsignacionOperarioRepository asignacionOperarioRepository;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -435,6 +438,40 @@ public class AuthServiceTest {
             authService.cerrarSesion(header);
 
             verify(tokenBlacklistService, times(1)).revocar("jwt-taquillero");
+        }
+
+        @Test
+        @DisplayName("Operario con estación activa finaliza su asignación automáticamente al cerrar sesión")
+        void cerrarSesion_OperarioConEstacionActiva_FinalizaAsignacionYRevoca() {
+            String header = "Bearer jwt-operario";
+            when(jwtUtil.extraerTokenDelHeader(header)).thenReturn("jwt-operario");
+            when(jwtUtil.extraerCorreo("jwt-operario")).thenReturn("operario@test.com");
+
+            Usuario operario = new Usuario();
+            operario.setId(20L);
+            operario.setCorreo("operario@test.com");
+            Rol rolOperario = new Rol();
+            rolOperario.setNombre(NombreRol.OPERARIO);
+            operario.setRol(rolOperario);
+
+            com.software.territoriodeninos.entity.AsignacionOperario asignacionActiva =
+                    com.software.territoriodeninos.entity.AsignacionOperario.builder()
+                            .id(55L)
+                            .usuario(operario)
+                            .estado(com.software.territoriodeninos.util.EstadoAsignacion.ACTIVA)
+                            .build();
+
+            when(usuarioRepository.findByCorreo("operario@test.com")).thenReturn(Optional.of(operario));
+            when(asignacionOperarioRepository.findByUsuarioIdAndEstado(
+                    20L, com.software.territoriodeninos.util.EstadoAsignacion.ACTIVA))
+                    .thenReturn(Optional.of(asignacionActiva));
+
+            authService.cerrarSesion(header);
+
+            assertEquals(com.software.territoriodeninos.util.EstadoAsignacion.FINALIZADA, asignacionActiva.getEstado());
+            assertNotNull(asignacionActiva.getHoraFin());
+            verify(asignacionOperarioRepository, times(1)).save(asignacionActiva);
+            verify(tokenBlacklistService, times(1)).revocar("jwt-operario");
         }
     }
 
