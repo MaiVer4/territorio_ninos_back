@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Servicios del Backend
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-19 (commit 99cce91).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-19 (commit 6c5b0db).
 
 ## 1. Stack, Convenciones y Reglas de Arquitectura
 - **Stack:** Java 21, Spring Boot `4.0.6`, Spring Security + JWT (`jjwt`), Spring Data JPA (Hibernate), Flyway, WebSocket STOMP, ZXing (QR), OpenPDF / CSV, Lombok `1.18.38`.
