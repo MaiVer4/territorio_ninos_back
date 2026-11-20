@@ -1,11 +1,11 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-19 (commit d326d97).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-19 (commit 99cce91).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
 - **Autenticación JWT (`JwtAuthenticationFilter` + `JwtUtil`):**
   - Header: `Authorization: Bearer <token>`.
-  - Claims incluidos: `sub` (correo), `id` (Long), `nombre`, `rol` (`ADMINISTRADOR` | `TAQUILLERO` | `OPERARIO`).
+  - Claims incluidos: `sub` (correo), `id` (Long), `nombre`, `rol` (`ADMINISTRADOR` | `TAQUILLERO` | `OPERARIO` | `COORDINADOR`).
   - Expiración: `${JWT_EXPIRATION_HOURS:24}` horas. Secret: `${JWT_SECRET}`.
   - Revocación en memoria: `TokenBlacklistService` invalida tokens al hacer `/api/auth/logout`, cambiar contraseña o inactivar usuario.
   - Protección fuerza bruta: `LoginAttemptService` bloquea temporalmente tras intentos fallidos (HTTP 429 `CuentaBloqueadaException`).
@@ -34,7 +34,7 @@
 
 ## 2. Catálogo de Endpoints por Módulo
 
-> **Abreviaturas de Roles:** `ADMIN` = `ADMINISTRADOR`, `TAQ` = `TAQUILLERO`, `OPE` = `OPERARIO`, `TODOS` = `ADMINISTRADOR, TAQUILLERO, OPERARIO`, `PÚBLICO` = sin token.
+> **Abreviaturas de Roles:** `ADMIN` = `ADMINISTRADOR`, `TAQ` = `TAQUILLERO`, `OPE` = `OPERARIO`, `COORD` = `COORDINADOR`, `TODOS` = cualquier rol autenticado, `PÚBLICO` = sin token.
 
 ### 2.1 Autenticación (`AuthController` — `/api/auth`)
 | Método | Ruta | Rol | Request | Response | Notas / Errores |
@@ -42,19 +42,19 @@
 | `POST` | `/api/auth/login` | PÚBLICO | `LoginRequestDTO` | `200 AuthResponseDTO` | `401` credenciales/inactivo, `429` bloqueado. |
 | `POST` | `/api/auth/forgot-password` | PÚBLICO | `ForgotPasswordRequest` | `200 Map("mensaje")` | Siempre retorna 200 (no filtra existencia de correo). |
 | `PATCH` | `/api/auth/reset-password` | PÚBLICO | `ResetPasswordRequest` | `200 Map("mensaje")` | `400` si token inválido/expirado. |
-| `POST` | `/api/auth/logout` | PÚBLICO | Header `Authorization` | `200 Map("mensaje")` | Revoca el JWT en `TokenBlacklistService`. |
+| `POST` | `/api/auth/logout` | PÚBLICO | Header `Authorization` | `200 Map("mensaje")` | Revoca el JWT en `TokenBlacklistService` y, si es `OPERARIO`, finaliza su asignación `ACTIVA`. |
 
 ### 2.2 Usuarios / Colaboradores (`UsuarioController` — `/api/usuarios`)
 | Método | Ruta | Rol | Request | Response | Notas / Errores |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/usuarios` | `ADMIN` | `UsuarioRegistroDTO` | `201 UsuarioResponseDTO` | `409 CorreoDuplicadoException`. |
-| `GET` | `/api/usuarios` | `ADMIN, TAQ` | — | `200 List<UsuarioResponseDTO>` | |
-| `GET` | `/api/usuarios/{id}` | `TODOS` | Path `id` | `200 UsuarioResponseDTO` | `404` si no existe. |
+| `GET` | `/api/usuarios` | `ADMIN` | — | `200 List<UsuarioResponseDTO>` | |
+| `GET` | `/api/usuarios/{id}` | `TODOS` | Path `id` | `200 UsuarioResponseDTO` | `404` si no existe; `403` si un usuario no `ADMIN` consulta un `id` distinto al propio (protección IDOR). |
 | `PUT` | `/api/usuarios/{id}` | `ADMIN, TAQ` | `UsuarioUpdateDTO` | `200 UsuarioResponseDTO` | |
 | `PATCH` | `/api/usuarios/{id}/password` | `TODOS` | `ChangePasswordRequest` | `200 Map("mensaje")` | Valida `passwordActual` y revoca tokens previos. |
 | `PATCH` | `/api/usuarios/{id}/inactivar` | `ADMIN` | Path `id` | `200 UsuarioResponseDTO` | Pasa a `INACTIVO` y bloquea token en blacklist. |
 | `PATCH` | `/api/usuarios/{id}/activar` | `ADMIN` | Path `id` | `200 UsuarioResponseDTO` | Pasa a `ACTIVO`. |
-| `GET` | `/api/usuarios/rol/{rol}` | `ADMIN, TAQ` | Path `rol` | `200 List<UsuarioResponseDTO>` | Filtra por `ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO`. |
+| `GET` | `/api/usuarios/rol/{rol}` | `ADMIN` | Path `rol` | `200 List<UsuarioResponseDTO>` | Filtra por `ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO`, `COORDINADOR`. |
 | `DELETE` | `/api/usuarios/{id}` | `ADMIN` | Path `id` | `204 No Content` | |
 
 ### 2.3 Clientes y Menores (`ClienteController` — `/api/clientes`)
@@ -79,7 +79,7 @@
 | `GET` | `/api/atracciones/activas` | `TODOS` | — | `200 List<AtraccionResponseDTO>` | Solo `estado == ACTIVO`. |
 | `GET` | `/api/atracciones/{id}` | `TODOS` | Path `id` | `200 AtraccionResponseDTO` | |
 | `PUT` | `/api/atracciones/{id}` | `ADMIN` | `AtraccionRequestDTO` | `200 AtraccionResponseDTO` | |
-| `PATCH` | `/api/atracciones/{id}/estado` | `ADMIN, COORD` | Query `?estado=` | `200 AtraccionResponseDTO` | `ACTIVO`, `INACTIVO`, `MANTENIMIENTO`, `FUERA_DE_SERVICIO`. Difunde WS `ESTADO_ATRACCION_CAMBIADO`. |
+| `PATCH` | `/api/atracciones/{id}/estado` | `ADMIN, COORD` | Query `?estado=` | `200 AtraccionResponseDTO` | `ACTIVO`, `INACTIVO`, `MANTENIMIENTO`, `FUERA_DE_SERVICIO`. `COORD` solo puede alternar `ACTIVO` <-> `FUERA_DE_SERVICIO` (`403` en `INACTIVO`/`MANTENIMIENTO`). Difunde WS `ESTADO_ATRACCION_CAMBIADO` tras commit. |
 | `DELETE` | `/api/atracciones/{id}` | `ADMIN` | Path `id` | `204 No Content` | Bloquea si tiene ventas/sesiones históricas. |
 | `POST` | `/api/tarifas-tiempo` (o `/api/rates`) | `ADMIN` | `TarifaTiempoRequestDTO` | `201 TarifaTiempoResponseDTO` | `409` si `(atraccionId, duracionMinutos)` ya existe. |
 | `GET` | `/api/tarifas-tiempo/atraccion/{atraccionId}` (o `/attraction/{atraccionId}`) | `TODOS` | Path `atraccionId` | `200 List<TarifaTiempoResponseDTO>` | |
@@ -137,7 +137,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/operario/estacion-activa` | `OPE, ADMIN` | — | `200 EstacionTrabajoDTO` | Obtiene la estación asignada al operario autenticado. |
 | `POST` | `/api/operacion/escanear` | `OPE, ADMIN` | `EscaneoQrRequestDTO` | `200 ValidacionTicketResponseDTO` | Acepta UUID completo o prefijo corto (ej. `TDN-XXXXXXXX`). Registra siempre en `log_escaneo_qr`. Lanza `TicketInvalidoOperacionException` (`409`/`404`/`400`) si falla validación. |
-| `POST` | `/api/operacion/iniciar-sesion` | `OPE, ADMIN` | `InicioSesionRequestDTO` | `200 SesionJuegoResponseDTO` | Pasa ticket a `EN_USO`, crea `SesionJuego`, publica WS `NUEVO_INGRESO`. |
+| `POST` | `/api/operacion/iniciar-sesion` | `OPE, ADMIN` | `InicioSesionRequestDTO` | `200 SesionJuegoResponseDTO` | Pasa ticket a `EN_USO`, crea `SesionJuego`, publica WS `NUEVO_INGRESO` tras commit. `409` si la atracción no está `ACTIVO`. |
 | `GET` | `/api/operacion/cola/{atraccionId}` | `TODOS` | Path `atraccionId` | `200 ColaAtraccionResponseDTO` | Sesiones activas (`EN_CURSO`, `PAUSADA`) y cupos libres. |
 | `POST` | `/api/operacion/sesiones/{id}/pausar` | `OPE, ADMIN` | `PausaRequestDTO` | `200 SesionJuegoResponseDTO` | Congela `tiempoRestantePausa`, crea `LogIncidentePausa`, publica WS `PAUSA`. |
 | `POST` | `/api/operacion/sesiones/{id}/reanudar` | `OPE, ADMIN` | Path `id` | `200 SesionJuegoResponseDTO` | Recalcula `horaFin`, cierra `LogIncidentePausa`, publica WS `REANUDACION`. |
@@ -148,6 +148,7 @@
 | `GET` | `/api/operacion/atraccion/{id}/aforo-actual` | `TODOS` | Path `id` | `200 AforoActualDTO` | Ocupación activa, capacidad máxima y porcentaje. |
 | `POST` | `/api/operacion/vincular` | `OPE, ADMIN` | `VincularEstacionRequestDTO` | `200 EstacionTrabajoDTO` | Vincula al operario autenticado a la estación seleccionada creando o reactivando la asignación. Lanza `409` si ya está ocupada por otro operario o `404`/`400` si está inactiva/no existe. |
 | `POST` | `/api/operacion/desvincular` | `OPE, ADMIN` | — | `204 No Content` | Desvincula al operario autenticado de su estación activa actual pasando la asignación a `FINALIZADA`. |
+| `POST` | `/api/operacion/autorizar-sobreaforo` | `OPE, COORD, ADMIN` | `AutorizarSobreaforoRequestDTO` | `204 No Content` | Valida `SUPERVISOR_PIN` (comparación en tiempo constante) o contraseña de `ADMIN`/`COORD` activo (`401` si inválido, `404` si atracción no existe). |
 
 ### 2.11 Reportes y Auditoría (`ReporteController` — `/api/reportes`, `AuditoriaController` — `/api/auditoria`)
 | Método | Ruta | Rol | Request (Query / Path) | Response |
@@ -170,7 +171,7 @@
 | `POST` | `/api/reportes-atraccion` | `COORD, ADMIN` | `ReporteAtraccionRequestDTO` | `201 ReporteAtraccionResponseDTO` | Registra daño/falta de suplementos; si `desactivarAtraccion=true` marca `FUERA_DE_SERVICIO`. |
 | `GET` | `/api/reportes-atraccion` | `COORD, ADMIN` | Query `?atraccionId=&tipoReporte=&estado=` | `200 List<ReporteAtraccionResponseDTO>` | Listado filtrado ordenado por fecha descendente. |
 | `GET` | `/api/reportes-atraccion/{id}` | `COORD, ADMIN` | Path `id` | `200 ReporteAtraccionResponseDTO` | |
-| `PATCH` | `/api/reportes-atraccion/{id}/estado` | `COORD, ADMIN` | `ReporteAtraccionEstadoDTO` | `200 ReporteAtraccionResponseDTO` | Actualiza a `EN_PROCESO`/`RESUELTO`; permite reactivar la atracción al resolver. |
+| `PATCH` | `/api/reportes-atraccion/{id}/estado` | `COORD, ADMIN` | `ReporteAtraccionEstadoDTO` | `200 ReporteAtraccionResponseDTO` | Actualiza a `EN_PROCESO`/`RESUELTO`; permite reactivar la atracción al resolver (`409` si `reactivarAtraccion=true` y existen otros reportes sin resolver en la atracción). |
 
 ---
 
@@ -212,6 +213,7 @@
   - `TicketConsultaDTO`: `{ uuidCodigo, id (alias), uuid (alias), estadoTicket, estadoActual (alias), minutosContratados, fechaEmision, horaEmision (alias), menorId, menorNombre, menorDocumento, atraccionId, atraccionNombre, tipoTarifa, ventaId, detalleVentaId, clienteId, clienteDocumento, clienteNombre, horaIngresoEstimada, ingresoTexto }`
 - **Operación, Reportes y Auditoría:**
   - `VincularEstacionRequestDTO`: `{ atraccionId: Long (@NotNull) }`
+  - `AutorizarSobreaforoRequestDTO`: `{ atraccionId: Long (@NotNull), claveSupervisor: String (@NotBlank @Size(max=128)), motivo?: String (@Size(max=500)) }`
   - `EscaneoQrRequestDTO`: `{ uuid: String (@JsonAlias("codigo","uuidTicket","codigoBoleta","codigoQr")), atraccionId: Long, timestamp?: LocalDateTime }`
   - `ValidacionTicketResponseDTO`: `{ valido, mensaje, uuidTicket, estadoActual, atraccionId, atraccionNombre, tipoAtraccion, menorId, menorNombre, menorEdad, acudienteNombre, acudienteDocumento, acudienteTelefono, tipoTarifa, minutosAutorizados, intentosAutorizados, duracionMinutosBase, toleranciaMinutos, caidasLimite, fechaEmision }`
   - `InicioSesionRequestDTO`: `{ uuidTicket: UUID (@JsonAlias("ticketUuid","ticket_uuid")), atraccionId: Long, timestamp?: LocalDateTime }`

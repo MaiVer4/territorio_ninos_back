@@ -1,11 +1,11 @@
 # Esquema de Base de Datos (PostgreSQL + JPA + Flyway)
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V11__*.sql`. Última sincronización: 2026-11-19 (commit d326d97).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V12__*.sql`. Última sincronización: 2026-11-19 (commit 99cce91).
 
 ## 1. Gestión del Esquema y Convenciones
 - **Motor:** PostgreSQL (`jdbc:postgresql://localhost:5432/territorioNinos` por defecto en `DB_URL`). En tests se usa H2 en memoria.
 - **Estrategia híbrida JPA + Flyway:**
   - `spring.jpa.hibernate.ddl-auto=${DDL_AUTO:update}` crea/actualiza tablas base desde las entidades `@Entity`.
-  - `spring.flyway.enabled=${FLYWAY_ENABLED:true}` ejecuta `classpath:db/migration/V1..V9` con `baseline-on-migrate=true` y `baseline-version=0`. Todas las migraciones usan bloques `DO $$ ... IF to_regclass(...) IS NOT NULL` o `CREATE TABLE/INDEX IF NOT EXISTS` para ser 100% idempotentes.
+  - `spring.flyway.enabled=${FLYWAY_ENABLED:true}` ejecuta `classpath:db/migration/V1..V12` con `baseline-on-migrate=true` y `baseline-version=0`. Todas las migraciones usan bloques `DO $$ ... IF to_regclass(...) IS NOT NULL` o `CREATE TABLE/INDEX IF NOT EXISTS` para ser 100% idempotentes.
   - `PostgresConstraintInitializer` (`ApplicationRunner`) garantiza al arranque los índices únicos parciales de PostgreSQL (`ux_asignacion_operario_activa` y `ux_turno_caja_usuario_abierto`), omitiéndolos silenciosamente en H2.
 - **Claves primarias (PK):**
   - Todas las tablas usan `BIGSERIAL` (`Long` con `GenerationType.IDENTITY`), **excepto** `tickets`, cuya PK es `uuid_codigo` (`UUID` v4 generado por `UUIDGeneratorService` e insertado vía `Persistable<UUID>` para evitar `SELECT` previo al `INSERT`).
@@ -226,3 +226,4 @@ erDiagram
 - **`V9__reportes_auditoria_y_estadisticas.sql`**: Añade `atraccion_id` y `tipo_pausa` a `log_incidente_pausa`, y crea `auditoria_tickets` con sus índices.
 - **`V10__ticket_hora_ingreso_estimada.sql`**: Añade `hora_ingreso_estimada TIMESTAMP` (nullable) a `tickets` para sobreventa con cola FIFO.
 - **`V11__rol_coordinador_y_reportes_atraccion.sql`**: Inserta rol `COORDINADOR`, libera constraints CHECK para `FUERA_DE_SERVICIO` y crea tabla `reportes_atraccion`.
+- **`V12__restaurar_check_constraints_roles_y_atracciones.sql`**: Recrea de forma idempotente `chk_roles_nombre` (incluye `COORDINADOR`) y `chk_atracciones_estado` (incluye `FUERA_DE_SERVICIO`).
