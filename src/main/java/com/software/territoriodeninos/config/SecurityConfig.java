@@ -68,7 +68,27 @@ public class SecurityConfig {
                 "http://172.28.*:*",
                 "http://172.29.*:*",
                 "http://172.30.*:*",
-                "http://172.31.*:*"
+                "http://172.31.*:*",
+                "https://localhost:*",
+                "https://127.0.0.1:*",
+                "https://192.168.*:*",
+                "https://10.*:*",
+                "https://172.16.*:*",
+                "https://172.17.*:*",
+                "https://172.18.*:*",
+                "https://172.19.*:*",
+                "https://172.20.*:*",
+                "https://172.21.*:*",
+                "https://172.22.*:*",
+                "https://172.23.*:*",
+                "https://172.24.*:*",
+                "https://172.25.*:*",
+                "https://172.26.*:*",
+                "https://172.27.*:*",
+                "https://172.28.*:*",
+                "https://172.29.*:*",
+                "https://172.30.*:*",
+                "https://172.31.*:*"
         ));
         if (allowedOrigin != null && !allowedOrigin.isBlank()) {
             for (String origin : allowedOrigin.split(",")) {
