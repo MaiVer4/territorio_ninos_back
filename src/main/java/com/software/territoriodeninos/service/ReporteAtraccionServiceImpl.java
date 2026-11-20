@@ -6,6 +6,7 @@ import com.software.territoriodeninos.dto.ReporteAtraccionResponseDTO;
 import com.software.territoriodeninos.entity.Atraccion;
 import com.software.territoriodeninos.entity.ReporteAtraccion;
 import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
 import com.software.territoriodeninos.repository.AtraccionRepository;
@@ -104,6 +105,16 @@ public class ReporteAtraccionServiceImpl implements ReporteAtraccionService {
             reporte.setFechaResolucion(LocalDateTime.now());
             reporte.setUsuarioResuelve(usuario);
             if (Boolean.TRUE.equals(request.reactivarAtraccion()) && reporte.getAtraccion() != null) {
+                long otrosPendientes = reporteAtraccionRepository.countByAtraccionIdAndEstadoNotAndIdNot(
+                        reporte.getAtraccion().getId(),
+                        EstadoReporteAtraccion.RESUELTO,
+                        reporte.getId()
+                );
+                if (otrosPendientes > 0) {
+                    throw new ConflictoException(
+                            "No se puede reactivar la atracción porque aún tiene " + otrosPendientes + " reporte(s) pendiente(s) de resolución."
+                    );
+                }
                 atraccionService.cambiarEstado(reporte.getAtraccion().getId(), EstadoAtraccion.ACTIVO.name());
                 reporte.getAtraccion().setEstado(EstadoAtraccion.ACTIVO);
             }

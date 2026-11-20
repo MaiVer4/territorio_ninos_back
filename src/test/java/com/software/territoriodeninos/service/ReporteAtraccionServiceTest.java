@@ -7,6 +7,7 @@ import com.software.territoriodeninos.entity.Atraccion;
 import com.software.territoriodeninos.entity.ReporteAtraccion;
 import com.software.territoriodeninos.entity.Rol;
 import com.software.territoriodeninos.entity.Usuario;
+import com.software.territoriodeninos.exception.ConflictoException;
 import com.software.territoriodeninos.repository.AtraccionRepository;
 import com.software.territoriodeninos.repository.ReporteAtraccionRepository;
 import com.software.territoriodeninos.security.AuthenticatedUserProvider;
@@ -148,5 +149,34 @@ class ReporteAtraccionServiceTest {
         List<ReporteAtraccionResponseDTO> lista = service.listar(1L, TipoReporteAtraccion.FALTA_SUPLEMENTOS, EstadoReporteAtraccion.ABIERTO);
         assertEquals(1, lista.size());
         assertEquals("Sin arneses", lista.get(0).descripcion());
+    }
+
+    @Test
+    void actualizarEstado_resueltoConOtrosReportesAbiertos_lanzaConflictoYNoReactiva() {
+        atraccion.setEstado(EstadoAtraccion.FUERA_DE_SERVICIO);
+        ReporteAtraccion existente = ReporteAtraccion.builder()
+                .id(50L)
+                .atraccion(atraccion)
+                .usuarioReporta(coordinador)
+                .tipoReporte(TipoReporteAtraccion.DANO)
+                .severidad(SeveridadReporte.ALTA)
+                .descripcion("Malla rota")
+                .estado(EstadoReporteAtraccion.ABIERTO)
+                .atraccionDesactivada(true)
+                .fechaReporte(LocalDateTime.now().minusHours(1))
+                .build();
+
+        when(authenticatedUserProvider.resolverUsuario(auth)).thenReturn(Optional.of(coordinador));
+        when(reporteAtraccionRepository.findWithRelationsById(50L)).thenReturn(Optional.of(existente));
+        when(reporteAtraccionRepository.countByAtraccionIdAndEstadoNotAndIdNot(
+                1L, EstadoReporteAtraccion.RESUELTO, 50L
+        )).thenReturn(1L);
+
+        ReporteAtraccionEstadoDTO dto = new ReporteAtraccionEstadoDTO(
+                EstadoReporteAtraccion.RESUELTO, "Malla reparada", true
+        );
+
+        assertThrows(ConflictoException.class, () -> service.actualizarEstado(50L, dto, auth));
+        verify(atraccionService, never()).cambiarEstado(anyLong(), anyString());
     }
 }

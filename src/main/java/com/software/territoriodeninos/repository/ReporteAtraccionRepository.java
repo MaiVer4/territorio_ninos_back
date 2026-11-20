@@ -32,5 +32,5 @@ public interface ReporteAtraccionRepository extends JpaRepository<ReporteAtracci
     @EntityGraph(attributePaths = {"atraccion", "usuarioReporta", "usuarioResuelve"})
     Optional<ReporteAtraccion> findWithRelationsById(Long id);
 
-    long countByAtraccionIdAndEstadoNot(Long atraccionId, EstadoReporteAtraccion estado);
+    long countByAtraccionIdAndEstadoNotAndIdNot(Long atraccionId, EstadoReporteAtraccion estado, Long id);
 }
