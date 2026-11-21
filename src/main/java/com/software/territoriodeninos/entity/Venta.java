@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.entity;
 
+import com.software.territoriodeninos.util.CanalVenta;
 import com.software.territoriodeninos.util.EstadoVenta;
 import com.software.territoriodeninos.util.MetodoPago;
 import jakarta.persistence.*;
@@ -32,9 +33,17 @@ public class Venta {
     @JoinColumn(name = "cliente_id", nullable = false, updatable = false)
     private Cliente cliente;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "turno_caja_id", nullable = false, updatable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "turno_caja_id", updatable = false)
     private TurnoCaja turnoCaja;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "canal_venta", nullable = false, length = 20, updatable = false)
+    @Builder.Default
+    private CanalVenta canalVenta = CanalVenta.TAQUILLA;
+
+    @Column(name = "codigo_orden", length = 40, updatable = false)
+    private String codigoOrden;
 
     @Column(name = "monto_total", nullable = false, precision = 12, scale = 2, updatable = false)
     private BigDecimal montoTotal;
@@ -99,6 +108,9 @@ public class Venta {
         }
         if (this.congelada == null) {
             this.congelada = true;
+        }
+        if (this.canalVenta == null) {
+            this.canalVenta = CanalVenta.TAQUILLA;
         }
     }
 

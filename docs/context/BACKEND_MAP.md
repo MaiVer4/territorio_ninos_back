@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Servicios del Backend
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-19 (commit 3d51072).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-20 (commit e622fb4).
 
 ## 1. Stack, Convenciones y Reglas de Arquitectura
 - **Stack:** Java 21, Spring Boot `4.0.6`, Spring Security + JWT (`jjwt`), Spring Data JPA (Hibernate), Flyway, WebSocket STOMP, ZXing (QR), OpenPDF / CSV, Lombok `1.18.38`.
@@ -17,15 +17,15 @@
 | Paquete | Propósito |
 | :--- | :--- |
 | `config/` | `SecurityConfig` (JWT stateless, CORS), `WebSocketConfig` (`/ws-operacion`), `SwaggerConfig`, `PostgresConstraintInitializer` (índices únicos parciales). |
-| `controller/` | 14 pares `*Api.java` + `*Controller.java` bajo `/api/...`. |
-| `dto/` | 46 clases/records de transferencia de datos y eventos WebSocket. |
+| `controller/` | 15 controladores bajo `/api/...` (14 con pares `*Api.java` + `*Controller.java`, y `TiendaPublicaController`). |
+| `dto/` | DTOs de dominio y paquete dedicado `dto/tienda/` para compras online. |
 | `entity/` | 19 entidades JPA mapeadas a PostgreSQL. |
 | `exception/` | `GlobalExceptionHandler` + 11 excepciones de dominio (`ReglaNegocioException`, `RecursoNoEncontradoException`, `ConflictoException`, `TurnoConflictoException`, `TicketInvalidoOperacionException`, etc.). |
 | `mapper/` | `UsuarioMapper`. |
 | `repository/` | 19 interfaces `JpaRepository` con queries JPQL y nativas para reportes, aforo y búsqueda flexible de tickets. |
 | `security/` | `JwtAuthenticationFilter`, `JwtUtil`, `AuthenticatedUserProvider`, `LoginAttemptService` (rate limit login), `TokenBlacklistService` (revocación JWT en memoria). |
-| `service/` | 19 pares `*Service` + `*ServiceImpl`, más `OperacionWebSocketPublisher` y `SesionJuegoMonitorScheduler`. |
-| `util/` | 12 Enums de dominio + `FechaUtils` (parseo flexible de rangos), `HashUtil` (SHA-256), `TicketPrintFormatter` (tirilla térmica 58/80mm). |
+| `service/` | 20 servicios (`*Service` + `*ServiceImpl`), más `OperacionWebSocketPublisher` y `SesionJuegoMonitorScheduler`. |
+| `util/` | 13 Enums de dominio (`CanalVenta`, etc.) + `FechaUtils`, `HashUtil`, `TicketPrintFormatter`. |
 
 ---
 
@@ -53,6 +53,8 @@
 | `ExportacionReporteServiceImpl` | `exportarPdf`, `exportarCsv` | Genera archivos descargables PDF y CSV UTF-8 con BOM para reportes de turnos, rotación e incidentes. | `ConciliacionTurnoService`, `AuditoriaOperacionService`, `ConfiguracionParqueService` |
 | `AuditoriaOperacionServiceImpl` | `registrarTransicionTicket`, `consultarTimelinePorCriterio`, `consultarIncidentes` | Bitácora inmutable de cambios de estado de boletas (`auditoria_tickets`) y consulta de pausas/incidentes. | `AuditoriaTicketRepository`, `LogIncidentePausaRepository`, `TicketRepository` |
 | `ReporteAtraccionServiceImpl` | `crear`, `listar`, `obtenerPorId`, `actualizarEstado` | Gestión de reportes de novedades en atracciones; impide reactivar (`ConflictoException`) si existen otros reportes abiertos (`countByAtraccionIdAndEstadoNotAndIdNot`). | `ReporteAtraccionRepository`, `AtraccionRepository`, `AtraccionService`, `AuthenticatedUserProvider` |
+| `TiendaServiceImpl` | `obtenerCatalogoOnline`, `procesarCompraOnline`, `consultarBoletosCliente` | Gestión de compras online públicas: filtro honeypot, registro de clientes/menores invitados, validación de edades, emisión de boletas en `PAGADO` y notificación por correo. | `AtraccionRepository`, `TarifaTiempoRepository`, `TarifaEventoRepository`, `ClienteRepository`, `MenorRepository`, `VentaRepository`, `TicketRepository`, `ConfiguracionParqueRepository`, `UUIDGeneratorService`, `AuditoriaOperacionService`, `EmailService` |
+| `EmailServiceImpl` | `enviarCorreoRecuperacion`, `enviarBoletasCompraOnline` | Envío asíncrono y resiliente de correos SMTP para restablecimiento de contraseña y confirmación de compra online con desglose de boletas. | `JavaMailSender` |
 
 ---
 

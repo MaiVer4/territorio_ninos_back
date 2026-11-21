@@ -1,11 +1,11 @@
 # Esquema de Base de Datos (PostgreSQL + JPA + Flyway)
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V12__*.sql`. Última sincronización: 2026-11-19 (commit 99cce91).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V13__*.sql`. Última sincronización: 2026-11-20 (commit e622fb4).
 
 ## 1. Gestión del Esquema y Convenciones
 - **Motor:** PostgreSQL (`jdbc:postgresql://localhost:5432/territorioNinos` por defecto en `DB_URL`). En tests se usa H2 en memoria.
 - **Estrategia híbrida JPA + Flyway:**
   - `spring.jpa.hibernate.ddl-auto=${DDL_AUTO:update}` crea/actualiza tablas base desde las entidades `@Entity`.
-  - `spring.flyway.enabled=${FLYWAY_ENABLED:true}` ejecuta `classpath:db/migration/V1..V12` con `baseline-on-migrate=true` y `baseline-version=0`. Todas las migraciones usan bloques `DO $$ ... IF to_regclass(...) IS NOT NULL` o `CREATE TABLE/INDEX IF NOT EXISTS` para ser 100% idempotentes.
+  - `spring.flyway.enabled=${FLYWAY_ENABLED:true}` ejecuta `classpath:db/migration/V1..V13` con `baseline-on-migrate=true` y `baseline-version=0`. Todas las migraciones usan bloques `DO $$ ... IF to_regclass(...) IS NOT NULL` o `CREATE TABLE/INDEX IF NOT EXISTS` para ser 100% idempotentes.
   - `PostgresConstraintInitializer` (`ApplicationRunner`) garantiza al arranque los índices únicos parciales de PostgreSQL (`ux_asignacion_operario_activa` y `ux_turno_caja_usuario_abierto`), omitiéndolos silenciosamente en H2.
 - **Claves primarias (PK):**
   - Todas las tablas usan `BIGSERIAL` (`Long` con `GenerationType.IDENTITY`), **excepto** `tickets`, cuya PK es `uuid_codigo` (`UUID` v4 generado por `UUIDGeneratorService` e insertado vía `Persistable<UUID>` para evitar `SELECT` previo al `INSERT`).
@@ -144,7 +144,7 @@ erDiagram
   | `observaciones` | `VARCHAR(1000)` / `String` | SÍ | |
 
 - **`ventas`** (`entity/Venta.java`) y **`detalles_venta`** (`entity/DetalleVenta.java`):
-  - `ventas`: `id` (PK), `cliente_id` (FK -> `clientes`), `turno_caja_id` (FK -> `turnos_caja`), `monto_total` (`NUMERIC(12,2) NOT NULL`), `subtotal`, `descuento`, `impuestos`, `monto_recibido`, `cambio` (`NUMERIC(12,2)`), `metodo_pago` (`VARCHAR(30)` / `MetodoPago`), `estado_venta` (`VARCHAR(20)` / `EstadoVenta`, default `COMPLETADA`), `fecha_venta` (`TIMESTAMP NOT NULL`), `congelada` (`BOOLEAN NOT NULL DEFAULT TRUE`, V6 — impide alterar tarifas históricas), `observaciones` (`VARCHAR(500)`).
+  - `ventas`: `id` (PK), `cliente_id` (FK -> `clientes`), `turno_caja_id` (FK -> `turnos_caja`, nullable desde V13 para ventas online), `canal_venta` (`VARCHAR(20) NOT NULL DEFAULT 'TAQUILLA'` / `CanalVenta`: `TAQUILLA`, `ONLINE`), `codigo_orden` (`VARCHAR(50)`, idx `idx_ventas_codigo_orden`), `monto_total` (`NUMERIC(12,2) NOT NULL`), `subtotal`, `descuento`, `impuestos`, `monto_recibido`, `cambio` (`NUMERIC(12,2)`), `metodo_pago` (`VARCHAR(30)` / `MetodoPago`), `estado_venta` (`VARCHAR(20)` / `EstadoVenta`, default `COMPLETADA`), `fecha_venta` (`TIMESTAMP NOT NULL`), `congelada` (`BOOLEAN NOT NULL DEFAULT TRUE`, V6 — impide alterar tarifas históricas), `observaciones` (`VARCHAR(500)`).
   - `detalles_venta`: `id` (PK), `venta_id` (FK -> `ventas`), `atraccion_id` (FK -> `atracciones`), `menor_id` (FK -> `menores`, nullable), `tipo_tarifa` (`VARCHAR(20)` / `TipoTarifa`), `tarifa_tiempo_id` (`BIGINT`), `tarifa_evento_id` (`BIGINT`), `cantidad` (`INTEGER NOT NULL`), `precio_unitario` (`NUMERIC(12,2) NOT NULL`), `subtotal` (`NUMERIC(12,2) NOT NULL`).
 
 - **`tickets`** (`entity/Ticket.java` implements `Persistable<UUID>`):
@@ -201,6 +201,7 @@ erDiagram
 | `EstadoConciliacionTurno` | `CUADRADO`, `SOBRANTE`, `FALTANTE` | Calculado en reportes de cierre de turno. |
 | `MetodoPago` | `EFECTIVO`, `TARJETA`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `TRANSFERENCIA`, `DATAFONO`, `NEQUI`, `DAVIPLATA`, `PSE`, `MIXTO` | Acepta alias `CASH`, `CARD`, `DEBITO`, `CREDITO`, `TRANSFER`, `POS`. |
 | `EstadoVenta` | `PAGADO`, `COMPLETADA`, `PENDIENTE`, `ANULADA`, `CANCELADA` | Acepta `"PAGADA"/"EXITOSA" -> PAGADO`, `"COMPLETADO" -> COMPLETADA`. |
+| `CanalVenta` | `TAQUILLA`, `ONLINE` | Canal de venta: taquilla física vs portal web público (V13). |
 | `EstadoTicket` | `PAGADO`, `EN_USO`, `PAUSADO`, `CONSUMIDO`, `VENCIDO`, `ANULADO` | Ciclo normal: `PAGADO -> EN_USO (o PAUSADO) -> CONSUMIDO`. |
 | `EstadoSesionJuego` | `EN_CURSO`, `PAUSADA`, `FINALIZADA` | Sincronizado con el estado del `Ticket`. |
 
@@ -227,3 +228,4 @@ erDiagram
 - **`V10__ticket_hora_ingreso_estimada.sql`**: Añade `hora_ingreso_estimada TIMESTAMP` (nullable) a `tickets` para sobreventa con cola FIFO.
 - **`V11__rol_coordinador_y_reportes_atraccion.sql`**: Inserta rol `COORDINADOR`, libera constraints CHECK para `FUERA_DE_SERVICIO` y crea tabla `reportes_atraccion`.
 - **`V12__restaurar_check_constraints_roles_y_atracciones.sql`**: Recrea de forma idempotente `chk_roles_nombre` (incluye `COORDINADOR`) y `chk_atracciones_estado` (incluye `FUERA_DE_SERVICIO`).
+- **`V13__soporte_ventas_online.sql`**: Hace `turno_caja_id` nullable en `ventas` para compras web, agrega `canal_venta VARCHAR(20) NOT NULL DEFAULT 'TAQUILLA'`, `codigo_orden VARCHAR(50)` e índice `idx_ventas_codigo_orden`.

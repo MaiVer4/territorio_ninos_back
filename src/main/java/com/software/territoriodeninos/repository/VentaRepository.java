@@ -21,6 +21,9 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     @EntityGraph(attributePaths = {"cliente", "turnoCaja", "detalles", "detalles.atraccion", "detalles.menor"})
     Optional<Venta> findById(Long id);
 
+    @EntityGraph(attributePaths = {"cliente", "turnoCaja", "detalles", "detalles.atraccion", "detalles.menor"})
+    Optional<Venta> findByCodigoOrden(String codigoOrden);
+
     /**
      * Consulta el histórico de ventas de un turno de caja específico ordenado de la más reciente a la más antigua.
      */

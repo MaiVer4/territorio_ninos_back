@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-19 (commit 3d51072).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-20 (commit e622fb4).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -10,7 +10,7 @@
   - Revocación en memoria: `TokenBlacklistService` invalida tokens al hacer `/api/auth/logout`, cambiar contraseña o inactivar usuario.
   - Protección fuerza bruta: `LoginAttemptService` bloquea temporalmente tras intentos fallidos (HTTP 429 `CuentaBloqueadaException`).
 - **Rutas públicas (`permitAll` en `SecurityConfig`):**
-  - `/api/auth/**`, `/ws-operacion/**`, `/error`, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`.
+  - `/api/auth/**`, `/api/tienda/**`, `/ws-operacion/**`, `/error`, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`.
 - **CORS:** Permite orígenes `http://localhost:*`, `http://127.0.0.1:*`, redes privadas (`192.168.*.*`, `10.*.*`, `172.16-31.*.*`) y `${FRONTEND_URL:http://localhost:4200}`.
 - **Estructura Estándar de Error (`GlobalExceptionHandler`):**
   - `ErrorResponse`: `{ "status": int, "mensaje": String, "detalles": String, "timestamp": LocalDateTime }`
@@ -173,9 +173,23 @@
 | `GET` | `/api/reportes-atraccion/{id}` | `COORD, ADMIN` | Path `id` | `200 ReporteAtraccionResponseDTO` | |
 | `PATCH` | `/api/reportes-atraccion/{id}/estado` | `COORD, ADMIN` | `ReporteAtraccionEstadoDTO` | `200 ReporteAtraccionResponseDTO` | Actualiza a `EN_PROCESO`/`RESUELTO`; permite reactivar la atracción al resolver (`409` si `reactivarAtraccion=true` y existen otros reportes sin resolver en la atracción). |
 
+### 2.13 Tienda Pública Online (`TiendaPublicaController` — `/api/tienda`)
+| Método | Ruta | Rol | Request | Response | Notas / Errores |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/tienda/catalogo` | PÚBLICO | — | `200 List<CatalogoAtraccionOnlineDTO>` | Retorna atracciones `ACTIVO` con tarifas vigentes, cupos libres y edades. |
+| `POST` | `/api/tienda/comprar` | PÚBLICO | `CompraOnlineRequestDTO` | `201 CompraOnlineResponseDTO` | Checkout invitado con honeypot; emite boletas en estado `PAGADO` y envía correo de confirmación. `400` por validación o trampa honeypot, `404` si atracción no existe. |
+| `GET` | `/api/tienda/mis-boletos` | PÚBLICO | Query `?identificador=` | `200 List<TicketOnlineDTO>` | Búsqueda por documento o correo de boletas activas (`PAGADO`, `EN_USO`, `PAUSADO`) del día. |
+
 ---
 
 ## 3. Diccionario Compacto de DTOs y Alias JSON (`dto/*.java`)
+
+- **DTOs de Tienda Online (`dto/tienda/`):**
+  - `CatalogoAtraccionOnlineDTO`: `{ id, nombre, descripcion, tipoAtraccion, cuposLibres, capacidadMaxima, edadMinima, edadMaxima, tarifaMinuto, duracionRecomendadaMinutos, tarifasTiempo: List<TarifaTiempoDTO>, tarifasEvento: List<TarifaEventoDTO> }`
+  - `CompraOnlineRequestDTO`: `{ documentoAdulto, nombreAdulto, telefonoAdulto, correoAdulto, metodoPago, codigoReferenciaPago, items: List<ItemCompraOnlineDTO>, website: String (honeypot) }`
+  - `ItemCompraOnlineDTO`: `{ atraccionId, tipoTarifa, tarifaTiempoId, tarifaEventoId, duracionMinutos, cantidad, nombreMenor, edadMenor, documentoMenor }`
+  - `TicketOnlineDTO`: `{ uuidCodigo, codigoCorto, nombreAtraccion, tipoAtraccion, tipoTarifa, duracionMinutos, intentosTotales, intentosRestantes, nombreMenor, estadoTicket, fechaEmision, horaIngresoEstimada }`
+  - `CompraOnlineResponseDTO`: `{ ventaId, codigoOrden, fechaVenta, montoTotal, subtotal, impuestos, metodoPago, canalVenta, clienteNombre, clienteDocumento, boletas: List<TicketOnlineDTO>, mensaje }`
 
 > Los alias (`@JsonAlias` en entrada y `@JsonProperty` adicionales en salida) existen para compatibilidad directa con `territorio-front`. **No eliminarlos.**
 

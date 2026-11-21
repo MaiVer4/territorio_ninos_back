@@ -25,4 +25,9 @@ public interface MenorRepository extends JpaRepository<Menor, Long> {
      * @return Lista de menores asociados
      */
     List<Menor> findByClienteId(Long clienteId);
+
+    /**
+     * Busca un menor por cliente y nombre (ignorando mayúsculas y minúsculas).
+     */
+    Optional<Menor> findByClienteIdAndNombreCompletoIgnoreCase(Long clienteId, String nombreCompleto);
 }

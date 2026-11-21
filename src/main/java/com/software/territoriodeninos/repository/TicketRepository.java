@@ -93,6 +93,24 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
         """)
     List<Ticket> buscarPorDocumentoAcudiente(@Param("documento") String documento);
 
+    @Query("""
+        SELECT t FROM Ticket t
+        JOIN FETCH t.detalleVenta dv
+        JOIN FETCH dv.atraccion a
+        JOIN FETCH dv.venta v
+        JOIN FETCH v.cliente c
+        LEFT JOIN FETCH t.menor m
+        WHERE LOWER(c.numeroDocumento) = LOWER(:documento)
+          AND (LOWER(c.correo) = LOWER(:correo) OR :correo IS NULL)
+          AND t.fechaEmision >= :desde
+        ORDER BY t.fechaEmision DESC
+        """)
+    List<Ticket> buscarBoletosActivosCliente(
+            @Param("documento") String documento,
+            @Param("correo") String correo,
+            @Param("desde") java.time.LocalDateTime desde
+    );
+
     @Query("SELECT t.uuidCodigo FROM Ticket t WHERE t.uuidCodigo IN :uuids")
     Set<UUID> findExistingUuids(@Param("uuids") Collection<UUID> uuids);
 
