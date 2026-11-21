@@ -1,5 +1,11 @@
 package com.software.territoriodeninos.service;
 
+import com.software.territoriodeninos.dto.tienda.TicketOnlineDTO;
+import com.software.territoriodeninos.util.MetodoPago;
+
+import java.math.BigDecimal;
+import java.util.List;
+
 /**
  * Interfaz para el servicio de envío de correos electrónicos.
  * Aplica el Principio de Inversión de Dependencias (DIP):
@@ -24,5 +30,21 @@ public interface EmailService {
      * @param codigoOrden código de orden de compra
      * @param tickets lista de tickets digitales emitidos
      */
-    void enviarBoletasCompraOnline(String destinatario, String nombreCliente, String codigoOrden, java.util.List<com.software.territoriodeninos.dto.tienda.TicketOnlineDTO> tickets);
+    void enviarBoletasCompraOnline(String destinatario, String nombreCliente, String codigoOrden, List<TicketOnlineDTO> tickets);
+
+    /**
+     * Envía un correo con el resumen de factura/comprobante de pago y los boletos digitales adquiridos.
+     */
+    default void enviarBoletasCompraOnline(
+            String destinatario,
+            String nombreCliente,
+            String codigoOrden,
+            BigDecimal subtotal,
+            BigDecimal impuestos,
+            BigDecimal total,
+            MetodoPago metodoPago,
+            List<TicketOnlineDTO> tickets
+    ) {
+        enviarBoletasCompraOnline(destinatario, nombreCliente, codigoOrden, tickets);
+    }
 }

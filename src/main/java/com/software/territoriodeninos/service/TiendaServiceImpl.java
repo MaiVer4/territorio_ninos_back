@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -24,6 +26,9 @@ import java.util.*;
 @RequiredArgsConstructor
 public class TiendaServiceImpl implements TiendaService {
 
+    private static final List<EstadoSesionJuego> ESTADOS_SESION_ACTIVAS =
+            List.of(EstadoSesionJuego.EN_CURSO, EstadoSesionJuego.PAUSADA);
+
     private final AtraccionRepository atraccionRepository;
     private final TarifaTiempoRepository tarifaTiempoRepository;
     private final TarifaEventoRepository tarifaEventoRepository;
@@ -35,26 +40,77 @@ public class TiendaServiceImpl implements TiendaService {
     private final AuditoriaTicketRepository auditoriaTicketRepository;
     private final ConfiguracionParqueRepository configuracionParqueRepository;
     private final EmailService emailService;
+    private final SesionJuegoRepository sesionJuegoRepository;
+    private final EstimadorIngresoService estimadorIngresoService;
+    private final AtraccionService atraccionService;
 
     @Override
     @Transactional(readOnly = true)
     public List<CatalogoAtraccionOnlineDTO> obtenerCatalogoPublico() {
         List<Atraccion> atracciones = atraccionRepository.findAll();
-        List<CatalogoAtraccionOnlineDTO> resultado = new ArrayList<>();
+        if (atracciones == null || atracciones.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> atraccionIds = atracciones.stream()
+                .map(Atraccion::getId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Map<Long, Integer> ocupacionPorAtraccion = new HashMap<>();
+        if (sesionJuegoRepository != null && !atraccionIds.isEmpty()) {
+            List<SesionJuego> sesiones = sesionJuegoRepository.findByAtraccionIdInAndEstadoSesionIn(
+                    atraccionIds, ESTADOS_SESION_ACTIVAS
+            );
+            if (sesiones != null) {
+                for (SesionJuego s : sesiones) {
+                    if (s.getAtraccion() != null && s.getAtraccion().getId() != null) {
+                        ocupacionPorAtraccion.merge(s.getAtraccion().getId(), 1, Integer::sum);
+                    }
+                }
+            }
+        }
+
+        Map<Long, Integer> duracionesTarifaTiempo = new HashMap<>();
+        Map<Long, List<TarifaTiempoResponseDTO>> tarifasTiempoPorAtraccion = new HashMap<>();
+        Map<Long, List<TarifaEventoResponseDTO>> tarifasEventoPorAtraccion = new HashMap<>();
 
         for (Atraccion atr : atracciones) {
             List<TarifaTiempo> tarifasTiempo = tarifaTiempoRepository.findByAtraccionIdAndActivoTrue(atr.getId());
-            List<TarifaEvento> tarifasEvento = tarifaEventoRepository.findByAtraccionIdAndActivoTrue(atr.getId());
-
-            List<TarifaTiempoResponseDTO> ttDTOs = tarifasTiempo.stream()
+            if (tarifasTiempo != null) {
+                for (TarifaTiempo tt : tarifasTiempo) {
+                    if (tt.getId() != null && tt.getDuracionMinutos() != null) {
+                        duracionesTarifaTiempo.put(tt.getId(), tt.getDuracionMinutos());
+                    }
+                }
+            }
+            List<TarifaTiempoResponseDTO> ttDTOs = (tarifasTiempo != null ? tarifasTiempo : List.<TarifaTiempo>of()).stream()
                     .map(t -> new TarifaTiempoResponseDTO(t.getId(), atr.getId(), atr.getNombre(), t.getDuracionMinutos(), t.getPrecio(), t.getActivo(), t.getFechaCreacion()))
                     .toList();
+            tarifasTiempoPorAtraccion.put(atr.getId(), ttDTOs);
 
-            List<TarifaEventoResponseDTO> teDTOs = tarifasEvento.stream()
+            List<TarifaEvento> tarifasEvento = tarifaEventoRepository.findByAtraccionIdAndActivoTrue(atr.getId());
+            List<TarifaEventoResponseDTO> teDTOs = (tarifasEvento != null ? tarifasEvento : List.<TarifaEvento>of()).stream()
                     .map(t -> new TarifaEventoResponseDTO(t.getId(), atr.getId(), atr.getNombre(), t.getIntentos(), t.getPrecio(), t.getActivo(), t.getFechaCreacion()))
                     .toList();
+            tarifasEventoPorAtraccion.put(atr.getId(), teDTOs);
+        }
+
+        Map<Long, LocalDateTime> proximosIngresos = estimadorIngresoService != null
+                ? estimadorIngresoService.estimarProximoIngresoBatch(atracciones, LocalDateTime.now(), duracionesTarifaTiempo)
+                : Collections.emptyMap();
+
+        List<CatalogoAtraccionOnlineDTO> resultado = new ArrayList<>();
+        for (Atraccion atr : atracciones) {
+            List<TarifaTiempoResponseDTO> ttDTOs = tarifasTiempoPorAtraccion.getOrDefault(atr.getId(), List.of());
+            List<TarifaEventoResponseDTO> teDTOs = tarifasEventoPorAtraccion.getOrDefault(atr.getId(), List.of());
 
             boolean disponible = atr.getEstado() == EstadoAtraccion.ACTIVO && (!ttDTOs.isEmpty() || !teDTOs.isEmpty() || atr.getTarifaMinuto() != null);
+            int capacidad = atr.getCapacidadMaxima() != null ? atr.getCapacidadMaxima() : 1;
+            int ocupacionActual = ocupacionPorAtraccion.getOrDefault(atr.getId(), 0);
+            int cuposLibres = Math.max(0, capacidad - ocupacionActual);
+            LocalDateTime horaProximoIngreso = proximosIngresos != null ? proximosIngresos.get(atr.getId()) : null;
+            String ingresoTexto = IngresoTextoFormatter.texto(horaProximoIngreso, atr.getTipo());
 
             resultado.add(new CatalogoAtraccionOnlineDTO(
                     atr.getId(),
@@ -69,7 +125,12 @@ public class TiendaServiceImpl implements TiendaService {
                     atr.getEdadMaxima(),
                     disponible,
                     ttDTOs,
-                    teDTOs
+                    teDTOs,
+                    atr.getTarifaMinuto(),
+                    ocupacionActual,
+                    cuposLibres,
+                    horaProximoIngreso,
+                    ingresoTexto
             ));
         }
 
@@ -158,7 +219,8 @@ public class TiendaServiceImpl implements TiendaService {
                 Long tarifaEventoId,
                 String modalidadTexto,
                 BigDecimal precioUnitario,
-                int cantidad
+                int cantidad,
+                int duracionMinutos
         ) {}
 
         List<ItemProcesado> itemsProcesados = new ArrayList<>();
@@ -197,6 +259,9 @@ public class TiendaServiceImpl implements TiendaService {
             BigDecimal precioUnitario;
             String modalidadTexto;
             TipoTarifa tipoTarifa;
+            int duracionBase = (atraccion.getDuracionMinutosBase() != null && atraccion.getDuracionMinutosBase() > 0)
+                    ? atraccion.getDuracionMinutosBase() : 15;
+            int duracionItem = duracionBase;
 
             if (item.tarifaTiempoId() != null) {
                 TarifaTiempo tt = tarifaTiempoRepository.findById(item.tarifaTiempoId())
@@ -204,6 +269,9 @@ public class TiendaServiceImpl implements TiendaService {
                 precioUnitario = tt.getPrecio();
                 modalidadTexto = tt.getDuracionMinutos() + " min";
                 tipoTarifa = TipoTarifa.TIEMPO;
+                if (tt.getDuracionMinutos() != null && tt.getDuracionMinutos() > 0) {
+                    duracionItem = tt.getDuracionMinutos();
+                }
             } else if (item.tarifaEventoId() != null) {
                 TarifaEvento te = tarifaEventoRepository.findById(item.tarifaEventoId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa de evento con ID " + item.tarifaEventoId() + " no encontrada"));
@@ -211,11 +279,10 @@ public class TiendaServiceImpl implements TiendaService {
                 modalidadTexto = te.getIntentos() + " caídas";
                 tipoTarifa = TipoTarifa.EVENTO;
             } else {
-                int duracion = atraccion.getDuracionMinutosBase() != null ? atraccion.getDuracionMinutosBase() : 15;
                 precioUnitario = (atraccion.getTarifaMinuto() != null)
-                        ? atraccion.getTarifaMinuto().multiply(BigDecimal.valueOf(duracion))
+                        ? atraccion.getTarifaMinuto().multiply(BigDecimal.valueOf(duracionBase))
                         : BigDecimal.valueOf(10000);
-                modalidadTexto = duracion + " min (Base)";
+                modalidadTexto = duracionBase + " min (Base)";
                 tipoTarifa = TipoTarifa.MINUTO_BASE;
             }
 
@@ -230,7 +297,8 @@ public class TiendaServiceImpl implements TiendaService {
                     item.tarifaEventoId(),
                     modalidadTexto,
                     precioUnitario,
-                    item.cantidad()
+                    item.cantidad(),
+                    duracionItem
             ));
         }
 
@@ -258,6 +326,28 @@ public class TiendaServiceImpl implements TiendaService {
 
         Venta ventaGuardada = ventaRepository.save(venta);
 
+        // 5.1 Estimar horas de ingreso escalonadas en cola FIFO por atracción
+        Map<Long, List<Integer>> duracionesPorAtraccion = new LinkedHashMap<>();
+        Map<Long, Atraccion> atraccionesPorId = new HashMap<>();
+        for (ItemProcesado ip : itemsProcesados) {
+            Long atrId = ip.atraccion().getId();
+            atraccionesPorId.putIfAbsent(atrId, ip.atraccion());
+            List<Integer> lista = duracionesPorAtraccion.computeIfAbsent(atrId, k -> new ArrayList<>());
+            for (int c = 0; c < ip.cantidad(); c++) {
+                lista.add(ip.duracionMinutos());
+            }
+        }
+        Map<Long, Iterator<LocalDateTime>> horasPorAtraccion = new HashMap<>();
+        LocalDateTime ahoraEstimacion = LocalDateTime.now();
+        for (Map.Entry<Long, List<Integer>> entry : duracionesPorAtraccion.entrySet()) {
+            Atraccion atr = atraccionesPorId.get(entry.getKey());
+            List<Integer> duraciones = entry.getValue();
+            List<LocalDateTime> horas = estimadorIngresoService != null
+                    ? estimadorIngresoService.estimar(atr, duraciones, ahoraEstimacion)
+                    : Collections.nCopies(duraciones.size(), (LocalDateTime) null);
+            horasPorAtraccion.put(entry.getKey(), horas.iterator());
+        }
+
         // 6. Persistir Detalles y Tickets digitales
         List<TicketOnlineDTO> ticketsEmitidos = new ArrayList<>();
 
@@ -277,10 +367,13 @@ public class TiendaServiceImpl implements TiendaService {
                     .build();
 
             DetalleVenta detalleGuardado = detalleVentaRepository.save(detalle);
+            Iterator<LocalDateTime> itHoras = horasPorAtraccion.get(item.atraccion().getId());
 
             for (int i = 0; i < item.cantidad(); i++) {
                 UUID uuidCodigo = UUID.randomUUID();
                 LocalDateTime now = LocalDateTime.now();
+                LocalDateTime horaEstimada = (itHoras != null && itHoras.hasNext()) ? itHoras.next() : null;
+                String ingresoTexto = IngresoTextoFormatter.texto(horaEstimada, item.atraccion().getTipo());
 
                 Ticket ticket = Ticket.builder()
                         .uuidCodigo(uuidCodigo)
@@ -288,6 +381,7 @@ public class TiendaServiceImpl implements TiendaService {
                         .menor(item.menor())
                         .estadoTicket(EstadoTicket.PAGADO)
                         .fechaEmision(now)
+                        .horaIngresoEstimada(horaEstimada)
                         .build();
 
                 Ticket ticketGuardado = ticketRepository.save(ticket);
@@ -314,16 +408,24 @@ public class TiendaServiceImpl implements TiendaService {
                         item.precioUnitario(),
                         ticketGuardado.getEstadoTicket(),
                         ticketGuardado.getFechaEmision(),
-                        ticketGuardado.getUuidCodigo().toString()
+                        ticketGuardado.getUuidCodigo().toString(),
+                        horaEstimada,
+                        ingresoTexto
                 ));
             }
         }
 
-        // 7. Enviar correo de respaldo
+        invalidarCacheDespuesDeCommit();
+
+        // 7. Enviar correo de respaldo con resumen de factura y hora estimada de ingreso
         emailService.enviarBoletasCompraOnline(
                 cliente.getCorreo(),
                 cliente.getNombres() + " " + cliente.getApellidos(),
                 codigoOrden,
+                subtotalAcumulado,
+                impuestos,
+                total,
+                request.metodoPago(),
                 ticketsEmitidos
         );
 
@@ -365,6 +467,8 @@ public class TiendaServiceImpl implements TiendaService {
                     String tipoTarifaStr = (t.getDetalleVenta() != null && t.getDetalleVenta().getTipoTarifa() != null)
                             ? t.getDetalleVenta().getTipoTarifa().name()
                             : "ESTANDAR";
+                    LocalDateTime horaEstimada = t.getHoraIngresoEstimada();
+                    String ingresoTexto = IngresoTextoFormatter.texto(horaEstimada, a != null ? a.getTipo() : null);
 
                     return new TicketOnlineDTO(
                             t.getUuidCodigo(),
@@ -377,9 +481,28 @@ public class TiendaServiceImpl implements TiendaService {
                             t.getDetalleVenta() != null ? t.getDetalleVenta().getPrecioUnitario() : BigDecimal.ZERO,
                             t.getEstadoTicket(),
                             t.getFechaEmision(),
-                            t.getUuidCodigo().toString()
+                            t.getUuidCodigo().toString(),
+                            horaEstimada,
+                            ingresoTexto
                     );
                 })
                 .toList();
+    }
+
+    private void invalidarCacheDespuesDeCommit() {
+        if (atraccionService == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    atraccionService.invalidarCacheCatalogo();
+                }
+            });
+        } else {
+            atraccionService.invalidarCacheCatalogo();
+        }
     }
 }
