@@ -1,5 +1,5 @@
 # Esquema de Base de Datos (PostgreSQL + JPA + Flyway)
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V13__*.sql`. Última sincronización: 2026-11-20 (commit ed54d6e).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/entity/*.java`, `util/*.java`, `config/PostgresConstraintInitializer.java`, `src/main/resources/db/migration/V1..V13__*.sql`. Última sincronización: 2026-11-20 (commit 38e2ee0).
 
 ## 1. Gestión del Esquema y Convenciones
 - **Motor:** PostgreSQL (`jdbc:postgresql://localhost:5432/territorioNinos` por defecto en `DB_URL`). En tests se usa H2 en memoria.
