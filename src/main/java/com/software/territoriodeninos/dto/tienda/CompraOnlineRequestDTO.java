@@ -1,5 +1,6 @@
 package com.software.territoriodeninos.dto.tienda;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.software.territoriodeninos.util.MetodoPago;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -12,23 +13,27 @@ import java.util.List;
 @Schema(description = "Solicitud de compra online de tickets por acudiente invitado (Guest Checkout)")
 public record CompraOnlineRequestDTO(
     @NotBlank(message = "El número de documento es obligatorio")
+    @JsonAlias({"documentoAdulto", "numeroDocumento"})
     @Schema(example = "1098765432")
     String documento,
 
     @NotBlank(message = "El nombre del acudiente es obligatorio")
+    @JsonAlias({"nombreAdulto", "nombre"})
     @Schema(example = "Carlos")
     String nombres,
 
-    @NotBlank(message = "Los apellidos del acudiente son obligatorios")
+    @JsonAlias({"apellidoAdulto", "apellido"})
     @Schema(example = "Mendoza")
     String apellidos,
 
     @NotBlank(message = "El celular de contacto es obligatorio")
+    @JsonAlias({"telefonoAdulto", "celular"})
     @Schema(example = "3101234567")
     String telefono,
 
     @NotBlank(message = "El correo electrónico es obligatorio")
     @Email(message = "El formato de correo no es válido")
+    @JsonAlias({"correoAdulto", "email"})
     @Schema(example = "carlos.mendoza@gmail.com")
     String correo,
 

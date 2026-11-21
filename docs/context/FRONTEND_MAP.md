@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Componentes del Frontend (`territorio-front`)
-> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit 6609998).
+> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit 64a39c7).
 
 ## 1. Stack, Convenciones y Reglas de Desarrollo
 - **Stack:** Angular `21.2.0` (100% Standalone Components), Signals (`signal`, `computed`, `effect`), RxJS (`HttpClient`), Tailwind CSS `3.4.19`, Angular Material Icons (`material-symbols-outlined`), STOMP/WebSocket, Vitest `4.0.8`.
@@ -15,6 +15,9 @@
 ## 2. Mapa de Rutas, Guards y Roles (`src/app/app.routes.ts`)
 | Ruta | Componente | Guard | Roles Permitidos (`data.roles`) |
 | :--- | :--- | :--- | :--- |
+| `/` | `TiendaLandingComponent` | — | Público (Cara principal del parque) |
+| `/tienda` | *(Redirección a `/`)* | — | Público |
+| `/mis-boletos` | `MisBoletosComponent` | — | Público |
 | `/login` | `LoginComponent` | — | Público |
 | `/forgot-password` | `ForgotPasswordComponent` | — | Público |
 | `/reset-password` | `ResetPasswordComponent` | — | Público |
@@ -67,10 +70,17 @@
 | `ConfiguracionService` | `GET /configuracion`, `PUT /configuracion` | — | Lectura y actualización de datos fiscales del parque, ancho de papel y tiempo de gracia. |
 | `UsuarioService` | `GET/POST/PUT/DELETE /usuarios` | — | Gestión de colaboradores (`ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO`). |
 | `NotificationService` / `SoundNotificationService` / `PosAudioService` | *(UI / Web Audio API)* | `sonidoHabilitado`, `vibracionHabilitada` | Toasts (`ToastNotificationComponent`), sonidos de confirmación de pago POS, beep de escaneo QR y alarma sonora/vibración de tiempo agotado. |
+| `TiendaService` | `GET /tienda/catalogo`, `POST /tienda/comprar`, `GET /tienda/mis-boletos` | `catalogo`, `cargandoCatalogo`, `carrito`, `carritoAbierto`, `ordenReciente`, `boletosLocales` | Gestión del portal de compras públicas, cesta de boletas con cálculo en tiempo real, simulación de pago desacoplada y persistencia de QRs para acceso sin red. |
 
 ---
 
 ## 4. Mapa de Componentes por Feature (`src/app/features/` y `shared/`)
+- **`features/tienda/`:**
+  - `pages/landing/tienda-landing.component.ts`: Cara pública del parque (`/`), hero promocional, grilla de atracciones activas, control de aforo y cesta reactiva.
+  - `pages/mis-boletos/mis-boletos.component.ts`: Visualizador y buscador de boletas del día con código QR ampliable para escáner operario e impresión térmica/PDF.
+  - `components/modalidad-modal/modalidad-modal.component.ts`: Diálogo de selección de tarifas y datos de menor con validación de edad en tiempo real.
+  - `components/carrito-drawer/carrito-drawer.component.ts`: Panel lateral/inferior de cesta y checkout de invitado con protección honeypot.
+  - `components/pasarela-modal/pasarela-modal.component.ts`: Simulador interactivo de pagos (Nequi, PSE, Tarjeta).
 - **`features/auth/pages/`:** `login`, `forgot-password`, `reset-password`, `unauthorized`.
 - **`features/taquilla/`:**
   - `pages/apertura/apertura.component.ts`: Pantalla de apertura de turno de caja antes de entrar al POS.

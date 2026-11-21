@@ -91,15 +91,31 @@ public class TiendaServiceImpl implements TiendaService {
 
         // 2. Localizar o registrar cliente
         String doc = request.documento().trim();
+        String nombresRaw = request.nombres().trim();
+        String apellidosRaw = (request.apellidos() != null && !request.apellidos().isBlank())
+                ? request.apellidos().trim()
+                : "";
+        if (apellidosRaw.isEmpty()) {
+            int idx = nombresRaw.lastIndexOf(' ');
+            if (idx > 0) {
+                apellidosRaw = nombresRaw.substring(idx + 1).trim();
+                nombresRaw = nombresRaw.substring(0, idx).trim();
+            } else {
+                apellidosRaw = "-";
+            }
+        }
+        final String nombresFinal = nombresRaw;
+        final String apellidosFinal = apellidosRaw;
+
         Cliente cliente = clienteRepository.findByNumeroDocumento(doc)
                 .map(existente -> {
                     boolean modificado = false;
-                    if (request.nombres() != null && !request.nombres().isBlank()) {
-                        existente.setNombres(request.nombres().trim());
+                    if (!nombresFinal.isBlank()) {
+                        existente.setNombres(nombresFinal);
                         modificado = true;
                     }
-                    if (request.apellidos() != null && !request.apellidos().isBlank()) {
-                        existente.setApellidos(request.apellidos().trim());
+                    if (!apellidosFinal.isBlank()) {
+                        existente.setApellidos(apellidosFinal);
                         modificado = true;
                     }
                     if (request.telefono() != null && !request.telefono().isBlank()) {
@@ -115,8 +131,8 @@ public class TiendaServiceImpl implements TiendaService {
                 .orElseGet(() -> {
                     Cliente nuevo = Cliente.builder()
                             .numeroDocumento(doc)
-                            .nombres(request.nombres().trim())
-                            .apellidos(request.apellidos().trim())
+                            .nombres(nombresFinal)
+                            .apellidos(apellidosFinal)
                             .telefono(request.telefono().trim())
                             .correo(request.correo().trim().toLowerCase())
                             .fechaRegistro(LocalDateTime.now())
