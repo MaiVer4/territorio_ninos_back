@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Componentes del Frontend (`territorio-front`)
-> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit e41fcd9).
+> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-21 (commit 133e84a).
 
 ## 1. Stack, Convenciones y Reglas de Desarrollo
 - **Stack:** Angular `21.2.0` (100% Standalone Components), Signals (`signal`, `computed`, `effect`), RxJS (`HttpClient`), Tailwind CSS `3.4.19`, Angular Material Icons (`material-symbols-outlined`), STOMP/WebSocket, Vitest `4.0.8`.
@@ -70,18 +70,18 @@
 | `ConfiguracionService` | `GET /configuracion`, `PUT /configuracion` | — | Lectura y actualización de datos fiscales del parque, ancho de papel y tiempo de gracia. |
 | `UsuarioService` | `GET/POST/PUT/DELETE /usuarios` | — | Gestión de colaboradores (`ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO`). |
 | `NotificationService` / `SoundNotificationService` / `PosAudioService` | *(UI / Web Audio API)* | `sonidoHabilitado`, `vibracionHabilitada` | Toasts (`ToastNotificationComponent`), sonidos de confirmación de pago POS, beep de escaneo QR y alarma sonora/vibración de tiempo agotado. |
-| `TiendaService` | `GET /tienda/catalogo`, `POST /tienda/comprar`, `GET /tienda/mis-boletos` | `catalogo`, `cargandoCatalogo`, `carrito`, `carritoAbierto`, `ordenReciente`, `boletasLocales` | Gestión del portal de compras públicas (preservando `ocupacionActual`, `horaProximoIngreso` e `ingresoTexto` en catálogo), cesta de boletas con cálculo en tiempo real, simulación de pago desacoplada y persistencia de QRs para acceso sin red. |
+| `TiendaService` | `GET /tienda/catalogo`, `POST /tienda/comprar`, `GET /tienda/mis-boletos` | `catalogo`, `cargandoCatalogo`, `carrito`, `carritoAbierto`, `porcentajeImpuesto`, `ordenReciente`, `boletasLocales` | Gestión del portal de compras públicas (preservando `ocupacionActual`, `horaProximoIngreso`, `ingresoTexto` e IVA real `porcentajeImpuesto` desde backend), cesta de boletas en tiempo real, verificación 2FA en `consultarBoletos` y persistencia de QRs. |
 
 ---
 
 ## 4. Mapa de Componentes por Feature (`src/app/features/` y `shared/`)
 - **`features/tienda/`:**
-  - `pages/landing/tienda-landing.component.ts`: Cara comercial y pública del parque (`/`), hero de ventas, ticker de anuncios, filtros por edad/tipo (`Todas`, `Pequeños`, `Grandes`, `Por Tiempo`, `Por Caídas`), catálogo visual con imágenes temáticas, botón de normas, sección "Cómo Funciona", paquetes de cumpleaños/eventos con cotización vía WhatsApp, pilares de confianza, acordeón interactivo de preguntas frecuentes, horarios y ubicación con botón a Google Maps.
-  - `pages/mis-boletos/mis-boletos.component.ts`: Visualizador, comprobante imprimible (`factura-compra-online`) con desglose de totales/aviso de aforo lleno y buscador de boletas del día con badges de ingreso aproximado, código QR ampliable para escáner operario e impresión térmica/PDF.
+  - `pages/landing/tienda-landing.component.ts`: Cara comercial y pública del parque (`/`), storefront e-commerce estilo parque de diversiones/Figma Make ("Tickets para Parque de Aventuras"), con configurador express de pases interactivo en el hero, boletos troquelados (voucher cards con muescas circulares y línea punteada), selector táctil de duración/precio en tarjeta, stepper de cantidad, ticker de anuncios en vivo, filtros por tipo/edad (`Todas las Boletas`, `Por Tiempo`, `Por Caídas`, `Primera Infancia`, `Exploradores`), sección "Cómo Funciona", paquetes de cumpleaños VIP, pilares de confianza, acordeón interactivo FAQ, barra flotante de bolsa en móvil y horarios/ubicación.
+  - `pages/mis-boletos/mis-boletos.component.ts`: Visualizador, comprobante imprimible (`factura-compra-online`) con desglose de totales/aviso de aforo lleno y buscador 2FA (cédula + correo/código de orden) con badges de ingreso aproximado, formato de modalidad sin unidades duplicadas y código QR ampliable.
   - `components/normas-modal/normas-modal.component.ts`: Modal accesible de normas de seguridad, aforo, requisitos de medias antideslizantes, acompañamiento y tarifas activas por atracción.
-  - `components/modalidad-modal/modalidad-modal.component.ts`: Diálogo de selección de tarifas y datos de menor con validación de edad en tiempo real.
-  - `components/carrito-drawer/carrito-drawer.component.ts`: Panel lateral/inferior de cesta con sugerencias de cross-selling inteligente y checkout de invitado con protección honeypot.
-  - `components/pasarela-modal/pasarela-modal.component.ts`: Simulador interactivo de pagos (Nequi, PSE, Tarjeta).
+  - `components/modalidad-modal/modalidad-modal.component.ts`: Diálogo de selección de tarifas (input `atraccion` reactivo vía signal y cálculo consistente de `MINUTO_BASE`) y datos de menor con validación de edad en tiempo real.
+  - `components/carrito-drawer/carrito-drawer.component.ts`: Panel lateral/inferior de cesta con sugerencias de cross-selling, checkout de invitado 100% reactivo con signals (validando cédula, nombre, celular y correo sin fallbacks ficticios), honeypot y notificaciones vía `NotificationService`.
+  - `components/pasarela-modal/pasarela-modal.component.ts`: Simulador interactivo de pagos (Nequi, PSE, Tarjeta) con limpieza de temporizador en `ngOnDestroy`.
 - **`features/auth/pages/`:** `login`, `forgot-password`, `reset-password`, `unauthorized`.
 - **`features/taquilla/`:**
   - `pages/apertura/apertura.component.ts`: Pantalla de apertura de turno de caja antes de entrar al POS.

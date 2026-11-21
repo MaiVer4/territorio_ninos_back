@@ -100,11 +100,19 @@ class TiendaServiceImplTest {
     }
 
     @Test
-    @DisplayName("obtenerCatalogoPublico - Mapea atracciones activas con tarifas de tiempo y evento")
+    @DisplayName("obtenerCatalogoPublico - Mapea atracciones activas en batch sin N+1 e incluye porcentajeImpuesto")
     void obtenerCatalogoPublico_Exito() {
-        when(atraccionRepository.findAll()).thenReturn(List.of(atraccionActiva));
-        when(tarifaTiempoRepository.findByAtraccionIdAndActivoTrue(1L)).thenReturn(List.of(tarifaTiempo));
-        when(tarifaEventoRepository.findByAtraccionIdAndActivoTrue(1L)).thenReturn(List.of());
+        ConfiguracionParque config = ConfiguracionParque.builder()
+                .aplicaImpuesto(true)
+                .porcentajeImpuesto(BigDecimal.valueOf(19))
+                .build();
+        when(atraccionRepository.findByEstadoInOrderByNombreAsc(List.of(EstadoAtraccion.ACTIVO)))
+                .thenReturn(List.of(atraccionActiva));
+        when(tarifaTiempoRepository.findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(List.of(1L)))
+                .thenReturn(List.of(tarifaTiempo));
+        when(tarifaEventoRepository.findByAtraccionIdInAndActivoTrueOrderByIntentosAsc(List.of(1L)))
+                .thenReturn(List.of());
+        when(configuracionParqueRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(config));
 
         List<CatalogoAtraccionOnlineDTO> catalogo = tiendaService.obtenerCatalogoPublico();
 
@@ -112,6 +120,9 @@ class TiendaServiceImplTest {
         assertEquals("Piscina de Pelotas", catalogo.get(0).nombre());
         assertTrue(catalogo.get(0).disponibleParaCompra());
         assertEquals(1, catalogo.get(0).tarifasTiempo().size());
+        assertEquals(BigDecimal.valueOf(19), catalogo.get(0).porcentajeImpuesto());
+        verify(tarifaTiempoRepository, never()).findByAtraccionIdAndActivoTrue(any());
+        verify(tarifaEventoRepository, never()).findByAtraccionIdAndActivoTrue(any());
     }
 
     @Test
@@ -136,25 +147,24 @@ class TiendaServiceImplTest {
         );
 
         when(clienteRepository.findByNumeroDocumento("1098765432")).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.save(any(Cliente.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(configuracionParqueRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionActiva));
 
         ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () -> tiendaService.procesarCompraOnline(req));
         assertTrue(ex.getMessage().contains("no cumple con la edad mínima"));
+        verify(clienteRepository, never()).save(any(Cliente.class));
     }
 
     @Test
-    @DisplayName("procesarCompraOnline - Procesa compra exitosamente, emite tickets y audita")
+    @DisplayName("procesarCompraOnline - Procesa compra exitosamente sin sobrescribir cliente existente, emite tickets y audita")
     void procesarCompraOnline_Exito() {
         ItemCompraOnlineDTO item = new ItemCompraOnlineDTO(1L, 100L, null, "Lucas", 6, 2);
         CompraOnlineRequestDTO req = new CompraOnlineRequestDTO(
-                "1098765432", "Carlos", "Mendoza", "3101234567",
+                "1098765432", "Otro Nombre", "Intruso", "3999999999",
                 "carlos@gmail.com", MetodoPago.NEQUI, List.of(item), null
         );
 
         when(clienteRepository.findByNumeroDocumento("1098765432")).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.save(any(Cliente.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(configuracionParqueRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionActiva));
         when(tarifaTiempoRepository.findById(100L)).thenReturn(Optional.of(tarifaTiempo));
@@ -182,11 +192,58 @@ class TiendaServiceImplTest {
 
         assertNotNull(response);
         assertEquals("carlos@gmail.com", response.clienteCorreo());
+        assertEquals("Carlos", clienteExistente.getNombres());
+        assertEquals("3101234567", clienteExistente.getTelefono());
+        verify(clienteRepository, never()).save(any(Cliente.class));
         assertEquals(2, response.tickets().size());
         assertEquals("Lucas", response.tickets().get(0).menorNombre());
         verify(emailService, times(1)).enviarBoletasCompraOnline(any(), any(), any(), any(), any(), any(), any(), any());
         verify(auditoriaTicketRepository, times(2)).save(any(AuditoriaTicket.class));
         verify(atraccionService, times(1)).invalidarCacheCatalogo();
+    }
+
+    @Test
+    @DisplayName("procesarCompraOnline - Rechaza tarifa de tiempo que pertenece a otra atracción o está inactiva (P0 fraude)")
+    void procesarCompraOnline_TarifaDeOtraAtraccionOInactiva_LanzaExcepcion() {
+        Atraccion otraAtraccion = Atraccion.builder().id(99L).nombre("Otra").estado(EstadoAtraccion.ACTIVO).build();
+        TarifaTiempo tarifaAjena = TarifaTiempo.builder()
+                .id(200L)
+                .atraccion(otraAtraccion)
+                .duracionMinutos(5)
+                .precio(BigDecimal.valueOf(1000))
+                .activo(true)
+                .build();
+
+        ItemCompraOnlineDTO item = new ItemCompraOnlineDTO(1L, 200L, null, "Lucas", 6, 1);
+        CompraOnlineRequestDTO req = new CompraOnlineRequestDTO(
+                "1098765432", "Carlos", "Mendoza", "3101234567",
+                "carlos@gmail.com", MetodoPago.NEQUI, List.of(item), null
+        );
+
+        when(clienteRepository.findByNumeroDocumento("1098765432")).thenReturn(Optional.of(clienteExistente));
+        when(configuracionParqueRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
+        when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionActiva));
+        when(menorRepository.findByClienteIdAndNombreCompletoIgnoreCase(10L, "Lucas"))
+                .thenReturn(Optional.of(Menor.builder().id(20L).nombreCompleto("Lucas").edad(6).cliente(clienteExistente).build()));
+        when(tarifaTiempoRepository.findById(200L)).thenReturn(Optional.of(tarifaAjena));
+
+        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () -> tiendaService.procesarCompraOnline(req));
+        assertTrue(ex.getMessage().contains("no pertenece a la atracción"));
+        verifyNoInteractions(ventaRepository);
+    }
+
+    @Test
+    @DisplayName("procesarCompraOnline - Rechaza método de pago presencial EFECTIVO en canal online")
+    void procesarCompraOnline_MetodoPagoEfectivo_LanzaExcepcion() {
+        ItemCompraOnlineDTO item = new ItemCompraOnlineDTO(1L, 100L, null, "Lucas", 6, 1);
+        CompraOnlineRequestDTO req = new CompraOnlineRequestDTO(
+                "1098765432", "Carlos", "Mendoza", "3101234567",
+                "carlos@gmail.com", MetodoPago.EFECTIVO, List.of(item), null
+        );
+
+        ReglaNegocioException ex = assertThrows(ReglaNegocioException.class, () -> tiendaService.procesarCompraOnline(req));
+        assertTrue(ex.getMessage().contains("no está habilitado para compras online"));
+        verifyNoInteractions(ventaRepository);
     }
 
     @Test
@@ -197,9 +254,13 @@ class TiendaServiceImplTest {
         SesionJuego s2 = SesionJuego.builder().id(2L).atraccion(atraccionActiva).estadoSesion(EstadoSesionJuego.PAUSADA).build();
         LocalDateTime horaEstimada = LocalDateTime.of(2026, 11, 20, 16, 20);
 
-        when(atraccionRepository.findAll()).thenReturn(List.of(atraccionActiva));
-        when(tarifaTiempoRepository.findByAtraccionIdAndActivoTrue(1L)).thenReturn(List.of(tarifaTiempo));
-        when(tarifaEventoRepository.findByAtraccionIdAndActivoTrue(1L)).thenReturn(List.of());
+        when(atraccionRepository.findByEstadoInOrderByNombreAsc(List.of(EstadoAtraccion.ACTIVO)))
+                .thenReturn(List.of(atraccionActiva));
+        when(tarifaTiempoRepository.findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(List.of(1L)))
+                .thenReturn(List.of(tarifaTiempo));
+        when(tarifaEventoRepository.findByAtraccionIdInAndActivoTrueOrderByIntentosAsc(List.of(1L)))
+                .thenReturn(List.of());
+        when(configuracionParqueRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         when(sesionJuegoRepository.findByAtraccionIdInAndEstadoSesionIn(any(), any())).thenReturn(List.of(s1, s2));
         when(estimadorIngresoService.estimarProximoIngresoBatch(any(), any(), any()))
                 .thenReturn(java.util.Map.of(1L, horaEstimada));
@@ -226,7 +287,6 @@ class TiendaServiceImplTest {
         LocalDateTime h2 = LocalDateTime.of(2026, 11, 20, 15, 25);
 
         when(clienteRepository.findByNumeroDocumento("1098765432")).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.save(any(Cliente.class))).thenAnswer(inv -> inv.getArgument(0));
         when(configuracionParqueRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         when(atraccionRepository.findById(1L)).thenReturn(Optional.of(atraccionActiva));
         when(tarifaTiempoRepository.findById(100L)).thenReturn(Optional.of(tarifaTiempo));
@@ -269,14 +329,18 @@ class TiendaServiceImplTest {
     }
 
     @Test
-    @DisplayName("consultarBoletosActivos - Retorna horaIngresoEstimada e ingresoTexto formateado")
+    @DisplayName("consultarBoletosActivos - Exige segundo factor (correo o código de orden) y resuelve modalidad real")
     void consultarBoletosActivos_IncluyeHoraIngresoEstimada() {
+        assertThrows(ReglaNegocioException.class,
+                () -> tiendaService.consultarBoletosActivos("1098765432", null, null));
+
         LocalDateTime horaEstimada = LocalDateTime.of(2026, 11, 20, 17, 45);
         Ticket ticket = Ticket.builder()
                 .uuidCodigo(UUID.randomUUID())
                 .detalleVenta(DetalleVenta.builder()
                         .atraccion(atraccionActiva)
                         .tipoTarifa(TipoTarifa.TIEMPO)
+                        .tarifaTiempoId(100L)
                         .precioUnitario(BigDecimal.valueOf(15000))
                         .build())
                 .menor(Menor.builder().nombreCompleto("Sofía").edad(5).build())
@@ -285,13 +349,16 @@ class TiendaServiceImplTest {
                 .horaIngresoEstimada(horaEstimada)
                 .build();
 
-        when(ticketRepository.buscarBoletosActivosCliente(eq("1098765432"), isNull(), any()))
+        when(ticketRepository.buscarBoletosActivosPorDocumentoYCorreo(
+                eq("1098765432"), eq("carlos@gmail.com"), any(), any()))
                 .thenReturn(List.of(ticket));
+        when(tarifaTiempoRepository.findAllById(any())).thenReturn(List.of(tarifaTiempo));
 
         List<com.software.territoriodeninos.dto.tienda.TicketOnlineDTO> res =
-                tiendaService.consultarBoletosActivos("1098765432", null);
+                tiendaService.consultarBoletosActivos("1098765432", "carlos@gmail.com", null);
 
         assertEquals(1, res.size());
+        assertEquals("15 min", res.get(0).modalidadTexto());
         assertEquals(horaEstimada, res.get(0).horaIngresoEstimada());
         assertEquals("17:45 (aprox.)", res.get(0).ingresoTexto());
     }

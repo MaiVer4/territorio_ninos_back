@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Servicios del Backend
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-20 (commit f67e2bd).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/**`, `src/main/resources/application.properties`, `pom.xml`, `Dockerfile`, `start-app.sh`. Última sincronización: 2026-11-20 (commit ed54d6e).
 
 ## 1. Stack, Convenciones y Reglas de Arquitectura
 - **Stack:** Java 21, Spring Boot `4.0.6`, Spring Security + JWT (`jjwt`), Spring Data JPA (Hibernate), Flyway, WebSocket STOMP, ZXing (QR), OpenPDF / CSV, Lombok `1.18.38`.
@@ -53,8 +53,8 @@
 | `ExportacionReporteServiceImpl` | `exportarPdf`, `exportarCsv` | Genera archivos descargables PDF y CSV UTF-8 con BOM para reportes de turnos, rotación e incidentes. | `ConciliacionTurnoService`, `AuditoriaOperacionService`, `ConfiguracionParqueService` |
 | `AuditoriaOperacionServiceImpl` | `registrarTransicionTicket`, `consultarTimelinePorCriterio`, `consultarIncidentes` | Bitácora inmutable de cambios de estado de boletas (`auditoria_tickets`) y consulta de pausas/incidentes. | `AuditoriaTicketRepository`, `LogIncidentePausaRepository`, `TicketRepository` |
 | `ReporteAtraccionServiceImpl` | `crear`, `listar`, `obtenerPorId`, `actualizarEstado` | Gestión de reportes de novedades en atracciones; impide reactivar (`ConflictoException`) si existen otros reportes abiertos (`countByAtraccionIdAndEstadoNotAndIdNot`). | `ReporteAtraccionRepository`, `AtraccionRepository`, `AtraccionService`, `AuthenticatedUserProvider` |
-| `TiendaServiceImpl` | `obtenerCatalogoOnline`, `procesarCompraOnline`, `consultarBoletosCliente` | Gestión de compras online públicas: filtro honeypot, registro de clientes/menores invitados, validación de edades, emisión de boletas en `PAGADO` y notificación por correo. | `AtraccionRepository`, `TarifaTiempoRepository`, `TarifaEventoRepository`, `ClienteRepository`, `MenorRepository`, `VentaRepository`, `TicketRepository`, `ConfiguracionParqueRepository`, `UUIDGeneratorService`, `AuditoriaOperacionService`, `EmailService` |
-| `EmailServiceImpl` | `enviarCorreoRecuperacion`, `enviarBoletasCompraOnline` | Envío asíncrono y resiliente de correos SMTP para restablecimiento de contraseña y confirmación de compra online con desglose de boletas. | `JavaMailSender` |
+| `TiendaServiceImpl` | `obtenerCatalogoPublico`, `procesarCompraOnline`, `consultarBoletosActivos` | Compras online públicas: catálogo batch solo `ACTIVO` con IVA real, honeypot, validación estricta de tarifas/métodos online sin sobrescribir PII existente, consulta 2FA (`documento` + `correo`/`codigoOrden`) y correo `@Async` en `afterCommit`. | `AtraccionRepository`, `TarifaTiempoRepository`, `TarifaEventoRepository`, `ClienteRepository`, `MenorRepository`, `VentaRepository`, `TicketRepository`, `ConfiguracionParqueRepository`, `AuditoriaTicketRepository`, `EstimadorIngresoService`, `EmailService` |
+| `EmailServiceImpl` | `enviarCorreoRecuperacion`, `enviarBoletasCompraOnline` | Envío `@Async` (`@EnableAsync`) y resiliente de correos SMTP para restablecimiento de contraseña y confirmación de compra online con desglose de boletas. | `JavaMailSender` |
 
 ---
 

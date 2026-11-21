@@ -1243,4 +1243,79 @@ class OperacionServiceImplTest {
         assertThrows(org.springframework.security.access.AccessDeniedException.class,
                 () -> operacionService.autorizarSobreaforo(req, authentication));
     }
+
+    @Test
+    @DisplayName("autorizarSobreaforo - Permite escanear e iniciar 1 sesión con aforo lleno y exige re-autorización para una segunda")
+    void autorizarSobreaforo_flujoCompletoUnSoloUso() {
+        operacionService.setSupervisorPin("PIN-SEG-9988");
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+        when(asignacionRepository.findFirstByUsuarioIdAndFechaAsignacionAndEstadoOrderByHoraInicioDesc(
+                eq(5L), eq(LocalDate.now()), eq(EstadoAsignacion.ACTIVA)
+        )).thenReturn(Optional.of(asignacion));
+        when(sesionJuegoRepository.countByAtraccionIdAndEstadoSesionIn(eq(10L), any())).thenReturn(20);
+        when(ticketRepository.findByUuidCodigo(ticketUuid)).thenReturn(Optional.of(ticket));
+        when(sesionJuegoRepository.save(any(SesionJuego.class))).thenAnswer(inv -> {
+            SesionJuego s = inv.getArgument(0);
+            s.setId(777L);
+            return s;
+        });
+
+        // 1. Autorizar sobreaforo
+        operacionService.autorizarSobreaforo(
+                new AutorizarSobreaforoRequestDTO(10L, "PIN-SEG-9988", "Hermano menor"),
+                authentication
+        );
+
+        // 2. Escanear ticket con aforo lleno (20/20) debe aprobar con permiso vigente
+        ValidacionTicketResponseDTO validacion = operacionService.escanearTicket(
+                new EscaneoQrRequestDTO(ticketUuid, 10L, LocalDateTime.now()),
+                authentication,
+                "127.0.0.1"
+        );
+        assertTrue(validacion.valido());
+
+        // 3. Iniciar sesión consume el permiso de un solo uso
+        SesionJuegoResponseDTO sesion = operacionService.iniciarSesion(
+                new InicioSesionRequestDTO(ticketUuid, 10L, LocalDateTime.now()),
+                authentication
+        );
+        assertEquals(777L, sesion.sesionId());
+
+        // 4. Un segundo ingreso con aforo lleno sin nueva autorización es rechazado con 409
+        UUID otroUuid = UUID.randomUUID();
+        assertThrows(AforoCompletoException.class, () -> operacionService.iniciarSesion(
+                new InicioSesionRequestDTO(otroUuid, 10L, LocalDateTime.now()),
+                authentication
+        ));
+    }
+
+    @Test
+    @DisplayName("autorizarSobreaforo - Bloquea tras múltiples intentos fallidos mediante LoginAttemptService")
+    void autorizarSobreaforo_bloqueaFuerzaBruta() {
+        com.software.territoriodeninos.security.LoginAttemptService attemptService =
+                new com.software.territoriodeninos.security.LoginAttemptService();
+        operacionService.setLoginAttemptService(attemptService);
+        operacionService.setSupervisorPin("PIN-REAL");
+
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn("carlos@territoriodeninos.com");
+        when(authentication.getName()).thenReturn("carlos@territoriodeninos.com");
+        when(usuarioRepository.findByCorreo("carlos@territoriodeninos.com")).thenReturn(Optional.of(operario));
+        when(atraccionRepository.findById(10L)).thenReturn(Optional.of(atraccion));
+        when(usuarioRepository.findByRolNombre(NombreRol.ADMINISTRADOR)).thenReturn(List.of());
+        when(usuarioRepository.findByRolNombre(NombreRol.COORDINADOR)).thenReturn(List.of());
+
+        AutorizarSobreaforoRequestDTO reqInvalido = new AutorizarSobreaforoRequestDTO(10L, "BAD", "Prueba");
+        for (int i = 0; i < com.software.territoriodeninos.security.LoginAttemptService.MAX_ATTEMPTS; i++) {
+            assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                    () -> operacionService.autorizarSobreaforo(reqInvalido, authentication));
+        }
+
+        assertThrows(CuentaBloqueadaException.class,
+                () -> operacionService.autorizarSobreaforo(reqInvalido, authentication));
+    }
 }

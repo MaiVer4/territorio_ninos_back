@@ -28,6 +28,17 @@ public class TiendaServiceImpl implements TiendaService {
 
     private static final List<EstadoSesionJuego> ESTADOS_SESION_ACTIVAS =
             List.of(EstadoSesionJuego.EN_CURSO, EstadoSesionJuego.PAUSADA);
+    private static final List<EstadoTicket> ESTADOS_TICKET_ACTIVOS =
+            List.of(EstadoTicket.PAGADO, EstadoTicket.EN_USO, EstadoTicket.PAUSADO);
+    private static final Set<MetodoPago> METODOS_PAGO_ONLINE = EnumSet.of(
+            MetodoPago.NEQUI,
+            MetodoPago.PSE,
+            MetodoPago.TARJETA,
+            MetodoPago.TARJETA_DEBITO,
+            MetodoPago.TARJETA_CREDITO,
+            MetodoPago.DAVIPLATA,
+            MetodoPago.TRANSFERENCIA
+    );
 
     private final AtraccionRepository atraccionRepository;
     private final TarifaTiempoRepository tarifaTiempoRepository;
@@ -47,7 +58,9 @@ public class TiendaServiceImpl implements TiendaService {
     @Override
     @Transactional(readOnly = true)
     public List<CatalogoAtraccionOnlineDTO> obtenerCatalogoPublico() {
-        List<Atraccion> atracciones = atraccionRepository.findAll();
+        List<Atraccion> atracciones = atraccionRepository.findByEstadoInOrderByNombreAsc(
+                List.of(EstadoAtraccion.ACTIVO)
+        );
         if (atracciones == null || atracciones.isEmpty()) {
             return List.of();
         }
@@ -71,30 +84,71 @@ public class TiendaServiceImpl implements TiendaService {
             }
         }
 
+        Map<Long, Atraccion> atraccionesPorId = new HashMap<>();
+        for (Atraccion atr : atracciones) {
+            if (atr.getId() != null) {
+                atraccionesPorId.put(atr.getId(), atr);
+            }
+        }
+
         Map<Long, Integer> duracionesTarifaTiempo = new HashMap<>();
         Map<Long, List<TarifaTiempoResponseDTO>> tarifasTiempoPorAtraccion = new HashMap<>();
         Map<Long, List<TarifaEventoResponseDTO>> tarifasEventoPorAtraccion = new HashMap<>();
 
-        for (Atraccion atr : atracciones) {
-            List<TarifaTiempo> tarifasTiempo = tarifaTiempoRepository.findByAtraccionIdAndActivoTrue(atr.getId());
-            if (tarifasTiempo != null) {
-                for (TarifaTiempo tt : tarifasTiempo) {
+        if (!atraccionIds.isEmpty()) {
+            List<TarifaTiempo> todasTarifasTiempo = tarifaTiempoRepository
+                    .findByAtraccionIdInAndActivoTrueOrderByDuracionMinutosAsc(atraccionIds);
+            if (todasTarifasTiempo != null) {
+                for (TarifaTiempo tt : todasTarifasTiempo) {
+                    if (tt.getAtraccion() == null || tt.getAtraccion().getId() == null) continue;
+                    Long atrId = tt.getAtraccion().getId();
+                    Atraccion atr = atraccionesPorId.get(atrId);
                     if (tt.getId() != null && tt.getDuracionMinutos() != null) {
                         duracionesTarifaTiempo.put(tt.getId(), tt.getDuracionMinutos());
                     }
+                    tarifasTiempoPorAtraccion
+                            .computeIfAbsent(atrId, k -> new ArrayList<>())
+                            .add(new TarifaTiempoResponseDTO(
+                                    tt.getId(),
+                                    atrId,
+                                    atr != null ? atr.getNombre() : tt.getAtraccion().getNombre(),
+                                    tt.getDuracionMinutos(),
+                                    tt.getPrecio(),
+                                    tt.getActivo(),
+                                    tt.getFechaCreacion()
+                            ));
                 }
             }
-            List<TarifaTiempoResponseDTO> ttDTOs = (tarifasTiempo != null ? tarifasTiempo : List.<TarifaTiempo>of()).stream()
-                    .map(t -> new TarifaTiempoResponseDTO(t.getId(), atr.getId(), atr.getNombre(), t.getDuracionMinutos(), t.getPrecio(), t.getActivo(), t.getFechaCreacion()))
-                    .toList();
-            tarifasTiempoPorAtraccion.put(atr.getId(), ttDTOs);
 
-            List<TarifaEvento> tarifasEvento = tarifaEventoRepository.findByAtraccionIdAndActivoTrue(atr.getId());
-            List<TarifaEventoResponseDTO> teDTOs = (tarifasEvento != null ? tarifasEvento : List.<TarifaEvento>of()).stream()
-                    .map(t -> new TarifaEventoResponseDTO(t.getId(), atr.getId(), atr.getNombre(), t.getIntentos(), t.getPrecio(), t.getActivo(), t.getFechaCreacion()))
-                    .toList();
-            tarifasEventoPorAtraccion.put(atr.getId(), teDTOs);
+            List<TarifaEvento> todasTarifasEvento = tarifaEventoRepository
+                    .findByAtraccionIdInAndActivoTrueOrderByIntentosAsc(atraccionIds);
+            if (todasTarifasEvento != null) {
+                for (TarifaEvento te : todasTarifasEvento) {
+                    if (te.getAtraccion() == null || te.getAtraccion().getId() == null) continue;
+                    Long atrId = te.getAtraccion().getId();
+                    Atraccion atr = atraccionesPorId.get(atrId);
+                    tarifasEventoPorAtraccion
+                            .computeIfAbsent(atrId, k -> new ArrayList<>())
+                            .add(new TarifaEventoResponseDTO(
+                                    te.getId(),
+                                    atrId,
+                                    atr != null ? atr.getNombre() : te.getAtraccion().getNombre(),
+                                    te.getIntentos(),
+                                    te.getPrecio(),
+                                    te.getActivo(),
+                                    te.getFechaCreacion()
+                            ));
+                }
+            }
         }
+
+        ConfiguracionParque config = configuracionParqueRepository != null
+                ? configuracionParqueRepository.findFirstByOrderByIdAsc().orElse(null)
+                : null;
+        BigDecimal porcentajeImpuesto = (config != null && Boolean.TRUE.equals(config.getAplicaImpuesto())
+                && config.getPorcentajeImpuesto() != null)
+                ? config.getPorcentajeImpuesto()
+                : BigDecimal.ZERO;
 
         Map<Long, LocalDateTime> proximosIngresos = estimadorIngresoService != null
                 ? estimadorIngresoService.estimarProximoIngresoBatch(atracciones, LocalDateTime.now(), duracionesTarifaTiempo)
@@ -130,7 +184,8 @@ public class TiendaServiceImpl implements TiendaService {
                     ocupacionActual,
                     cuposLibres,
                     horaProximoIngreso,
-                    ingresoTexto
+                    ingresoTexto,
+                    porcentajeImpuesto
             ));
         }
 
@@ -150,8 +205,13 @@ public class TiendaServiceImpl implements TiendaService {
             throw new ReglaNegocioException("El carrito de compras no contiene boletos.");
         }
 
-        // 2. Localizar o registrar cliente
+        if (request.metodoPago() == null || !METODOS_PAGO_ONLINE.contains(request.metodoPago())) {
+            throw new ReglaNegocioException("El método de pago '" + request.metodoPago() + "' no está habilitado para compras online.");
+        }
+
+        // 2. Localizar o registrar cliente (sin sobrescribir PII de clientes existentes desde canal anónimo)
         String doc = request.documento().trim();
+        String correoSolicitud = request.correo().trim().toLowerCase();
         String nombresRaw = request.nombres().trim();
         String apellidosRaw = (request.apellidos() != null && !request.apellidos().isBlank())
                 ? request.apellidos().trim()
@@ -169,33 +229,13 @@ public class TiendaServiceImpl implements TiendaService {
         final String apellidosFinal = apellidosRaw;
 
         Cliente cliente = clienteRepository.findByNumeroDocumento(doc)
-                .map(existente -> {
-                    boolean modificado = false;
-                    if (!nombresFinal.isBlank()) {
-                        existente.setNombres(nombresFinal);
-                        modificado = true;
-                    }
-                    if (!apellidosFinal.isBlank()) {
-                        existente.setApellidos(apellidosFinal);
-                        modificado = true;
-                    }
-                    if (request.telefono() != null && !request.telefono().isBlank()) {
-                        existente.setTelefono(request.telefono().trim());
-                        modificado = true;
-                    }
-                    if (request.correo() != null && !request.correo().isBlank()) {
-                        existente.setCorreo(request.correo().trim().toLowerCase());
-                        modificado = true;
-                    }
-                    return modificado ? clienteRepository.save(existente) : existente;
-                })
                 .orElseGet(() -> {
                     Cliente nuevo = Cliente.builder()
                             .numeroDocumento(doc)
                             .nombres(nombresFinal)
                             .apellidos(apellidosFinal)
                             .telefono(request.telefono().trim())
-                            .correo(request.correo().trim().toLowerCase())
+                            .correo(correoSolicitud)
                             .fechaRegistro(LocalDateTime.now())
                             .build();
                     return clienteRepository.save(nuevo);
@@ -263,9 +303,18 @@ public class TiendaServiceImpl implements TiendaService {
                     ? atraccion.getDuracionMinutosBase() : 15;
             int duracionItem = duracionBase;
 
+            if (item.tarifaTiempoId() != null && item.tarifaEventoId() != null) {
+                throw new ReglaNegocioException("Cada ítem debe especificar únicamente una tarifa de tiempo o de evento.");
+            }
+
             if (item.tarifaTiempoId() != null) {
                 TarifaTiempo tt = tarifaTiempoRepository.findById(item.tarifaTiempoId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa de tiempo con ID " + item.tarifaTiempoId() + " no encontrada"));
+                if (!Boolean.TRUE.equals(tt.getActivo())
+                        || tt.getAtraccion() == null
+                        || !atraccion.getId().equals(tt.getAtraccion().getId())) {
+                    throw new ReglaNegocioException("La tarifa de tiempo seleccionada no pertenece a la atracción '" + atraccion.getNombre() + "' o no está activa.");
+                }
                 precioUnitario = tt.getPrecio();
                 modalidadTexto = tt.getDuracionMinutos() + " min";
                 tipoTarifa = TipoTarifa.TIEMPO;
@@ -275,6 +324,11 @@ public class TiendaServiceImpl implements TiendaService {
             } else if (item.tarifaEventoId() != null) {
                 TarifaEvento te = tarifaEventoRepository.findById(item.tarifaEventoId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Tarifa de evento con ID " + item.tarifaEventoId() + " no encontrada"));
+                if (!Boolean.TRUE.equals(te.getActivo())
+                        || te.getAtraccion() == null
+                        || !atraccion.getId().equals(te.getAtraccion().getId())) {
+                    throw new ReglaNegocioException("La tarifa de evento seleccionada no pertenece a la atracción '" + atraccion.getNombre() + "' o no está activa.");
+                }
                 precioUnitario = te.getPrecio();
                 modalidadTexto = te.getIntentos() + " caídas";
                 tipoTarifa = TipoTarifa.EVENTO;
@@ -415,26 +469,36 @@ public class TiendaServiceImpl implements TiendaService {
             }
         }
 
-        invalidarCacheDespuesDeCommit();
+        // 7. Invalidar caché y enviar correo únicamente tras confirmar la transacción en BD
+        final String nombreClienteCompleto = cliente.getNombres() + " " + cliente.getApellidos();
+        final BigDecimal subtotalFinal = subtotalAcumulado;
+        final BigDecimal impuestosFinal = impuestos;
+        final BigDecimal totalFinal = total;
+        final MetodoPago metodoPagoFinal = request.metodoPago();
+        final List<TicketOnlineDTO> ticketsFinal = List.copyOf(ticketsEmitidos);
 
-        // 7. Enviar correo de respaldo con resumen de factura y hora estimada de ingreso
-        emailService.enviarBoletasCompraOnline(
-                cliente.getCorreo(),
-                cliente.getNombres() + " " + cliente.getApellidos(),
-                codigoOrden,
-                subtotalAcumulado,
-                impuestos,
-                total,
-                request.metodoPago(),
-                ticketsEmitidos
-        );
+        ejecutarDespuesDeCommit(() -> {
+            if (atraccionService != null) {
+                atraccionService.invalidarCacheCatalogo();
+            }
+            emailService.enviarBoletasCompraOnline(
+                    correoSolicitud,
+                    nombreClienteCompleto,
+                    codigoOrden,
+                    subtotalFinal,
+                    impuestosFinal,
+                    totalFinal,
+                    metodoPagoFinal,
+                    ticketsFinal
+            );
+        });
 
         return new CompraOnlineResponseDTO(
                 ventaGuardada.getId(),
                 codigoOrden,
                 cliente.getNumeroDocumento(),
-                cliente.getNombres() + " " + cliente.getApellidos(),
-                cliente.getCorreo(),
+                nombreClienteCompleto,
+                correoSolicitud,
                 subtotalAcumulado,
                 impuestos,
                 total,
@@ -446,27 +510,73 @@ public class TiendaServiceImpl implements TiendaService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TicketOnlineDTO> consultarBoletosActivos(String documento, String correo) {
+    public List<TicketOnlineDTO> consultarBoletosActivos(String documento, String correo, String codigoOrden) {
         if (documento == null || documento.isBlank()) {
             throw new ReglaNegocioException("El número de documento es obligatorio para consultar boletos.");
         }
 
         String docLimpio = documento.trim();
         String correoLimpio = (correo != null && !correo.isBlank()) ? correo.trim().toLowerCase() : null;
+        String ordenLimpia = (codigoOrden != null && !codigoOrden.isBlank()) ? codigoOrden.trim().toUpperCase() : null;
+
+        if (correoLimpio == null && ordenLimpia == null) {
+            throw new ReglaNegocioException("Debe ingresar el correo electrónico o el código de orden para consultar sus boletos.");
+        }
+
         LocalDateTime desdeHoy = LocalDate.now().atStartOfDay();
 
-        List<Ticket> tickets = ticketRepository.buscarBoletosActivosCliente(docLimpio, correoLimpio, desdeHoy);
+        List<Ticket> tickets = (ordenLimpia != null)
+                ? ticketRepository.buscarBoletosActivosPorDocumentoYOrden(docLimpio, ordenLimpia, ESTADOS_TICKET_ACTIVOS, desdeHoy)
+                : ticketRepository.buscarBoletosActivosPorDocumentoYCorreo(docLimpio, correoLimpio, ESTADOS_TICKET_ACTIVOS, desdeHoy);
+
+        if (tickets == null || tickets.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Integer> duracionesPorTarifa = new HashMap<>();
+        Map<Long, Integer> intentosPorTarifa = new HashMap<>();
+
+        Set<Long> tarifaTiempoIds = new HashSet<>();
+        Set<Long> tarifaEventoIds = new HashSet<>();
+        for (Ticket t : tickets) {
+            if (t.getDetalleVenta() != null) {
+                if (t.getDetalleVenta().getTarifaTiempoId() != null) {
+                    tarifaTiempoIds.add(t.getDetalleVenta().getTarifaTiempoId());
+                }
+                if (t.getDetalleVenta().getTarifaEventoId() != null) {
+                    tarifaEventoIds.add(t.getDetalleVenta().getTarifaEventoId());
+                }
+            }
+        }
+        if (!tarifaTiempoIds.isEmpty() && tarifaTiempoRepository != null) {
+            List<TarifaTiempo> encontradas = tarifaTiempoRepository.findAllById(tarifaTiempoIds);
+            if (encontradas != null) {
+                for (TarifaTiempo tt : encontradas) {
+                    if (tt.getId() != null && tt.getDuracionMinutos() != null) {
+                        duracionesPorTarifa.put(tt.getId(), tt.getDuracionMinutos());
+                    }
+                }
+            }
+        }
+        if (!tarifaEventoIds.isEmpty() && tarifaEventoRepository != null) {
+            List<TarifaEvento> encontradas = tarifaEventoRepository.findAllById(tarifaEventoIds);
+            if (encontradas != null) {
+                for (TarifaEvento te : encontradas) {
+                    if (te.getId() != null && te.getIntentos() != null) {
+                        intentosPorTarifa.put(te.getId(), te.getIntentos());
+                    }
+                }
+            }
+        }
 
         return tickets.stream()
                 .map(t -> {
-                    Atraccion a = t.getDetalleVenta() != null ? t.getDetalleVenta().getAtraccion() : null;
+                    DetalleVenta dv = t.getDetalleVenta();
+                    Atraccion a = dv != null ? dv.getAtraccion() : null;
                     Menor m = t.getMenor();
-                    String modTexto = (t.getDetalleVenta() != null && t.getDetalleVenta().getTipoTarifa() != null)
-                            ? t.getDetalleVenta().getTipoTarifa().name()
-                            : "TICKET";
-                    String tipoTarifaStr = (t.getDetalleVenta() != null && t.getDetalleVenta().getTipoTarifa() != null)
-                            ? t.getDetalleVenta().getTipoTarifa().name()
-                            : "ESTANDAR";
+                    TipoTarifa tipoTarifa = dv != null ? dv.getTipoTarifa() : null;
+                    String tipoTarifaStr = tipoTarifa != null ? tipoTarifa.name() : "ESTANDAR";
+                    String modTexto = resolverModalidadTexto(dv, a, duracionesPorTarifa, intentosPorTarifa);
                     LocalDateTime horaEstimada = t.getHoraIngresoEstimada();
                     String ingresoTexto = IngresoTextoFormatter.texto(horaEstimada, a != null ? a.getTipo() : null);
 
@@ -478,7 +588,7 @@ public class TiendaServiceImpl implements TiendaService {
                             m != null ? m.getEdad() : null,
                             tipoTarifaStr,
                             modTexto,
-                            t.getDetalleVenta() != null ? t.getDetalleVenta().getPrecioUnitario() : BigDecimal.ZERO,
+                            dv != null ? dv.getPrecioUnitario() : BigDecimal.ZERO,
                             t.getEstadoTicket(),
                             t.getFechaEmision(),
                             t.getUuidCodigo().toString(),
@@ -489,20 +599,50 @@ public class TiendaServiceImpl implements TiendaService {
                 .toList();
     }
 
-    private void invalidarCacheDespuesDeCommit() {
-        if (atraccionService == null) {
-            return;
+    private String resolverModalidadTexto(
+            DetalleVenta dv,
+            Atraccion atr,
+            Map<Long, Integer> duracionesPorTarifa,
+            Map<Long, Integer> intentosPorTarifa
+    ) {
+        if (dv == null || dv.getTipoTarifa() == null) {
+            return "TICKET";
         }
+        if (dv.getTarifaTiempoId() != null && duracionesPorTarifa.containsKey(dv.getTarifaTiempoId())) {
+            return duracionesPorTarifa.get(dv.getTarifaTiempoId()) + " min";
+        }
+        if (dv.getTarifaEventoId() != null && intentosPorTarifa.containsKey(dv.getTarifaEventoId())) {
+            return intentosPorTarifa.get(dv.getTarifaEventoId()) + " caídas";
+        }
+        if (dv.getTipoTarifa() == TipoTarifa.MINUTO_BASE) {
+            int base = (atr != null && atr.getDuracionMinutosBase() != null && atr.getDuracionMinutosBase() > 0)
+                    ? atr.getDuracionMinutosBase() : 15;
+            return base + " min (Base)";
+        }
+        if (dv.getTipoTarifa() == TipoTarifa.TIEMPO) {
+            int base = (atr != null && atr.getDuracionMinutosBase() != null && atr.getDuracionMinutosBase() > 0)
+                    ? atr.getDuracionMinutosBase() : 15;
+            return base + " min";
+        }
+        if (dv.getTipoTarifa() == TipoTarifa.EVENTO) {
+            int caidas = (atr != null && atr.getCaidasLimite() != null && atr.getCaidasLimite() > 0)
+                    ? atr.getCaidasLimite() : 3;
+            return caidas + " caídas";
+        }
+        return dv.getTipoTarifa().name();
+    }
+
+    private void ejecutarDespuesDeCommit(Runnable accion) {
         if (TransactionSynchronizationManager.isActualTransactionActive()
                 && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    atraccionService.invalidarCacheCatalogo();
+                    accion.run();
                 }
             });
         } else {
-            atraccionService.invalidarCacheCatalogo();
+            accion.run();
         }
     }
 }

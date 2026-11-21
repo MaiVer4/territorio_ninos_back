@@ -37,16 +37,22 @@ public class TiendaPublicaController {
     }
 
     @GetMapping("/mis-boletos")
-    @Operation(summary = "Consultar boletos activos del día por documento y correo del acudiente")
+    @Operation(summary = "Consultar boletos activos del día por documento y correo o código de orden del acudiente")
     public ResponseEntity<List<TicketOnlineDTO>> consultarBoletos(
             @RequestParam(required = false) String documento,
             @RequestParam(required = false) String correo,
+            @RequestParam(required = false) String codigoOrden,
             @RequestParam(required = false) String identificador
     ) {
         String doc = (documento != null && !documento.isBlank()) ? documento : identificador;
         if (doc == null || doc.isBlank()) {
-            throw new IllegalArgumentException("El número de documento o identificador es obligatorio");
+            throw new IllegalArgumentException("El número de documento es obligatorio");
         }
-        return ResponseEntity.ok(tiendaService.consultarBoletosActivos(doc, correo));
+        boolean tieneCorreo = correo != null && !correo.isBlank();
+        boolean tieneOrden = codigoOrden != null && !codigoOrden.isBlank();
+        if (!tieneCorreo && !tieneOrden) {
+            throw new IllegalArgumentException("Debe proporcionar el correo electrónico o el código de orden para verificar la titularidad");
+        }
+        return ResponseEntity.ok(tiendaService.consultarBoletosActivos(doc, correo, codigoOrden));
     }
 }

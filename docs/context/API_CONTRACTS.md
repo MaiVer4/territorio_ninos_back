@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-20 (commit 078341b).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-20 (commit ed54d6e).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -148,7 +148,7 @@
 | `GET` | `/api/operacion/atraccion/{id}/aforo-actual` | `TODOS` | Path `id` | `200 AforoActualDTO` | Ocupación activa, capacidad máxima y porcentaje. |
 | `POST` | `/api/operacion/vincular` | `OPE, ADMIN` | `VincularEstacionRequestDTO` | `200 EstacionTrabajoDTO` | Vincula al operario autenticado a la estación seleccionada creando o reactivando la asignación. Lanza `409` si ya está ocupada por otro operario o `404`/`400` si está inactiva/no existe. |
 | `POST` | `/api/operacion/desvincular` | `OPE, ADMIN` | — | `204 No Content` | Desvincula al operario autenticado de su estación activa actual pasando la asignación a `FINALIZADA`. |
-| `POST` | `/api/operacion/autorizar-sobreaforo` | `OPE, COORD, ADMIN` | `AutorizarSobreaforoRequestDTO` | `204 No Content` | Valida `SUPERVISOR_PIN` (comparación en tiempo constante) o contraseña de `ADMIN`/`COORD` activo (`401` si inválido, `404` si atracción no existe). |
+| `POST` | `/api/operacion/autorizar-sobreaforo` | `OPE, COORD, ADMIN` | `AutorizarSobreaforoRequestDTO` | `204 No Content` | Valida `SUPERVISOR_PIN` (comparación en tiempo constante) o contraseña de `ADMIN`/`COORD` activo con rate-limiting (`LoginAttemptService`, `423` si bloqueado, `403` si inválido, `404` si atracción no existe) y otorga permiso temporal de un solo uso (5 min) consumido al iniciar la siguiente sesión. |
 
 ### 2.11 Reportes y Auditoría (`ReporteController` — `/api/reportes`, `AuditoriaController` — `/api/auditoria`)
 | Método | Ruta | Rol | Request (Query / Path) | Response |
@@ -178,16 +178,16 @@
 ### 2.13 Tienda Pública Online (`TiendaPublicaController` — `/api/tienda`)
 | Método | Ruta | Rol | Request | Response | Notas / Errores |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/tienda/catalogo` | PÚBLICO | — | `200 List<CatalogoAtraccionOnlineDTO>` | Retorna atracciones `ACTIVO` con tarifas vigentes, cupos libres, ocupación y próximo ingreso estimado. |
-| `POST` | `/api/tienda/comprar` | PÚBLICO | `CompraOnlineRequestDTO` | `201 CompraOnlineResponseDTO` | Checkout invitado con honeypot; emite boletas en estado `PAGADO` y envía correo de confirmación con resumen financiero e ingreso aproximado. `400` por validación o trampa honeypot, `404` si atracción no existe. |
-| `GET` | `/api/tienda/mis-boletos` | PÚBLICO | Query `?identificador=` | `200 List<TicketOnlineDTO>` | Búsqueda por documento o correo de boletas activas (`PAGADO`, `EN_USO`, `PAUSADO`) del día. |
+| `GET` | `/api/tienda/catalogo` | PÚBLICO | — | `200 List<CatalogoAtraccionOnlineDTO>` | Retorna solo atracciones `ACTIVO` (queries batch sin N+1) con tarifas vigentes, cupos libres, ocupación, próximo ingreso estimado y `porcentajeImpuesto` configurado. |
+| `POST` | `/api/tienda/comprar` | PÚBLICO | `CompraOnlineRequestDTO` | `201 CompraOnlineResponseDTO` | Checkout invitado con honeypot, validación estricta de pertenencia/vigencia de tarifa, métodos online permitidos y límites de cantidad; no sobrescribe PII de clientes existentes; emite boletas `PAGADO` y envía correo asíncrono tras commit. |
+| `GET` | `/api/tienda/mis-boletos` | PÚBLICO | Query `?documento=` (`identificador`) + `?correo=` o `?codigoOrden=` | `200 List<TicketOnlineDTO>` | Exige verificación en dos factores (documento + correo o código de orden) y retorna boletas activas (`PAGADO`, `EN_USO`, `PAUSADO`) del día con modalidad real resuelta en batch. |
 
 ---
 
 ## 3. Diccionario Compacto de DTOs y Alias JSON (`dto/*.java`)
 
 - **DTOs de Tienda Online (`dto/tienda/`):**
-  - `CatalogoAtraccionOnlineDTO`: `{ id, nombre, descripcion, tipoAtraccion, ocupacionActual, cuposLibres, capacidadMaxima, horaProximoIngreso, ingresoTexto, edadMinima, edadMaxima, tarifaMinuto, duracionRecomendadaMinutos, tarifasTiempo: List<TarifaTiempoDTO>, tarifasEvento: List<TarifaEventoDTO> }`
+  - `CatalogoAtraccionOnlineDTO`: `{ id, nombre, descripcion, tipoAtraccion, ocupacionActual, cuposLibres, capacidadMaxima, horaProximoIngreso, ingresoTexto, porcentajeImpuesto, edadMinima, edadMaxima, tarifaMinuto, duracionRecomendadaMinutos, tarifasTiempo: List<TarifaTiempoDTO>, tarifasEvento: List<TarifaEventoDTO> }`
   - `CompraOnlineRequestDTO`: `{ documentoAdulto, nombreAdulto, telefonoAdulto, correoAdulto, metodoPago, codigoReferenciaPago, items: List<ItemCompraOnlineDTO>, website: String (honeypot) }`
   - `ItemCompraOnlineDTO`: `{ atraccionId, tipoTarifa, tarifaTiempoId, tarifaEventoId, duracionMinutos, cantidad, nombreMenor, edadMenor, documentoMenor }`
   - `TicketOnlineDTO`: `{ uuidCodigo, codigoCorto, nombreAtraccion, tipoAtraccion, tipoTarifa, duracionMinutos, intentosTotales, intentosRestantes, nombreMenor, estadoTicket, fechaEmision, horaIngresoEstimada, ingresoTexto }`

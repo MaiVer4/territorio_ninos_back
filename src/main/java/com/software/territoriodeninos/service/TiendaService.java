@@ -13,5 +13,9 @@ public interface TiendaService {
 
     CompraOnlineResponseDTO procesarCompraOnline(CompraOnlineRequestDTO request);
 
-    List<TicketOnlineDTO> consultarBoletosActivos(String documento, String correo);
+    default List<TicketOnlineDTO> consultarBoletosActivos(String documento, String correo) {
+        return consultarBoletosActivos(documento, correo, null);
+    }
+
+    List<TicketOnlineDTO> consultarBoletosActivos(String documento, String correo, String codigoOrden);
 }

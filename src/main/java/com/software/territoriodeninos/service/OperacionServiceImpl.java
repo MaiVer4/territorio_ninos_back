@@ -27,6 +27,7 @@ import com.software.territoriodeninos.entity.Usuario;
 import com.software.territoriodeninos.entity.Venta;
 import com.software.territoriodeninos.exception.AforoCompletoException;
 import com.software.territoriodeninos.exception.ConflictoException;
+import com.software.territoriodeninos.exception.CuentaBloqueadaException;
 import com.software.territoriodeninos.exception.EstacionNoAutorizadaException;
 import com.software.territoriodeninos.exception.RecursoNoEncontradoException;
 import com.software.territoriodeninos.exception.ReglaNegocioException;
@@ -41,6 +42,7 @@ import com.software.territoriodeninos.repository.TarifaTiempoRepository;
 import com.software.territoriodeninos.repository.TicketRepository;
 import com.software.territoriodeninos.repository.UsuarioRepository;
 import com.software.territoriodeninos.security.AuthenticatedUserProvider;
+import com.software.territoriodeninos.security.LoginAttemptService;
 import com.software.territoriodeninos.util.EstadoAsignacion;
 import com.software.territoriodeninos.util.EstadoAtraccion;
 import com.software.territoriodeninos.util.EstadoSesionJuego;
@@ -62,12 +64,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -87,6 +92,14 @@ public class OperacionServiceImpl implements OperacionService {
     private final AuditoriaOperacionService auditoriaOperacionService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
     private final PasswordEncoder passwordEncoder;
+
+    private static final long SOBREAFORO_TTL_SECONDS = 300L;
+    private static final int MAX_SOBREAFORO_ENTRIES = 1_000;
+
+    @Setter(onMethod_ = {@org.springframework.beans.factory.annotation.Autowired(required = false)})
+    private LoginAttemptService loginAttemptService;
+
+    private final Map<String, Instant> autorizacionesSobreaforo = new ConcurrentHashMap<>();
 
     @Setter
     @Value("${app.operacion.supervisor-pin:}")
@@ -248,14 +261,19 @@ public class OperacionServiceImpl implements OperacionService {
             ticketUuid = ticket.getUuidCodigo();
         }
 
+        boolean sobreaforoAutorizado = false;
         if (ocupacionActiva >= capacidadMaxima) {
-            registrarLogEscaneo(ticketUuid, false, atraccionEstacion, operario, clientIp,
-                    request.timestamp(), "RECHAZADO_AFORO_COMPLETO",
-                    "Aforo completo (" + ocupacionActiva + "/" + capacidadMaxima + ")");
-            throw new AforoCompletoException(
-                    "La atracción '" + atraccionEstacion.getNombre() + "' ha alcanzado el 100% de su capacidad máxima (" +
-                            ocupacionActiva + "/" + capacidadMaxima + " niños). No se permiten nuevos ingresos."
-            );
+            if (tieneSobreaforoVigente(operario.getId(), atraccionEstacion.getId())) {
+                sobreaforoAutorizado = true;
+            } else {
+                registrarLogEscaneo(ticketUuid, false, atraccionEstacion, operario, clientIp,
+                        request.timestamp(), "RECHAZADO_AFORO_COMPLETO",
+                        "Aforo completo (" + ocupacionActiva + "/" + capacidadMaxima + ")");
+                throw new AforoCompletoException(
+                        "La atracción '" + atraccionEstacion.getNombre() + "' ha alcanzado el 100% de su capacidad máxima (" +
+                                ocupacionActiva + "/" + capacidadMaxima + " niños). No se permiten nuevos ingresos."
+                );
+            }
         }
 
         // 3. Validación algorítmica de existencia y estado PAGADO (HU-26.03 / CA-01 -> HTTP 409 si CONSUMIDO/ANULADO)
@@ -294,7 +312,11 @@ public class OperacionServiceImpl implements OperacionService {
 
         // 7. Registro de auditoría exitoso en base de datos (HU-25.03)
         registrarLogEscaneo(ticketUuid, true, atraccionEstacion, operario, clientIp,
-                request.timestamp(), "VALIDADO_EXITOSO", "Validación completada satisfactoriamente");
+                request.timestamp(),
+                sobreaforoAutorizado ? "VALIDADO_SOBREAFORO" : "VALIDADO_EXITOSO",
+                sobreaforoAutorizado
+                        ? "Validación completada con sobreaforo autorizado por supervisor"
+                        : "Validación completada satisfactoriamente");
 
         Venta venta = detalle != null ? detalle.getVenta() : null;
         Cliente cliente = venta != null ? venta.getCliente() : (menor != null ? menor.getCliente() : null);
@@ -353,13 +375,18 @@ public class OperacionServiceImpl implements OperacionService {
             );
         }
 
-        // Control de aforo
+        // Control de aforo (con soporte a permiso de sobreaforo de un solo uso autorizado por supervisor)
         int capacidad = atraccion.getCapacidadMaxima() != null ? atraccion.getCapacidadMaxima() : 1;
         int ocupacionActiva = calcularOcupacionActiva(atraccion.getId());
+        boolean ingresoConSobreaforo = false;
         if (ocupacionActiva >= capacidad) {
-            throw new AforoCompletoException(
-                    "Aforo completo (" + ocupacionActiva + "/" + capacidad + "). No es posible ingresar más participantes a " + atraccion.getNombre()
-            );
+            if (consumirSobreaforoVigente(operario.getId(), atraccion.getId())) {
+                ingresoConSobreaforo = true;
+            } else {
+                throw new AforoCompletoException(
+                        "Aforo completo (" + ocupacionActiva + "/" + capacidad + "). No es posible ingresar más participantes a " + atraccion.getNombre()
+                );
+            }
         }
 
         Ticket ticket = ticketRepository.findByUuidCodigoForUpdate(request.uuidTicket())
@@ -400,7 +427,9 @@ public class OperacionServiceImpl implements OperacionService {
                 ticket.getUuidCodigo(),
                 estadoOrigen,
                 EstadoTicket.EN_USO.name(),
-                "Inicio de sesión en atracción: " + atraccion.getNombre(),
+                ingresoConSobreaforo
+                        ? "Inicio de sesión con sobreaforo autorizado en atracción: " + atraccion.getNombre()
+                        : "Inicio de sesión en atracción: " + atraccion.getNombre(),
                 operario.getId(),
                 "Terminal Operario"
         );
@@ -817,16 +846,73 @@ public class OperacionServiceImpl implements OperacionService {
             throw new ConflictoException("La atracción '" + atraccion.getNombre() + "' no se encuentra activa.");
         }
 
+        String rateLimitKey = "sobreaforo:" + (usuario.getCorreo() != null ? usuario.getCorreo().toLowerCase() : usuario.getId());
+        if (loginAttemptService != null && loginAttemptService.isBlocked(rateLimitKey)) {
+            long minutos = loginAttemptService.getRemainingLockoutMinutes(rateLimitKey);
+            throw new CuentaBloqueadaException(
+                    "Demasiados intentos fallidos de autorización de sobreaforo. Intente nuevamente en " + minutos + " minutos."
+            );
+        }
+
         String pinIngresado = request.claveSupervisor().trim();
         if (!validarCredencialSupervisor(pinIngresado, usuario)) {
+            if (loginAttemptService != null) {
+                loginAttemptService.loginFailed(rateLimitKey);
+            }
             throw new AccessDeniedException("PIN o credencial de supervisor inválida.");
         }
+
+        if (loginAttemptService != null) {
+            loginAttemptService.loginSucceeded(rateLimitKey);
+        }
+
+        registrarSobreaforoVigente(usuario.getId(), atraccion.getId());
 
         String motivo = (request.motivo() != null && !request.motivo().isBlank())
                 ? request.motivo().trim()
                 : "Override de capacidad máxima autorizado";
-        log.warn("Sobreaforo autorizado en atracción '{}' (ID {}) por usuario {}. Motivo: {}",
-                atraccion.getNombre(), atraccion.getId(), usuario.getCorreo(), motivo);
+        log.warn("Sobreaforo autorizado en atracción '{}' (ID {}) por usuario {} (válido {}s, 1 uso). Motivo: {}",
+                atraccion.getNombre(), atraccion.getId(), usuario.getCorreo(), SOBREAFORO_TTL_SECONDS, motivo);
+    }
+
+    private String claveSobreaforo(Long usuarioId, Long atraccionId) {
+        return usuarioId + ":" + atraccionId;
+    }
+
+    private void registrarSobreaforoVigente(Long usuarioId, Long atraccionId) {
+        if (usuarioId == null || atraccionId == null) {
+            return;
+        }
+        Instant ahora = Instant.now();
+        if (autorizacionesSobreaforo.size() >= MAX_SOBREAFORO_ENTRIES) {
+            autorizacionesSobreaforo.entrySet().removeIf(e -> e.getValue().isBefore(ahora));
+        }
+        autorizacionesSobreaforo.put(claveSobreaforo(usuarioId, atraccionId), ahora.plusSeconds(SOBREAFORO_TTL_SECONDS));
+    }
+
+    private boolean tieneSobreaforoVigente(Long usuarioId, Long atraccionId) {
+        if (usuarioId == null || atraccionId == null) {
+            return false;
+        }
+        String key = claveSobreaforo(usuarioId, atraccionId);
+        Instant expiracion = autorizacionesSobreaforo.get(key);
+        if (expiracion == null) {
+            return false;
+        }
+        if (Instant.now().isAfter(expiracion)) {
+            autorizacionesSobreaforo.remove(key, expiracion);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean consumirSobreaforoVigente(Long usuarioId, Long atraccionId) {
+        if (usuarioId == null || atraccionId == null) {
+            return false;
+        }
+        String key = claveSobreaforo(usuarioId, atraccionId);
+        Instant expiracion = autorizacionesSobreaforo.remove(key);
+        return expiracion != null && !Instant.now().isAfter(expiracion);
     }
 
     private boolean validarCredencialSupervisor(String pinIngresado, Usuario usuarioActual) {

@@ -2,9 +2,11 @@ package com.software.territoriodeninos.dto.tienda;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Schema(description = "Ítem de compra online asignado a un menor")
 public record ItemCompraOnlineDTO(
@@ -15,15 +17,18 @@ public record ItemCompraOnlineDTO(
     Long tarifaEventoId,
 
     @NotBlank(message = "El nombre del niño es obligatorio")
+    @Size(min = 2, max = 150, message = "El nombre del niño debe tener entre 2 y 150 caracteres")
     @JsonAlias({"nombreMenor", "nombre"})
     String menorNombre,
 
     @NotNull(message = "La edad del niño es obligatoria")
     @Min(value = 0, message = "La edad no puede ser negativa")
+    @Max(value = 17, message = "La edad máxima permitida para menores es 17 años")
     @JsonAlias({"edadMenor", "edad"})
     Integer menorEdad,
 
     @NotNull(message = "La cantidad es obligatoria")
     @Min(value = 1, message = "La cantidad mínima es 1")
+    @Max(value = 10, message = "La cantidad máxima por ítem es 10")
     Integer cantidad
 ) {}

@@ -698,7 +698,7 @@ public class VentaServiceImpl implements VentaService {
             v.getCliente().getId(),
             v.getCliente().getNumeroDocumento(),
             nombreCompletoCliente.trim(),
-            v.getTurnoCaja().getId(),
+            v.getTurnoCaja() != null ? v.getTurnoCaja().getId() : null,
             v.getSubtotal(),
             v.getDescuento(),
             v.getImpuestos(),

@@ -29,14 +29,6 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     Optional<Ticket> findByUuidCodigo(UUID uuidCodigo);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = {
-        "detalleVenta",
-        "detalleVenta.atraccion",
-        "detalleVenta.venta",
-        "detalleVenta.venta.cliente",
-        "detalleVenta.venta.turnoCaja",
-        "menor"
-    })
     @Query("SELECT t FROM Ticket t WHERE t.uuidCodigo = :uuidCodigo")
     Optional<Ticket> findByUuidCodigoForUpdate(@Param("uuidCodigo") UUID uuidCodigo);
 
@@ -100,14 +92,36 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
         JOIN FETCH dv.venta v
         JOIN FETCH v.cliente c
         LEFT JOIN FETCH t.menor m
-        WHERE LOWER(c.numeroDocumento) = LOWER(:documento)
-          AND (LOWER(c.correo) = LOWER(:correo) OR :correo IS NULL)
+        WHERE c.numeroDocumento = :documento
+          AND LOWER(c.correo) = LOWER(:correo)
+          AND t.estadoTicket IN :estados
           AND t.fechaEmision >= :desde
         ORDER BY t.fechaEmision DESC
         """)
-    List<Ticket> buscarBoletosActivosCliente(
+    List<Ticket> buscarBoletosActivosPorDocumentoYCorreo(
             @Param("documento") String documento,
             @Param("correo") String correo,
+            @Param("estados") Collection<com.software.territoriodeninos.util.EstadoTicket> estados,
+            @Param("desde") java.time.LocalDateTime desde
+    );
+
+    @Query("""
+        SELECT t FROM Ticket t
+        JOIN FETCH t.detalleVenta dv
+        JOIN FETCH dv.atraccion a
+        JOIN FETCH dv.venta v
+        JOIN FETCH v.cliente c
+        LEFT JOIN FETCH t.menor m
+        WHERE c.numeroDocumento = :documento
+          AND UPPER(v.codigoOrden) = UPPER(:codigoOrden)
+          AND t.estadoTicket IN :estados
+          AND t.fechaEmision >= :desde
+        ORDER BY t.fechaEmision DESC
+        """)
+    List<Ticket> buscarBoletosActivosPorDocumentoYOrden(
+            @Param("documento") String documento,
+            @Param("codigoOrden") String codigoOrden,
+            @Param("estados") Collection<com.software.territoriodeninos.util.EstadoTicket> estados,
             @Param("desde") java.time.LocalDateTime desde
     );
 

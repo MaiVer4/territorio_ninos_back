@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -50,11 +51,13 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    @Async
     public void enviarBoletasCompraOnline(String destinatario, String nombreCliente, String codigoOrden, List<TicketOnlineDTO> tickets) {
         enviarBoletasCompraOnline(destinatario, nombreCliente, codigoOrden, null, null, null, null, tickets);
     }
 
     @Override
+    @Async
     public void enviarBoletasCompraOnline(
             String destinatario,
             String nombreCliente,

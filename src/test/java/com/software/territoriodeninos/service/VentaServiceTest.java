@@ -519,4 +519,36 @@ class VentaServiceTest {
         );
         assertTrue(ex.getMessage().contains("Los cajeros no tienen autorización para aplicar descuentos manuales"));
     }
+
+    @Test
+    @DisplayName("obtenerVentaPorId - Soporta ventas ONLINE sin turnoCaja asociado (turnoCaja == null)")
+    void testObtenerVentaPorId_VentaOnlineSinTurnoCaja_NoLanzaNpe() {
+        Venta ventaOnline = Venta.builder()
+                .id(123L)
+                .cliente(clienteMock)
+                .turnoCaja(null)
+                .canalVenta(com.software.territoriodeninos.util.CanalVenta.ONLINE)
+                .codigoOrden("ORD-999-ABCD")
+                .subtotal(new BigDecimal("15000.00"))
+                .descuento(BigDecimal.ZERO)
+                .impuestos(BigDecimal.ZERO)
+                .montoTotal(new BigDecimal("15000.00"))
+                .montoRecibido(new BigDecimal("15000.00"))
+                .cambio(BigDecimal.ZERO)
+                .metodoPago(MetodoPago.NEQUI)
+                .estadoVenta(EstadoVenta.PAGADO)
+                .fechaVenta(LocalDateTime.now())
+                .congelada(true)
+                .build();
+
+        when(ventaRepository.findById(123L)).thenReturn(Optional.of(ventaOnline));
+        when(ticketRepository.findByDetalleVentaVentaIdOrderByFechaEmisionAsc(123L)).thenReturn(List.of());
+
+        VentaResponseDTO dto = ventaService.obtenerVentaPorId(123L);
+
+        assertNotNull(dto);
+        assertEquals(123L, dto.id());
+        assertNull(dto.turnoCajaId());
+        assertEquals(new BigDecimal("15000.00"), dto.montoTotal());
+    }
 }

@@ -30,8 +30,36 @@ public record CatalogoAtraccionOnlineDTO(
     Integer ocupacionActual,
     Integer cuposLibres,
     LocalDateTime horaProximoIngreso,
-    String ingresoTexto
+    String ingresoTexto,
+    BigDecimal porcentajeImpuesto
 ) {
+    public CatalogoAtraccionOnlineDTO(
+            Long id,
+            String nombre,
+            String descripcion,
+            String imagenUrl,
+            TipoAtraccion tipo,
+            EstadoAtraccion estado,
+            Integer capacidadMaxima,
+            Integer duracionMinutosBase,
+            Integer edadMinima,
+            Integer edadMaxima,
+            boolean disponibleParaCompra,
+            List<TarifaTiempoResponseDTO> tarifasTiempo,
+            List<TarifaEventoResponseDTO> tarifasEvento,
+            BigDecimal tarifaMinuto,
+            Integer ocupacionActual,
+            Integer cuposLibres,
+            LocalDateTime horaProximoIngreso,
+            String ingresoTexto
+    ) {
+        this(
+                id, nombre, descripcion, imagenUrl, tipo, estado, capacidadMaxima, duracionMinutosBase,
+                edadMinima, edadMaxima, disponibleParaCompra, tarifasTiempo, tarifasEvento,
+                tarifaMinuto, ocupacionActual, cuposLibres, horaProximoIngreso, ingresoTexto, BigDecimal.ZERO
+        );
+    }
+
     public CatalogoAtraccionOnlineDTO(
             Long id,
             String nombre,
@@ -65,7 +93,8 @@ public record CatalogoAtraccionOnlineDTO(
                 0,
                 capacidadMaxima != null ? capacidadMaxima : 0,
                 null,
-                IngresoTextoFormatter.AHORA
+                IngresoTextoFormatter.AHORA,
+                BigDecimal.ZERO
         );
     }
 

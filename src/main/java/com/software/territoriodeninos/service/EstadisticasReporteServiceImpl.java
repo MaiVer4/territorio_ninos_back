@@ -7,6 +7,7 @@ import com.software.territoriodeninos.entity.Venta;
 import com.software.territoriodeninos.repository.SesionJuegoRepository;
 import com.software.territoriodeninos.repository.VentaRepository;
 import com.software.territoriodeninos.util.EstadoVenta;
+import com.software.territoriodeninos.util.FechaParametroUtil;
 import com.software.territoriodeninos.util.MetodoPago;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -263,8 +264,8 @@ public class EstadisticasReporteServiceImpl implements EstadisticasReporteServic
     static LocalDateTime[] resolverRango(String periodo, String fechaInicio, String fechaFin) {
         LocalDate hoy = LocalDate.now();
         LocalDateTime finDia = hoy.atTime(java.time.LocalTime.MAX);
-        LocalDateTime inicioCustom = parseFecha(fechaInicio, false);
-        LocalDateTime finCustom = parseFecha(fechaFin, true);
+        LocalDateTime inicioCustom = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime finCustom = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
         if (inicioCustom != null || finCustom != null) {
             return new LocalDateTime[]{
                     inicioCustom != null ? inicioCustom : hoy.atStartOfDay(),
@@ -276,20 +277,6 @@ public class EstadisticasReporteServiceImpl implements EstadisticasReporteServic
             case "ESTE_MES" -> new LocalDateTime[]{hoy.withDayOfMonth(1).atStartOfDay(), finDia};
             default -> new LocalDateTime[]{hoy.atStartOfDay(), finDia};
         };
-    }
-
-    private static LocalDateTime parseFecha(String valor, boolean finDeDia) {
-        if (valor == null || valor.isBlank()) return null;
-        String v = valor.trim();
-        try {
-            if (v.length() <= 10) {
-                LocalDate d = LocalDate.parse(v);
-                return finDeDia ? d.atTime(java.time.LocalTime.MAX) : d.atStartOfDay();
-            }
-            return LocalDateTime.parse(v);
-        } catch (java.time.format.DateTimeParseException e) {
-            return null;
-        }
     }
 
     static String etiquetaHora(int h) {

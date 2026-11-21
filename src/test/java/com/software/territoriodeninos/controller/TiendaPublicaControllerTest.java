@@ -123,7 +123,7 @@ class TiendaPublicaControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/tienda/mis-boletos - Consulta boletos activos por documento")
+    @DisplayName("GET /api/tienda/mis-boletos - Consulta boletos activos por documento y correo")
     void consultarBoletos_Exito_Retorna200() throws Exception {
         UUID uuid = UUID.randomUUID();
         TicketOnlineDTO ticketDTO = new TicketOnlineDTO(
@@ -132,7 +132,7 @@ class TiendaPublicaControllerTest {
                 EstadoTicket.PAGADO, LocalDateTime.now(), uuid.toString()
         );
 
-        when(tiendaService.consultarBoletosActivos(eq("1098765432"), any()))
+        when(tiendaService.consultarBoletosActivos(eq("1098765432"), eq("carlos@gmail.com"), any()))
                 .thenReturn(List.of(ticketDTO));
 
         mockMvc.perform(get("/api/tienda/mis-boletos")
@@ -141,5 +141,13 @@ class TiendaPublicaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].uuidCodigo", is(uuid.toString())));
+    }
+
+    @Test
+    @DisplayName("GET /api/tienda/mis-boletos - Rechaza 400 si solo se envía documento sin correo ni código de orden")
+    void consultarBoletos_SinSegundoFactor_Retorna400() throws Exception {
+        mockMvc.perform(get("/api/tienda/mis-boletos")
+                        .param("documento", "1098765432"))
+                .andExpect(status().isBadRequest());
     }
 }
