@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Componentes del Frontend (`territorio-front`)
-> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit 64a39c7).
+> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit 497ffa3).
 
 ## 1. Stack, Convenciones y Reglas de Desarrollo
 - **Stack:** Angular `21.2.0` (100% Standalone Components), Signals (`signal`, `computed`, `effect`), RxJS (`HttpClient`), Tailwind CSS `3.4.19`, Angular Material Icons (`material-symbols-outlined`), STOMP/WebSocket, Vitest `4.0.8`.
@@ -76,10 +76,11 @@
 
 ## 4. Mapa de Componentes por Feature (`src/app/features/` y `shared/`)
 - **`features/tienda/`:**
-  - `pages/landing/tienda-landing.component.ts`: Cara pública del parque (`/`), hero promocional, grilla de atracciones activas, control de aforo y cesta reactiva.
+  - `pages/landing/tienda-landing.component.ts`: Cara comercial y pública del parque (`/`), hero de ventas, ticker de anuncios, filtros por edad/tipo (`Todas`, `Pequeños`, `Grandes`, `Por Tiempo`, `Por Caídas`), catálogo visual con imágenes temáticas, botón de normas, sección "Cómo Funciona", paquetes de cumpleaños/eventos con cotización vía WhatsApp, pilares de confianza, acordeón interactivo de preguntas frecuentes, horarios y ubicación con botón a Google Maps.
   - `pages/mis-boletos/mis-boletos.component.ts`: Visualizador y buscador de boletas del día con código QR ampliable para escáner operario e impresión térmica/PDF.
+  - `components/normas-modal/normas-modal.component.ts`: Modal accesible de normas de seguridad, aforo, requisitos de medias antideslizantes, acompañamiento y tarifas activas por atracción.
   - `components/modalidad-modal/modalidad-modal.component.ts`: Diálogo de selección de tarifas y datos de menor con validación de edad en tiempo real.
-  - `components/carrito-drawer/carrito-drawer.component.ts`: Panel lateral/inferior de cesta y checkout de invitado con protección honeypot.
+  - `components/carrito-drawer/carrito-drawer.component.ts`: Panel lateral/inferior de cesta con sugerencias de cross-selling inteligente y checkout de invitado con protección honeypot.
   - `components/pasarela-modal/pasarela-modal.component.ts`: Simulador interactivo de pagos (Nequi, PSE, Tarjeta).
 - **`features/auth/pages/`:** `login`, `forgot-password`, `reset-password`, `unauthorized`.
 - **`features/taquilla/`:**
