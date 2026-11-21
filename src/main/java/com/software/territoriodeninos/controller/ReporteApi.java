@@ -11,12 +11,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Tag(name = "Reportes y Auditoría Contable", description = "Endpoints administrativos para conciliación financiera de turnos y métricas de rotación por atracción")
@@ -32,11 +30,11 @@ public interface ReporteApi {
             @ApiResponse(responseCode = "403", description = "Acceso denegado: solo Administrador")
     })
     ResponseEntity<List<ReporteTurnoDTO>> obtenerReporteTurnos(
-            @Parameter(description = "Fecha inicial (ISO DATE_TIME)", example = "2026-11-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @Parameter(description = "Fecha inicial (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-01")
+            @RequestParam(required = false) String fechaInicio,
 
-            @Parameter(description = "Fecha final (ISO DATE_TIME)", example = "2026-11-02T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin,
+            @Parameter(description = "Fecha final (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-02")
+            @RequestParam(required = false) String fechaFin,
 
             @Parameter(description = "ID del usuario cajero opcional", example = "2")
             @RequestParam(required = false) Long usuarioId
@@ -67,11 +65,11 @@ public interface ReporteApi {
             @ApiResponse(responseCode = "403", description = "Acceso denegado: solo Administrador")
     })
     ResponseEntity<List<RotacionAtraccionDTO>> obtenerRotacionAtracciones(
-            @Parameter(description = "Fecha inicial del rango", example = "2026-10-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @Parameter(description = "Fecha inicial del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-10-01")
+            @RequestParam(required = false) String fechaInicio,
 
-            @Parameter(description = "Fecha final del rango", example = "2026-10-31T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin,
+            @Parameter(description = "Fecha final del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-10-31")
+            @RequestParam(required = false) String fechaFin,
 
             @Parameter(description = "Agrupación temporal: DIARIO, SEMANAL, MENSUAL", example = "MENSUAL")
             @RequestParam(required = false, defaultValue = "MENSUAL") String periodo,
@@ -92,11 +90,11 @@ public interface ReporteApi {
             @Parameter(description = "Tipo de reporte: TURNOS, ROTACION, INCIDENTES", example = "TURNOS")
             @RequestParam(required = false, defaultValue = "TURNOS") String tipoReporte,
 
-            @Parameter(description = "Fecha inicial del rango", example = "2026-11-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @Parameter(description = "Fecha inicial del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-01")
+            @RequestParam(required = false) String fechaInicio,
 
-            @Parameter(description = "Fecha final del rango", example = "2026-11-02T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin,
+            @Parameter(description = "Fecha final del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-02")
+            @RequestParam(required = false) String fechaFin,
 
             @Parameter(description = "ID del cajero opcional", example = "1")
             @RequestParam(required = false) Long usuarioId,
@@ -117,11 +115,11 @@ public interface ReporteApi {
             @Parameter(description = "Tipo de reporte: TURNOS, ROTACION, INCIDENTES", example = "TURNOS")
             @RequestParam(required = false, defaultValue = "TURNOS") String tipoReporte,
 
-            @Parameter(description = "Fecha inicial del rango", example = "2026-11-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @Parameter(description = "Fecha inicial del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-01")
+            @RequestParam(required = false) String fechaInicio,
 
-            @Parameter(description = "Fecha final del rango", example = "2026-11-02T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin,
+            @Parameter(description = "Fecha final del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-02")
+            @RequestParam(required = false) String fechaFin,
 
             @Parameter(description = "ID del cajero opcional", example = "1")
             @RequestParam(required = false) Long usuarioId,
@@ -140,8 +138,10 @@ public interface ReporteApi {
             @ApiResponse(responseCode = "403", description = "Acceso denegado: solo Administrador")
     })
     ResponseEntity<com.software.territoriodeninos.dto.GraficoTendenciaDTO> obtenerHorasPico(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin
+            @Parameter(description = "Fecha inicial del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-01")
+            @RequestParam(required = false) String fechaInicio,
+            @Parameter(description = "Fecha final del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-02")
+            @RequestParam(required = false) String fechaFin
     );
 
     @Operation(
@@ -154,8 +154,10 @@ public interface ReporteApi {
             @ApiResponse(responseCode = "403", description = "Acceso denegado: solo Administrador")
     })
     ResponseEntity<com.software.territoriodeninos.dto.GraficoTendenciaDTO> obtenerMetodosPago(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin
+            @Parameter(description = "Fecha inicial del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-01")
+            @RequestParam(required = false) String fechaInicio,
+            @Parameter(description = "Fecha final del rango (YYYY-MM-DD o ISO DATE_TIME)", example = "2026-11-02")
+            @RequestParam(required = false) String fechaFin
     );
 
     @Operation(

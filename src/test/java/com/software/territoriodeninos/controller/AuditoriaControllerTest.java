@@ -124,4 +124,29 @@ class AuditoriaControllerTest {
                 .andExpect(jsonPath("$.incidentes", hasSize(1)))
                 .andExpect(jsonPath("$.incidentes[0].atraccionNombre", is("Castillo Mágico")));
     }
+
+    @Test
+    @DisplayName("GET /api/auditoria/incidentes debe aceptar fechas YYYY-MM-DD y delegar rango completo del día")
+    void testConsultarIncidentesConSoloFecha() throws Exception {
+        ResumenIncidentesAuditoriaDTO resumen = ResumenIncidentesAuditoriaDTO.builder()
+                .totalIncidentes(0)
+                .incidentes(List.of())
+                .build();
+
+        LocalDateTime esperadoInicio = LocalDateTime.of(2026, 11, 21, 0, 0, 0);
+        LocalDateTime esperadoFin = LocalDateTime.of(2026, 11, 21, 23, 59, 59, 999999999);
+
+        when(auditoriaOperacionService.consultarIncidentes(eq(esperadoInicio), eq(esperadoFin), any(), any()))
+                .thenReturn(resumen);
+
+        mockMvc.perform(get("/api/auditoria/incidentes")
+                        .param("fechaInicio", "2026-11-21")
+                        .param("fechaFin", "2026-11-21")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalIncidentes", is(0)));
+
+        org.mockito.Mockito.verify(auditoriaOperacionService)
+                .consultarIncidentes(eq(esperadoInicio), eq(esperadoFin), any(), any());
+    }
 }

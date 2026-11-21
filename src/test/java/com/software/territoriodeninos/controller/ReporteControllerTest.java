@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.software.territoriodeninos.dto.DetalleTurnoAuditadoDTO;
 import com.software.territoriodeninos.dto.ReporteTurnoDTO;
 import com.software.territoriodeninos.dto.RotacionAtraccionDTO;
+import com.software.territoriodeninos.exception.GlobalExceptionHandler;
 import com.software.territoriodeninos.service.ConciliacionTurnoService;
 import com.software.territoriodeninos.util.EstadoConciliacionTurno;
 import com.software.territoriodeninos.util.EstadoTurnoCaja;
@@ -27,6 +28,9 @@ import java.util.List;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -56,7 +60,9 @@ class ReporteControllerTest {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
-        mockMvc = MockMvcBuilders.standaloneSetup(reporteController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(reporteController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -231,5 +237,69 @@ class ReporteControllerTest {
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.titulo", is("Evolución Ingresos")));
+    }
+
+    @Test
+    @DisplayName("GET /api/reportes/turnos debe aceptar fechas YYYY-MM-DD convirtiendo a inicio y fin de día")
+    void testObtenerReporteTurnosConSoloFecha() throws Exception {
+        LocalDateTime esperadoInicio = LocalDateTime.of(2026, 11, 21, 0, 0, 0);
+        LocalDateTime esperadoFin = LocalDateTime.of(2026, 11, 21, 23, 59, 59, 999999999);
+
+        when(conciliacionTurnoService.obtenerReporteTurnos(eq(esperadoInicio), eq(esperadoFin), isNull()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/reportes/turnos")
+                        .param("fechaInicio", "2026-11-21")
+                        .param("fechaFin", "2026-11-21")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        verify(conciliacionTurnoService).obtenerReporteTurnos(eq(esperadoInicio), eq(esperadoFin), isNull());
+    }
+
+    @Test
+    @DisplayName("GET /api/reportes/turnos debe aceptar formato ISO LocalDateTime")
+    void testObtenerReporteTurnosConLocalDateTime() throws Exception {
+        LocalDateTime esperadoInicio = LocalDateTime.of(2026, 11, 21, 9, 15, 0);
+
+        when(conciliacionTurnoService.obtenerReporteTurnos(eq(esperadoInicio), isNull(), isNull()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/reportes/turnos")
+                        .param("fechaInicio", "2026-11-21T09:15:00")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        verify(conciliacionTurnoService).obtenerReporteTurnos(eq(esperadoInicio), isNull(), isNull());
+    }
+
+    @Test
+    @DisplayName("GET /api/reportes/turnos debe retornar 400 Bad Request cuando fechaInicio es inválida")
+    void testObtenerReporteTurnosConFechaInvalida() throws Exception {
+        mockMvc.perform(get("/api/reportes/turnos")
+                        .param("fechaInicio", "no-es-fecha")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detalles").exists());
+    }
+
+    @Test
+    @DisplayName("GET /api/reportes/exportar/csv debe aceptar fechas YYYY-MM-DD convirtiendo a inicio y fin de día")
+    void testExportarCsvConSoloFecha() throws Exception {
+        byte[] csvBytes = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF, 'a', ';', 'b'};
+        LocalDateTime esperadoInicio = LocalDateTime.of(2026, 11, 21, 0, 0, 0);
+        LocalDateTime esperadoFin = LocalDateTime.of(2026, 11, 21, 23, 59, 59, 999999999);
+
+        when(exportacionReporteService.exportarCsv(eq("TURNOS"), eq(esperadoInicio), eq(esperadoFin), isNull(), isNull()))
+                .thenReturn(csvBytes);
+
+        mockMvc.perform(get("/api/reportes/exportar/csv")
+                        .param("tipoReporte", "TURNOS")
+                        .param("fechaInicio", "2026-11-21")
+                        .param("fechaFin", "2026-11-21"))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(csvBytes));
+
+        verify(exportacionReporteService).exportarCsv(eq("TURNOS"), eq(esperadoInicio), eq(esperadoFin), isNull(), isNull());
     }
 }

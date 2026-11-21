@@ -8,6 +8,7 @@ import com.software.territoriodeninos.dto.RotacionAtraccionDTO;
 import com.software.territoriodeninos.service.ConciliacionTurnoService;
 import com.software.territoriodeninos.service.EstadisticasReporteService;
 import com.software.territoriodeninos.service.ExportacionReporteService;
+import com.software.territoriodeninos.util.FechaParametroUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -33,11 +34,13 @@ public class ReporteController implements ReporteApi {
     @GetMapping("/turnos")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<List<ReporteTurnoDTO>> obtenerReporteTurnos(
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin,
             @RequestParam(required = false) Long usuarioId
     ) {
-        List<ReporteTurnoDTO> reporte = conciliacionTurnoService.obtenerReporteTurnos(fechaInicio, fechaFin, usuarioId);
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
+        List<ReporteTurnoDTO> reporte = conciliacionTurnoService.obtenerReporteTurnos(inicio, fin, usuarioId);
         return ResponseEntity.ok(reporte);
     }
 
@@ -55,14 +58,16 @@ public class ReporteController implements ReporteApi {
     @GetMapping("/rotacion-atracciones")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<List<RotacionAtraccionDTO>> obtenerRotacionAtracciones(
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin,
             @RequestParam(required = false, defaultValue = "MENSUAL") String periodo,
             @RequestParam(required = false, defaultValue = "USOS") String criterioOrden
     ) {
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
         List<RotacionAtraccionDTO> rotacion = conciliacionTurnoService.obtenerRotacionAtracciones(
-                fechaInicio,
-                fechaFin,
+                inicio,
+                fin,
                 periodo,
                 criterioOrden
         );
@@ -74,12 +79,14 @@ public class ReporteController implements ReporteApi {
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<byte[]> exportarPdf(
             @RequestParam(required = false, defaultValue = "TURNOS") String tipoReporte,
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin,
             @RequestParam(required = false) Long usuarioId,
             @RequestParam(required = false) Long atraccionId
     ) {
-        byte[] pdfBytes = exportacionReporteService.exportarPdf(tipoReporte, fechaInicio, fechaFin, usuarioId, atraccionId);
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
+        byte[] pdfBytes = exportacionReporteService.exportarPdf(tipoReporte, inicio, fin, usuarioId, atraccionId);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDisposition(ContentDisposition.attachment()
@@ -93,12 +100,14 @@ public class ReporteController implements ReporteApi {
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<byte[]> exportarCsv(
             @RequestParam(required = false, defaultValue = "TURNOS") String tipoReporte,
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin,
             @RequestParam(required = false) Long usuarioId,
             @RequestParam(required = false) Long atraccionId
     ) {
-        byte[] csvBytes = exportacionReporteService.exportarCsv(tipoReporte, fechaInicio, fechaFin, usuarioId, atraccionId);
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
+        byte[] csvBytes = exportacionReporteService.exportarCsv(tipoReporte, inicio, fin, usuarioId, atraccionId);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("text/csv; charset=UTF-8"));
         headers.setContentDisposition(ContentDisposition.attachment()
@@ -111,10 +120,12 @@ public class ReporteController implements ReporteApi {
     @GetMapping("/graficos/horas-pico")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<GraficoTendenciaDTO> obtenerHorasPico(
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin
     ) {
-        GraficoTendenciaDTO grafico = estadisticasReporteService.obtenerHorasPico(fechaInicio, fechaFin);
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
+        GraficoTendenciaDTO grafico = estadisticasReporteService.obtenerHorasPico(inicio, fin);
         return ResponseEntity.ok(grafico);
     }
 
@@ -122,10 +133,12 @@ public class ReporteController implements ReporteApi {
     @GetMapping("/graficos/metodos-pago")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<GraficoTendenciaDTO> obtenerMetodosPago(
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin
     ) {
-        GraficoTendenciaDTO grafico = estadisticasReporteService.obtenerDistribucionMetodosPago(fechaInicio, fechaFin);
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
+        GraficoTendenciaDTO grafico = estadisticasReporteService.obtenerDistribucionMetodosPago(inicio, fin);
         return ResponseEntity.ok(grafico);
     }
 

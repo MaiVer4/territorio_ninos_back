@@ -3,6 +3,7 @@ package com.software.territoriodeninos.controller;
 import com.software.territoriodeninos.dto.ResumenIncidentesAuditoriaDTO;
 import com.software.territoriodeninos.dto.TimelineTicketDTO;
 import com.software.territoriodeninos.service.AuditoriaOperacionService;
+import com.software.territoriodeninos.util.FechaParametroUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,14 +33,16 @@ public class AuditoriaController implements AuditoriaApi {
     @GetMapping("/incidentes")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ADMIN')")
     public ResponseEntity<ResumenIncidentesAuditoriaDTO> consultarIncidentes(
-            @RequestParam(required = false) LocalDateTime fechaInicio,
-            @RequestParam(required = false) LocalDateTime fechaFin,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin,
             @RequestParam(required = false) Long atraccionId,
             @RequestParam(required = false) String tipoPausa
     ) {
+        LocalDateTime inicio = FechaParametroUtil.parseInicio(fechaInicio, "fechaInicio");
+        LocalDateTime fin = FechaParametroUtil.parseFin(fechaFin, "fechaFin");
         ResumenIncidentesAuditoriaDTO resumen = auditoriaOperacionService.consultarIncidentes(
-                fechaInicio,
-                fechaFin,
+                inicio,
+                fin,
                 atraccionId,
                 tipoPausa
         );
