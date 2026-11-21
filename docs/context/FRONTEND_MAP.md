@@ -1,5 +1,5 @@
 # Mapa de Arquitectura y Componentes del Frontend (`territorio-front`)
-> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit 39201c0).
+> Fuente de verdad: `/home/vera/Downloads/territorio-front/src/app/**`, `package.json`, `angular.json`. Última sincronización: 2026-11-20 (commit e41fcd9).
 
 ## 1. Stack, Convenciones y Reglas de Desarrollo
 - **Stack:** Angular `21.2.0` (100% Standalone Components), Signals (`signal`, `computed`, `effect`), RxJS (`HttpClient`), Tailwind CSS `3.4.19`, Angular Material Icons (`material-symbols-outlined`), STOMP/WebSocket, Vitest `4.0.8`.
@@ -57,7 +57,7 @@
 | `AtraccionService` | `GET /atracciones`, `GET /atracciones/activas`, `GET /ventas/catalogo`, `GET /atracciones/{id}`, `POST /atracciones`, `PUT /atracciones/{id}`, `DELETE /atracciones/{id}` | — | CRUD de atracciones, consulta de atracciones activas y carga del catálogo de venta POS con tarifas y cupos en tiempo real. |
 | `TarifaService` | `GET/POST/PUT/DELETE /tarifas-tiempo...` y `/tarifas-evento...` | — | Gestión de bloques de tiempo (`TarifaBloque`) y paquetes de intentos (`TarifaEvento`) por atracción. |
 | `VentaCalculoService` | *(Cálculo local)* | — | Cálculo de subtotales, IVA (`INCLUIDO`/`ADICIONAL`), cambio en efectivo y armado de `ResumenLiquidacionPOS`. |
-| `ColaEmisionService` | `POST /ventas/procesar` (vía sincronización) | `ordenes`, `ordenReciente`, `boletasGeneradas`, `historialTicketsTurno`, `ordenesPendientes` | Orquesta la emisión de boletas tras el pago en POS, reconciliando los UUIDs generados por el backend con las boletas impresas. |
+| `ColaEmisionService` | `POST /ventas/procesar` (vía sincronización) | `ordenes`, `ordenReciente`, `boletasGeneradas`, `historialTicketsTurno`, `ordenesPendientes` | Orquesta la emisión de boletas tras el pago en POS, reconciliando `idVenta`, totales fiscales, UUIDs y `horaIngresoEstimada`/`ingresoTexto` generados por el backend con las boletas impresas y `PrintService`. |
 | `PrintService` | *(Usa `ConfiguracionService` + `window.print()`)* | `imprimiendo`, `ordenEnImpresion`, `boletasEnImpresion`, `anchoPapelMm`, `configParque` | Renderiza `TicketPrintTemplateComponent` en formato térmico de `58mm` u `80mm` y lanza diálogo de impresión. |
 | `TicketConsultaService` | `GET /tickets/buscar?criterio=`, `GET /tickets/{uuid}` | — | Búsqueda de boletas en taquilla y cálculo de estado visual (`PAGADO`, `EN_USO`, `CONSUMIDO`) y tiempo restante. |
 | `TicketReimpresionService` | `POST /tickets/{uuid}/reimprimir` | `historialReimpresiones`, `ultimaReimpresion`, `procesandoReimpresion` | Solicita reimpresión justificada (`ATASCO_PAPEL`, `FALTA_PAPEL`, `BOLETA_ILEGIBLE`), marca boleta como `REIMPRESIÓN` y soporta cola offline. |
@@ -65,19 +65,19 @@
 | `OperacionService` | `GET /operario/estacion-activa`, `POST /operacion/vincular`, `POST /operacion/desvincular`, `POST /operacion/autorizar-sobreaforo`, `POST /operacion/escanear`, `POST /operacion/iniciar-sesion`, `GET /operacion/cola/{id}`, `POST /operacion/sesiones/{id}/pausar|reanudar|salida|descontar-intento`, `POST /operacion/atraccion/{id}/pausa-general` | `estacionActiva`, `colaActiva`, `resultadoValidacionActual`, `paradaEmergenciaActiva`, `ocupacionActual`, `capacidadMaxima`, `colaOrdenadaPorUrgencia` | Motor de la vista de operario: vinculación asíncrona con refresco en `409`, autorización de sobreaforo en backend, validación QR fail-closed (`ERROR_SERVIDOR`/`SIN_CONEXION` en 5xx/offline), guarda anti-race en `sincronizarColaDesdeServidor`, reconciliación de `sesionId`, cronómetros y caídas. |
 | `OfflineQueueService` | *(Persistencia en `localStorage`)* | `accionesPendientes`, `accionesDescartadas`, `totalPendientes`, `hayAccionesPendientes` | Encola acciones operativas cuando se pierde conexión y las reintenta al reconectar. |
 | `WebsocketService` | STOMP `/territorioninos/ws-operacion` (`/topic/atraccion/{id}`, `/topic/operacion/dashboard`, `/topic/admin/dashboard`) | `connected`, `estadoConexion`, `serverTimeOffsetMs`, `ultimoMensajeRecibido`, `occupancy$` | Sincronización en tiempo real de colas y aforo para dashboard/POS con reconexión backoff/online en `dashboardAdminActivo` y desconexión automática vía `effect()` cuando `authService.currentUser()` pasa a `null`. |
-| `ReporteService` | `GET /reportes/turnos`, `GET /reportes/turnos/{id}/detalle`, `GET /reportes/rotacion-atracciones`, `GET /reportes/graficos`, `GET /reportes/exportar/csv|pdf` | `descargandoArchivo`, `formatoDescargaActivo` | Reportes de conciliación de caja, rotación de atracciones, series estadísticas reales de ventas/afluencia por hora y descarga de blobs PDF/CSV. |
+| `ReporteService` | `GET /reportes/turnos`, `GET /reportes/turnos/{id}/detalle`, `GET /reportes/rotacion-atracciones`, `GET /reportes/graficos`, `GET /reportes/exportar/csv|pdf` | `descargandoArchivo`, `formatoDescargaActivo` | Reportes de conciliación de caja, rotación de atracciones, series estadísticas reales de ventas/afluencia por hora y descarga de blobs PDF/CSV (normalizando fechas con `core/utils/date.util.ts` y mapeando respuestas de turnos/detalle). |
 | `AuditoriaService` | `GET /auditoria/tickets/{criterio}`, `GET /auditoria/incidentes` | — | Consulta de línea de tiempo inmutable de un ticket y bitácora de incidentes/pausas (> 5 min resaltados). |
 | `ConfiguracionService` | `GET /configuracion`, `PUT /configuracion` | — | Lectura y actualización de datos fiscales del parque, ancho de papel y tiempo de gracia. |
 | `UsuarioService` | `GET/POST/PUT/DELETE /usuarios` | — | Gestión de colaboradores (`ADMINISTRADOR`, `TAQUILLERO`, `OPERARIO`). |
 | `NotificationService` / `SoundNotificationService` / `PosAudioService` | *(UI / Web Audio API)* | `sonidoHabilitado`, `vibracionHabilitada` | Toasts (`ToastNotificationComponent`), sonidos de confirmación de pago POS, beep de escaneo QR y alarma sonora/vibración de tiempo agotado. |
-| `TiendaService` | `GET /tienda/catalogo`, `POST /tienda/comprar`, `GET /tienda/mis-boletos` | `catalogo`, `cargandoCatalogo`, `carrito`, `carritoAbierto`, `ordenReciente`, `boletosLocales` | Gestión del portal de compras públicas, cesta de boletas con cálculo en tiempo real, simulación de pago desacoplada y persistencia de QRs para acceso sin red. |
+| `TiendaService` | `GET /tienda/catalogo`, `POST /tienda/comprar`, `GET /tienda/mis-boletos` | `catalogo`, `cargandoCatalogo`, `carrito`, `carritoAbierto`, `ordenReciente`, `boletasLocales` | Gestión del portal de compras públicas (preservando `ocupacionActual`, `horaProximoIngreso` e `ingresoTexto` en catálogo), cesta de boletas con cálculo en tiempo real, simulación de pago desacoplada y persistencia de QRs para acceso sin red. |
 
 ---
 
 ## 4. Mapa de Componentes por Feature (`src/app/features/` y `shared/`)
 - **`features/tienda/`:**
   - `pages/landing/tienda-landing.component.ts`: Cara comercial y pública del parque (`/`), hero de ventas, ticker de anuncios, filtros por edad/tipo (`Todas`, `Pequeños`, `Grandes`, `Por Tiempo`, `Por Caídas`), catálogo visual con imágenes temáticas, botón de normas, sección "Cómo Funciona", paquetes de cumpleaños/eventos con cotización vía WhatsApp, pilares de confianza, acordeón interactivo de preguntas frecuentes, horarios y ubicación con botón a Google Maps.
-  - `pages/mis-boletos/mis-boletos.component.ts`: Visualizador y buscador de boletas del día con código QR ampliable para escáner operario e impresión térmica/PDF.
+  - `pages/mis-boletos/mis-boletos.component.ts`: Visualizador, comprobante imprimible (`factura-compra-online`) con desglose de totales/aviso de aforo lleno y buscador de boletas del día con badges de ingreso aproximado, código QR ampliable para escáner operario e impresión térmica/PDF.
   - `components/normas-modal/normas-modal.component.ts`: Modal accesible de normas de seguridad, aforo, requisitos de medias antideslizantes, acompañamiento y tarifas activas por atracción.
   - `components/modalidad-modal/modalidad-modal.component.ts`: Diálogo de selección de tarifas y datos de menor con validación de edad en tiempo real.
   - `components/carrito-drawer/carrito-drawer.component.ts`: Panel lateral/inferior de cesta con sugerencias de cross-selling inteligente y checkout de invitado con protección honeypot.
@@ -85,12 +85,12 @@
 - **`features/auth/pages/`:** `login`, `forgot-password`, `reset-password`, `unauthorized`.
 - **`features/taquilla/`:**
   - `pages/apertura/apertura.component.ts`: Pantalla de apertura de turno de caja antes de entrar al POS.
-  - `pages/pos/pos.component.ts` (`TaquillaPosComponent`): Pantalla principal de taquilla. Coordina catálogo, carrito (depurando ítems si una atracción pasa a `FUERA_DE_SERVICIO` vía WS), registro de cliente/menores, cobro, impresión y cierre de caja.
+  - `pages/pos/pos.component.ts` (`TaquillaPosComponent`): Pantalla principal de taquilla. Coordina catálogo, carrito (depurando ítems si una atracción pasa a `FUERA_DE_SERVICIO` vía WS), registro de cliente/menores, cobro, espera de sincronización backend antes de imprimir, badges de ingreso en cola/carrusel e impresión y cierre de caja.
   - `components/`:
     - `catalogo-atracciones`: Tarjetas de atracciones con tarifas de tiempo/evento, cupos en vivo, validación de operario asignado y sobreventa con hora de ingreso estimada (`AHORA` o diferida).
-    - `pos-cart`: Carrito de compras con asignación de menor por boleta y cálculo en vivo (permite venta con aforo completo).
+    - `pos-cart`: Carrito de compras con asignación de menor por boleta, badge de ingreso aproximado ante aforo lleno y cálculo en vivo (permite venta con aforo completo).
     - `cliente-form` y `menores-chips`: Búsqueda por cédula, alta rápida de adulto y selección de menores.
-    - `confirmar-pago-modal`: Selección de medio de pago (`EFECTIVO`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `TRANSFERENCIA`), cálculo de vueltas y disparo de venta.
+    - `confirmar-pago-modal`: Selección de medio de pago (`EFECTIVO`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `TRANSFERENCIA`), badge de ingreso aproximado, cálculo de vueltas y disparo de venta.
     - `apertura-caja-modal` y `arqueo-caja-modal`: Conteo físico por denominación de billetes/monedas y cierre ciego.
     - `consulta-tickets` y `reimpresion-modal`: Búsqueda de boletas emitidas y reimpresión con motivo obligatorio.
 - **`features/operario/`:**
@@ -98,10 +98,10 @@
   - `components/`: `seleccion-atraccion` (espera confirmación del backend antes de emitir `estacionConfirmada`), `scanner-qr` (cámara en vivo con fallback tolerante + fallback de captura con foto nativa móvil para entornos HTTP/insecure context + entrada manual + autorización de sobreaforo contra backend con señal `autorizandoSupervisor`), `resultado-validacion`, `cola-usuarios` (tarjetas ordenadas por urgencia), `cronometro` (temporizador regresivo con semáforo y pausas), `modo-evento` (contador de caídas/intentos y cronómetro de ronda).
 - **`features/admin/`:**
   - `layout/admin-layout`: Sidebar de navegación administrativa, header con usuario actual y `<router-outlet>`.
-  - `pages/`: `dashboard` (KPIs y aforo en vivo vía WS), `atracciones` (+ `atraccion-form` unificado con gestión directa de tarifas y modalidades libres, `tarifas-modal`), `asignaciones`, `colaboradores` (+ `colaborador-form`), `turnos` (historial y conciliación), `reportes` (tablas, gráficos y exportación CSV/PDF), `auditoria` (+ `components/ticket-timeline`, integrado con `ReportesAtraccionPanelComponent` en pestaña 'Novedades y Daños' con badge dinámico evitando carga duplicada con `?tab=novedades`, y guarda anti-doble-clic `actualizandoId`/manejo de errores/`reportesVista` `computed` en el panel y exportación CSV), `configuracion` (+ `ticket-preview`).
+  - `pages/`: `dashboard` (KPIs y aforo en vivo vía WS), `atracciones` (+ `atraccion-form` unificado con gestión directa de tarifas y modalidades libres, `tarifas-modal`), `asignaciones`, `colaboradores` (+ `colaborador-form`), `turnos` (historial y conciliación con fecha local vía `date.util.ts`), `reportes` (tablas, gráficos, exportación CSV/PDF y rango local vía `date.util.ts`), `auditoria` (+ `components/ticket-timeline`, `date.util.ts` en CSV, integrado con `ReportesAtraccionPanelComponent` en pestaña 'Novedades y Daños' con badge dinámico evitando carga duplicada con `?tab=novedades`, y guarda anti-doble-clic `actualizandoId`/manejo de errores/`reportesVista` `computed` en el panel y exportación CSV), `configuracion` (+ `ticket-preview`).
 - **`shared/components/`:**
   - `qr-viewer`: Renderizador de código QR con validación óptica.
-  - `ticket-print-template`: Plantilla térmica oculta en pantalla y visible en `@media print` (soporta 58mm y 80mm, imprime hora/texto de ingreso).
+  - `ticket-print-template`: Plantilla térmica oculta en pantalla y visible en `@media print` (soporta 58mm y 80mm, imprime hoja inicial de factura/comprobante excluyendo reimpresiones individuales y destaca hora/texto de ingreso diferido en boletas).
   - `toast-notification`: Componente visual de notificaciones.
 
 ---

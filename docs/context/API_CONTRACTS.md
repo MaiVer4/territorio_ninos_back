@@ -1,5 +1,5 @@
 # Contratos de API REST, Seguridad y WebSocket
-> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-20 (commit f67e2bd).
+> Fuente de verdad: `src/main/java/com/software/territoriodeninos/controller/*Controller.java`, `*Api.java`, `dto/*.java`, `config/SecurityConfig.java`, `config/WebSocketConfig.java`, `exception/GlobalExceptionHandler.java`. Última sincronización: 2026-11-20 (commit 078341b).
 
 ## 1. Configuración Global, Seguridad y Errores
 - **Context Path del Servidor:** `/territorioninos` (`server.port=8080`). Todas las rutas de controladores empiezan con `/api/...`, por lo que la URL completa en local es `http://localhost:8080/territorioninos/api/...`.
@@ -165,6 +165,8 @@
 | `GET` | `/api/auditoria/tickets/{criterio}` | `ADMIN` | Path `criterio` (UUID, prefijo o doc) | `200 List<TimelineTicketDTO>` |
 | `GET` | `/api/auditoria/incidentes` | `ADMIN` | `?fechaInicio=&fechaFin=&atraccionId=&tipoPausa=` | `200 ResumenIncidentesAuditoriaDTO` |
 
+> **Rangos de fecha (`fechaInicio`, `fechaFin`):** Los endpoints de `/api/reportes/*` y `/api/auditoria/incidentes` aceptan formato corto `YYYY-MM-DD` (normalizado vía `FechaParametroUtil` a inicio/fin del día `00:00:00`–`23:59:59.999999999`) o formato ISO `DATE_TIME`/`OffsetDateTime`.
+
 ### 2.12 Reportes de Atracciones (`ReporteAtraccionController` — `/api/reportes-atraccion`)
 | Método | Ruta | Rol | Request | Response | Notas |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -176,8 +178,8 @@
 ### 2.13 Tienda Pública Online (`TiendaPublicaController` — `/api/tienda`)
 | Método | Ruta | Rol | Request | Response | Notas / Errores |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/tienda/catalogo` | PÚBLICO | — | `200 List<CatalogoAtraccionOnlineDTO>` | Retorna atracciones `ACTIVO` con tarifas vigentes, cupos libres y edades. |
-| `POST` | `/api/tienda/comprar` | PÚBLICO | `CompraOnlineRequestDTO` | `201 CompraOnlineResponseDTO` | Checkout invitado con honeypot; emite boletas en estado `PAGADO` y envía correo de confirmación. `400` por validación o trampa honeypot, `404` si atracción no existe. |
+| `GET` | `/api/tienda/catalogo` | PÚBLICO | — | `200 List<CatalogoAtraccionOnlineDTO>` | Retorna atracciones `ACTIVO` con tarifas vigentes, cupos libres, ocupación y próximo ingreso estimado. |
+| `POST` | `/api/tienda/comprar` | PÚBLICO | `CompraOnlineRequestDTO` | `201 CompraOnlineResponseDTO` | Checkout invitado con honeypot; emite boletas en estado `PAGADO` y envía correo de confirmación con resumen financiero e ingreso aproximado. `400` por validación o trampa honeypot, `404` si atracción no existe. |
 | `GET` | `/api/tienda/mis-boletos` | PÚBLICO | Query `?identificador=` | `200 List<TicketOnlineDTO>` | Búsqueda por documento o correo de boletas activas (`PAGADO`, `EN_USO`, `PAUSADO`) del día. |
 
 ---
@@ -185,10 +187,10 @@
 ## 3. Diccionario Compacto de DTOs y Alias JSON (`dto/*.java`)
 
 - **DTOs de Tienda Online (`dto/tienda/`):**
-  - `CatalogoAtraccionOnlineDTO`: `{ id, nombre, descripcion, tipoAtraccion, cuposLibres, capacidadMaxima, edadMinima, edadMaxima, tarifaMinuto, duracionRecomendadaMinutos, tarifasTiempo: List<TarifaTiempoDTO>, tarifasEvento: List<TarifaEventoDTO> }`
+  - `CatalogoAtraccionOnlineDTO`: `{ id, nombre, descripcion, tipoAtraccion, ocupacionActual, cuposLibres, capacidadMaxima, horaProximoIngreso, ingresoTexto, edadMinima, edadMaxima, tarifaMinuto, duracionRecomendadaMinutos, tarifasTiempo: List<TarifaTiempoDTO>, tarifasEvento: List<TarifaEventoDTO> }`
   - `CompraOnlineRequestDTO`: `{ documentoAdulto, nombreAdulto, telefonoAdulto, correoAdulto, metodoPago, codigoReferenciaPago, items: List<ItemCompraOnlineDTO>, website: String (honeypot) }`
   - `ItemCompraOnlineDTO`: `{ atraccionId, tipoTarifa, tarifaTiempoId, tarifaEventoId, duracionMinutos, cantidad, nombreMenor, edadMenor, documentoMenor }`
-  - `TicketOnlineDTO`: `{ uuidCodigo, codigoCorto, nombreAtraccion, tipoAtraccion, tipoTarifa, duracionMinutos, intentosTotales, intentosRestantes, nombreMenor, estadoTicket, fechaEmision, horaIngresoEstimada }`
+  - `TicketOnlineDTO`: `{ uuidCodigo, codigoCorto, nombreAtraccion, tipoAtraccion, tipoTarifa, duracionMinutos, intentosTotales, intentosRestantes, nombreMenor, estadoTicket, fechaEmision, horaIngresoEstimada, ingresoTexto }`
   - `CompraOnlineResponseDTO`: `{ ventaId, codigoOrden, fechaVenta, montoTotal, subtotal, impuestos, metodoPago, canalVenta, clienteNombre, clienteDocumento, boletas: List<TicketOnlineDTO>, mensaje }`
 
 > Los alias (`@JsonAlias` en entrada y `@JsonProperty` adicionales en salida) existen para compatibilidad directa con `territorio-front`. **No eliminarlos.**
